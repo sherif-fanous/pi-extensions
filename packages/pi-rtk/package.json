@@ -25,6 +25,22 @@
     "LICENSE",
     "README.md"
   ],
+  "scripts": {
+    "format": "prettier --write .",
+    "format-check": "prettier --check *.ts",
+    "lint": "eslint .",
+    "sort-package-json": "npx sort-package-json",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@mariozechner/pi-coding-agent": "^0.58.4",
+    "@types/node": "^25.5.0",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.8.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.1"
+  },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*"
   },
