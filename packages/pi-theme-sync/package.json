@@ -1,0 +1,56 @@
+{
+  "name": "@sherif-fanous/pi-theme-sync",
+  "version": "0.1.0",
+  "description": "Pi package extension that automatically switches Pi themes to match terminal or OS appearance",
+  "keywords": [
+    "pi",
+    "pi-coding-agent",
+    "pi-package",
+    "theme-sync",
+    "light-mode",
+    "dark-mode",
+    "terminal-appearance",
+    "system-appearance"
+  ],
+  "homepage": "https://github.com/sherif-fanous/pi-theme-sync#readme",
+  "bugs": {
+    "url": "https://github.com/sherif-fanous/pi-theme-sync/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sherif-fanous/pi-theme-sync.git"
+  },
+  "license": "MIT",
+  "author": "Sherif Fanous",
+  "type": "module",
+  "files": [
+    "src/**/*.ts",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "format": "prettier --write src/.",
+    "format-check": "prettier --check src/.",
+    "lint": "eslint src/.",
+    "sort-package-json": "npx sort-package-json",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@mariozechner/pi-coding-agent": "^0.58.4",
+    "@types/node": "^25.5.0",
+    "eslint-config-prettier": "10.1.8",
+    "prettier": "3.8.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.1"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
+}
