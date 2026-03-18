@@ -1,6 +1,6 @@
 {
   "name": "@sherif-fanous/pi-rtk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Pi extension that routes bash commands through rtk (Rust Token Killer) for LLM token savings",
   "keywords": [
     "pi",
@@ -34,7 +34,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@mariozechner/pi-coding-agent": "^0.58.4",
+    "@mariozechner/pi-coding-agent": "^0.60.0",
     "@types/node": "^25.5.0",
     "eslint-config-prettier": "10.1.8",
     "prettier": "3.8.1",

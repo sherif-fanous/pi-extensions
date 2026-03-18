@@ -17,7 +17,36 @@ If rewrite succeeds, Pi executes the rewritten command. If rewrite fails for any
 
 Commands entered with `!!<cmd>` are intentionally not intercepted. They continue through Pi's normal context-excluded shell execution path unchanged.
 
-## Agent `bash` tool calls
+## Prerequisites
+
+- Pi v0.60.0 or later
+- [rtk](https://github.com/rtk-ai/rtk), installed and available on your `PATH`
+
+If `rtk` is unavailable, `pi-rtk` still preserves normal shell behavior by falling back to the original command.
+
+## Install
+
+Make sure your Pi installation is v0.60.0 or later before installing this package.
+
+```shell
+pi install npm:@sherif-fanous/pi-rtk
+```
+
+Or try without installing:
+
+```shell
+pi -e npm:@sherif-fanous/pi-rtk
+```
+
+To uninstall:
+
+```shell
+pi remove npm:@sherif-fanous/pi-rtk
+```
+
+## How It Works
+
+### Agent `bash` tool calls
 
 `pi-rtk` registers a replacement `bash` tool for Pi. Before the tool executes a command, the extension attempts an `rtk rewrite` and uses the rewritten command when available.
 
@@ -25,7 +54,7 @@ This preserves the normal `bash` tool interface while routing supported commands
 
 If `rtk` is unavailable, times out, or cannot rewrite the command, the original command runs unchanged.
 
-### Behavior summary
+#### Behavior summary
 
 ```text
 Agent bash tool call
@@ -42,7 +71,7 @@ pi-rtk replacement bash tool
     same bash tool interface to Pi
 ```
 
-## User `!<cmd>` shell commands
+### User `!<cmd>` shell commands
 
 `pi-rtk` also hooks Pi's `user_bash` event for context-visible user shell commands entered with `!<cmd>`.
 
@@ -50,7 +79,7 @@ For these commands, the extension probes rewrite eligibility before claiming the
 
 This keeps optimization best-effort, silent, and non-disruptive during normal operation.
 
-### Behavior summary
+#### Behavior summary
 
 ```text
 User !<cmd>
@@ -64,41 +93,17 @@ User !<cmd>
     same user shell experience in Pi
 ```
 
-## User `!!<cmd>` shell commands
+### User `!!<cmd>` shell commands
 
 Commands entered with `!!<cmd>` are excluded from model context by design, so `pi-rtk` does not intercept them.
 
 They bypass `pi-rtk` completely and continue through Pi's normal context-excluded shell handling.
 
-### Behavior summary
+#### Behavior summary
 
 ```text
 User !!<cmd>
         │
         ▼
     bypass pi-rtk and use normal Pi context-excluded shell handling
-```
-
-## Prerequisites
-
-[rtk](https://github.com/rtk-ai/rtk) is required to get the token-saving optimization behavior and should be [installed](https://github.com/rtk-ai/rtk#installation) and available on your `PATH`.
-
-If `rtk` is unavailable, `pi-rtk` still preserves normal shell behavior by falling back to the original command.
-
-## Install
-
-```shell
-pi install npm:@sherif-fanous/pi-rtk
-```
-
-Or try without installing:
-
-```shell
-pi -e npm:@sherif-fanous/pi-rtk
-```
-
-To uninstall:
-
-```shell
-pi remove npm:@sherif-fanous/pi-rtk
 ```
