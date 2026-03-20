@@ -22,24 +22,25 @@ pi remove npm:@sherif-fanous/pi-theme-sync
 
 ## Quick start
 
-No configuration is needed. Once installed, `pi-theme-sync` detects your current appearance and switches Pi between its built-in `light` and `dark` themes automatically. To map appearances to custom themes instead, see [Configuration](#configuration).
+No configuration is needed. Once installed, `pi-theme-sync` detects your current appearance and switches Pi between its built-in `light` and `dark` themes automatically.
+
+Run `/theme-sync` to open an interactive overlay menu with `Config` and `Status` options.
 
 ## Configuration
 
-Create a configuration file to map light and dark appearances to specific Pi themes.
-
 `pi-theme-sync` looks for configuration in this order:
 
-1. **Project config** (`.pi/theme-sync.json`) - project-specific settings
-2. **Global config** — `~/.pi/agent/theme-sync.json` - user preferences
-3. **Built-in defaults** — Pi's `light` and `dark` themes
+1. **Project config** (`.pi/theme-sync.json`) — project-specific settings
+2. **Global config** (`~/.pi/agent/theme-sync.json`) — user preferences
+3. **Built-in defaults** — Pi's `light` and `dark` themes plus active sync enabled
 
-This means project config overrides global config, and global config overrides built-in defaults.
+Project config overrides global config, and global config overrides built-in defaults, on a per-key basis.
 
 ### Example
 
 ```json
 {
+  "isSyncActive": true,
   "themes": {
     "light": "catppuccin-latte",
     "dark": "catppuccin-macchiato"
@@ -50,13 +51,22 @@ This means project config overrides global config, and global config overrides b
 }
 ```
 
-| Field                      | Default   | Description                                                                              |
-| -------------------------- | --------- | ---------------------------------------------------------------------------------------- |
-| `themes.light`             | `"light"` | Pi theme to use when light appearance is detected                                        |
-| `themes.dark`              | `"dark"`  | Pi theme to use when dark appearance is detected                                         |
-| `detection.pollIntervalMs` | `2000`    | Polling interval in milliseconds (used when subscription-based detection is unavailable) |
+| Field                      | Default   | Description                                                                      |
+| -------------------------- | --------- | -------------------------------------------------------------------------------- |
+| `isSyncActive`             | `true`    | Whether the extension actively applies mapped themes in the current runtime      |
+| `themes.light`             | `"light"` | Pi theme to use when light appearance is detected                                |
+| `themes.dark`              | `"dark"`  | Pi theme to use when dark appearance is detected                                 |
+| `detection.pollIntervalMs` | `2000`    | Polling interval in milliseconds (must be >= 1000)                               |
 
 If a configured theme name does not exist in Pi, `pi-theme-sync` falls back to the corresponding built-in theme (`light` or `dark`).
+
+## Reload behavior
+
+Configuration changes are **not** applied automatically. Saving changes from the config overlay, or manually editing config files, writes to disk only. To apply changes, run:
+
+```shell
+/reload
+```
 
 ## How it works
 

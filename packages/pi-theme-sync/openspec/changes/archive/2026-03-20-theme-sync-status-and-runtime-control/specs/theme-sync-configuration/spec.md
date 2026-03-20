@@ -1,10 +1,4 @@
-# theme-sync-configuration
-
-## Purpose
-
-Configuration loading, validation, scoped writes, and per-key precedence for theme sync settings.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Theme sync loads scoped configuration
 
@@ -34,24 +28,7 @@ The extension SHALL accept configuration for light and dark theme mappings, poll
 - **WHEN** the user configures `isSyncActive`
 - **THEN** the extension uses that value to determine whether ongoing theme synchronization is active or inactive
 
-### Requirement: Theme sync validates configured theme mappings
-
-The extension SHALL validate configured light and dark theme mappings against the Pi themes available at runtime.
-
-#### Scenario: Use configured mappings when themes exist
-
-- **WHEN** both configured theme names are available in Pi
-- **THEN** the extension uses those configured theme mappings
-
-#### Scenario: Fallback when configured light theme is unavailable
-
-- **WHEN** the configured light theme name is not available in Pi
-- **THEN** the extension uses Pi built-in `light` for the light mapping
-
-#### Scenario: Fallback when configured dark theme is unavailable
-
-- **WHEN** the configured dark theme name is not available in Pi
-- **THEN** the extension uses Pi built-in `dark` for the dark mapping
+## ADDED Requirements
 
 ### Requirement: Theme sync supports scoped config writes
 

@@ -1,10 +1,4 @@
-# theme-sync-debugging
-
-## Purpose
-
-On-demand inspection and configuration surfaces for diagnosing theme sync behavior.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Theme sync provides on-demand inspection and configuration while remaining quiet by default
 

@@ -4,8 +4,8 @@ import { parseDsr997Reply } from "./dsr-996.js";
 import { queryWithTerminalListener } from "./query.js";
 
 const DEC_MODE_2031_DECRQM = "\x1b[?2031$p";
-const DEC_MODE_2031_ENABLE = "\x1b[?2031h";
 const DEC_MODE_2031_DISABLE = "\x1b[?2031l";
+const DEC_MODE_2031_ENABLE = "\x1b[?2031h";
 
 type DecMode2031Support = "supported" | "unsupported" | "unknown";
 
@@ -13,6 +13,20 @@ export type DecMode2031Subscription = {
   removePiTerminalInputListener: () => void;
   disableTerminalNotifications: () => void;
 };
+
+function parseDecMode2031Decrqm(data: string): DecMode2031Support {
+  // 1=set, 2=reset (but recognized), 3=permanently set — all mean supported
+  if (/\x1b\[\?2031;[123]\$y/.test(data)) {
+    return "supported";
+  }
+
+  // 0=not recognized, 4=permanently reset — unsupported
+  if (/\x1b\[\?2031;[04]\$y/.test(data)) {
+    return "unsupported";
+  }
+
+  return "unknown";
+}
 
 export function enableDecMode2031Subscription(
   ctx: ExtensionContext,
@@ -44,20 +58,6 @@ export function enableDecMode2031Subscription(
       process.stdout.write(DEC_MODE_2031_DISABLE);
     },
   };
-}
-
-function parseDecMode2031Decrqm(data: string): DecMode2031Support {
-  // 1=set, 2=reset (but recognized), 3=permanently set — all mean supported
-  if (/\x1b\[\?2031;[123]\$y/.test(data)) {
-    return "supported";
-  }
-
-  // 0=not recognized, 4=permanently reset — unsupported
-  if (/\x1b\[\?2031;[04]\$y/.test(data)) {
-    return "unsupported";
-  }
-
-  return "unknown";
 }
 
 export async function probeDecMode2031Support(

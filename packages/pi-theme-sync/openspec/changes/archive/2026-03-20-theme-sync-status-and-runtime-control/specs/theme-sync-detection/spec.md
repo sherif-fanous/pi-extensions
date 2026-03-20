@@ -1,38 +1,4 @@
-# theme-sync-detection
-
-## Purpose
-
-Appearance detection strategy selection, detector probing, subscription/polling lifecycle, and graceful degradation.
-
-## Requirements
-
-### Requirement: Theme sync determines current appearance from polling detectors in priority order
-
-The extension SHALL determine current appearance by trying supported polling detectors in priority order.
-
-#### Scenario: Current appearance resolves from higher-priority polling detector
-
-- **WHEN** a higher-priority polling detector returns a concrete appearance
-- **THEN** the extension uses that appearance without consulting lower-priority polling detectors for that detection pass
-
-#### Scenario: Current appearance falls back to lower-priority polling detector
-
-- **WHEN** a higher-priority polling detector does not return a concrete appearance and a lower-priority polling detector does
-- **THEN** the extension uses the lower-priority polling detector result
-
-### Requirement: Theme sync probes available polling and subscription detectors
-
-The extension SHALL probe available polling detectors and available subscription detectors at startup.
-
-#### Scenario: Polling detector is available
-
-- **WHEN** a polling detector returns a concrete appearance during probing
-- **THEN** the extension treats that polling detector as available
-
-#### Scenario: Subscription detector is available
-
-- **WHEN** a subscription detector reports support during probing
-- **THEN** the extension treats that subscription detector as available
+## MODIFIED Requirements
 
 ### Requirement: Theme sync prefers subscription updates when available
 
@@ -62,19 +28,7 @@ The extension SHALL poll available polling detectors in priority order when subs
 - **WHEN** the first available polling detector does not return a concrete appearance during a polling cycle and a lower-priority available polling detector does while effective `isSyncActive` is `true`
 - **THEN** the extension uses the lower-priority polling detector result for that cycle
 
-### Requirement: Theme sync degrades gracefully when a detection source cannot be used
-
-The extension SHALL treat unsupported detection sources, unavailable inputs, and detection timeouts as non-fatal.
-
-#### Scenario: Interactive-only detection source is unavailable
-
-- **WHEN** a configured detection source requires capabilities that are not available in the current Pi mode
-- **THEN** the extension skips that source and continues to fallback behavior
-
-#### Scenario: Detection source times out
-
-- **WHEN** a detection source does not produce a usable result within its timeout window
-- **THEN** the extension treats that source result as unavailable and continues detection or fallback behavior
+## ADDED Requirements
 
 ### Requirement: Theme sync performs one-shot detection while inactive
 
