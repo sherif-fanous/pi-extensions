@@ -28,21 +28,6 @@ export async function detectAppearance(
   }
 }
 
-export async function detectAppearanceFromAvailablePollingDetectors(
-  ctx: ExtensionContext,
-  availablePollingDetectors: PollingDetector[],
-): Promise<Appearance> {
-  for (const pollingDetector of availablePollingDetectors) {
-    const detectedAppearance = await detectAppearance(ctx, pollingDetector);
-
-    if (detectedAppearance !== "unknown") {
-      return detectedAppearance;
-    }
-  }
-
-  return "unknown";
-}
-
 export async function probeAvailablePollingDetectors(
   ctx: ExtensionContext,
 ): Promise<PollingDetector[]> {
