@@ -2,6 +2,12 @@
 
 This changelog follows [Common Changelog](https://common-changelog.org/).
 
+## [0.3.0] - 2026-05-12
+
+### Changed
+
+- **Breaking:** The extension now targets Pi published under the `@earendil-works` npm scope (Pi `0.74.0` and later). Pi has moved away from its old `@mariozechner` scope, and `pi-theme-sync` v0.3.0 will not load on Pi versions prior to `0.74.0`. Upgrade Pi to `0.74.0` or newer before upgrading this extension.
+
 ## [0.2.0] - 2026-03-20
 
 ### Added
@@ -17,5 +23,6 @@ This changelog follows [Common Changelog](https://common-changelog.org/).
 
 _Initial release._
 
+[0.3.0]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.3.0
 [0.2.0]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.2.0
 [0.1.0]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.1.0
