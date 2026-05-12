@@ -1,3 +1,12 @@
+/**
+ * Configuration load / persist / validation.
+ *
+ * Owns the global and project JSON file paths, the `loadConfig` and
+ * `writeConfigValue` APIs, and the per-key validation helpers that emit
+ * warnings rather than throwing. Does NOT own runtime application of
+ * config (lives in `runtime.ts`) or the editing UI (lives in `command.ts`).
+ */
+
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { promises as fs } from "node:fs";
 import { homedir } from "node:os";

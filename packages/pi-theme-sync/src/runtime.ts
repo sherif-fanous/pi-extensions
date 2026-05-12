@@ -1,3 +1,13 @@
+/**
+ * Long-running theme-detection runtime.
+ *
+ * Owns detection orchestration (subscription vs polling preference), the
+ * active poller and drift-poller intervals, the cached current-appearance
+ * state, and the read-only `RuntimeStatus` surface read by the Status
+ * overlay. Does NOT own configuration persistence (lives in `config.ts`) or
+ * any interactive UI (lives in `command.ts`).
+ */
+
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_CONFIG, loadConfig } from "./config.js";
 import {

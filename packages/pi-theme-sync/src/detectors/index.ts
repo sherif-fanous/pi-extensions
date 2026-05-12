@@ -1,3 +1,15 @@
+/**
+ * Detector registry and dispatcher.
+ *
+ * Owns the `POLLING_DETECTORS` and `SUBSCRIPTION_DETECTORS` `as const`
+ * arrays that act as the single source of truth for which detection
+ * strategies exist, the `detectAppearance` switch that dispatches to
+ * per-protocol detectors, and the `probeAvailable*Detectors` helpers that
+ * filter the registry to currently-supported detectors at startup. Does
+ * NOT own per-protocol detection logic (delegates to `./system/` and
+ * `./terminal/`) or the runtime detection loop (lives in `runtime.ts`).
+ */
+
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type {
   Appearance,

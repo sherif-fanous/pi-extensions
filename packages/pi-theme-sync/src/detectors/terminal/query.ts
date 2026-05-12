@@ -1,3 +1,13 @@
+/**
+ * Terminal-query primitive used by every terminal-based detector.
+ *
+ * Owns `queryWithTerminalListener<T>`, the shared "write a control
+ * sequence, subscribe via `ctx.ui.onTerminalInput`, race the reply against
+ * a timeout, always clean up the listener and the timeout" helper. Does
+ * NOT own any per-protocol parsing or classification — each detector
+ * passes its own `parse` function and owns the meaning of the reply.
+ */
+
 import type {
   ExtensionContext,
   TerminalInputHandler,

@@ -1,3 +1,13 @@
+/**
+ * Shared cross-module type definitions.
+ *
+ * Owns the canonical `Appearance`, `ConfigScope`, `ConfigSource`,
+ * `PollingDetector`, `SubscriptionDetector`, `RuntimeConfig`,
+ * `RuntimeStatus`, `LoadedConfig`, and related types consumed across the
+ * runtime, configuration, command, and detector layers. Does NOT contain
+ * any runtime code, validation logic, or implementation.
+ */
+
 export type Appearance = "light" | "dark" | "unknown";
 
 export type ConfigScope = "project" | "global";

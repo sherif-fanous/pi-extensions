@@ -1,3 +1,14 @@
+/**
+ * The `/theme-sync` interactive overlay.
+ *
+ * Owns the overlay mode state machine (`menu` / `config` / `themeSelect` /
+ * `syncSelect` / `pollIntervalEdit` / `writeTarget` / `status`), the
+ * `rebuild()` rendering pipeline including the shared `buildListOverlay`
+ * helper, and the in-flight config-edit drafts. Does NOT own runtime
+ * detection (delegates to the `ThemeSyncRuntime` passed in) or config
+ * persistence (delegates to `writeConfigValue` in `config.ts`).
+ */
+
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
   DynamicBorder,

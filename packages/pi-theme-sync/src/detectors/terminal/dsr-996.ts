@@ -1,3 +1,11 @@
+/**
+ * DSR 996 / 997 appearance probe.
+ *
+ * Owns the `DSR_996_QUERY` control sequence, the orchestrator
+ * `detectAppearanceViaDsr996`, and the pure parser `parseDsr997Reply`.
+ * Does NOT own the terminal-query primitive (delegates to `./query.ts`).
+ */
+
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Appearance } from "../../types.js";
 import { queryWithTerminalListener } from "./query.js";
