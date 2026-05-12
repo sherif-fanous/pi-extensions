@@ -34,6 +34,7 @@ export async function queryWithTerminalListener<T>(
 
       if (result !== undefined) {
         finish(result);
+
         return { consume: true };
       }
 

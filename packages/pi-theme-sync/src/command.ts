@@ -45,27 +45,6 @@ type ThemeSyncOverlayMode =
   | { kind: "pollIntervalEdit"; value: string; error?: string }
   | { kind: "writeTarget" };
 
-function formatSource(source: ConfigSource): string {
-  switch (source) {
-    case "project":
-      return "Project";
-    case "global":
-      return "Global";
-    case "default":
-      return "Default";
-  }
-}
-
-function requireUI(ctx: ExtensionCommandContext, commandName: string): boolean {
-  if (ctx.hasUI) {
-    return true;
-  }
-
-  ctx.ui.notify(`UI support is required for ${commandName}`, "error");
-
-  return false;
-}
-
 export async function openThemeSyncOverlay(
   runtime: ThemeSyncRuntime,
   ctx: ExtensionCommandContext,
@@ -152,18 +131,22 @@ export async function openThemeSyncOverlay(
       switch (item.value) {
         case "themes.light":
           setMode({ kind: "themeSelect", fieldId: "themes.light" });
+
           break;
         case "themes.dark":
           setMode({ kind: "themeSelect", fieldId: "themes.dark" });
+
           break;
         case "detection.pollIntervalMs":
           setMode({
             kind: "pollIntervalEdit",
             value: desiredStateDraft["detection.pollIntervalMs"],
           });
+
           break;
         case "isSyncActive":
           setMode({ kind: "syncSelect" });
+
           break;
       }
     };
@@ -249,7 +232,7 @@ export async function openThemeSyncOverlay(
     }
 
     switch (mode.kind) {
-      case "menu": {
+      case "menu":
         if (matchesKey(data, Key.escape)) {
           doneFn();
 
@@ -260,9 +243,7 @@ export async function openThemeSyncOverlay(
         tui.requestRender();
 
         return;
-      }
-
-      case "config": {
+      case "config":
         if (matchesKey(data, Key.ctrl("s"))) {
           setMode({ kind: "writeTarget" });
 
@@ -280,18 +261,14 @@ export async function openThemeSyncOverlay(
         tui.requestRender();
 
         return;
-      }
-
       case "themeSelect":
       case "syncSelect":
-      case "writeTarget": {
+      case "writeTarget":
         activeSelectList?.handleInput(data);
         tui.requestRender();
 
         return;
-      }
-
-      case "pollIntervalEdit": {
+      case "pollIntervalEdit":
         if (matchesKey(data, Key.enter)) {
           const parsed = Number(mode.value);
 
@@ -338,9 +315,7 @@ export async function openThemeSyncOverlay(
         }
 
         return;
-      }
-
-      case "status": {
+      case "status":
         if (matchesKey(data, Key.escape)) {
           setMode({ kind: "menu" });
         }
@@ -348,7 +323,6 @@ export async function openThemeSyncOverlay(
         tui.requestRender();
 
         return;
-      }
     }
   }
 
@@ -356,7 +330,7 @@ export async function openThemeSyncOverlay(
     rootContainer.clear();
     activeSelectList = undefined;
 
-    const borderFn = (s: string) => theme.fg("accent", s);
+    const borderFn = (text: string) => theme.fg("accent", text);
 
     switch (mode.kind) {
       case "menu": {
@@ -703,4 +677,25 @@ export async function openThemeSyncOverlay(
       },
     },
   );
+}
+
+function formatSource(source: ConfigSource): string {
+  switch (source) {
+    case "project":
+      return "Project";
+    case "global":
+      return "Global";
+    case "default":
+      return "Default";
+  }
+}
+
+function requireUI(ctx: ExtensionCommandContext, commandName: string): boolean {
+  if (ctx.hasUI) {
+    return true;
+  }
+
+  ctx.ui.notify(`UI support is required for ${commandName}`, "error");
+
+  return false;
 }

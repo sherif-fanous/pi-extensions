@@ -10,6 +10,7 @@ export async function detectAppearanceViaDsr996(
   return (
     (await queryWithTerminalListener(ctx, DSR_996_QUERY, (data) => {
       const parsedAppearance = parseDsr997Reply(data);
+
       return parsedAppearance === "unknown" ? undefined : parsedAppearance;
     })) ?? "unknown"
   );
