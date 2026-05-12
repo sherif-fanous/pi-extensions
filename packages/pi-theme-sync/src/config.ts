@@ -37,114 +37,6 @@ type ReadJsonResult = {
   warning?: string;
 };
 
-async function readJsonIfExists(filePath: string): Promise<ReadJsonResult> {
-  let content: string;
-
-  try {
-    content = await fs.readFile(filePath, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return {};
-    }
-
-    throw error;
-  }
-
-  try {
-    const parsed = JSON.parse(content) as LoadedConfig;
-
-    return { config: parsed };
-  } catch {
-    return {
-      warning: `Invalid JSON in ${filePath} — file ignored`,
-    };
-  }
-}
-
-function resolveSource<T>(
-  projectValue: T | undefined,
-  globalValue: T | undefined,
-): ConfigScope | "default" {
-  if (projectValue !== undefined) {
-    return "project";
-  }
-
-  if (globalValue !== undefined) {
-    return "global";
-  }
-
-  return "default";
-}
-
-function validateIsSyncActive(
-  value: unknown,
-  scope: string,
-  warnings: string[],
-): boolean | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value !== "boolean") {
-    warnings.push(
-      `${scope}: isSyncActive "${String(value)}" is not a boolean — ignored`,
-    );
-
-    return undefined;
-  }
-
-  return value;
-}
-
-function validatePollingIntervalMs(
-  value: number | undefined,
-  scope: string,
-  warnings: string[],
-): number {
-  if (value === undefined) {
-    return DEFAULT_CONFIG.detection.pollIntervalMs;
-  }
-
-  if (typeof value !== "number" || !isValidPollIntervalMs(value)) {
-    warnings.push(
-      `${scope}: pollIntervalMs "${String(value)}" is not a number >= ${POLL_INTERVAL_MIN_MS} — using default (${DEFAULT_CONFIG.detection.pollIntervalMs}ms)`,
-    );
-
-    return DEFAULT_CONFIG.detection.pollIntervalMs;
-  }
-
-  return value;
-}
-
-function validateTheme(
-  themeName: string | undefined,
-  fallback: "light" | "dark",
-  availableThemes: Set<string>,
-  warnings: string[],
-): string {
-  if (!themeName) {
-    return DEFAULT_CONFIG.themes[fallback];
-  }
-
-  if (!availableThemes.has(themeName)) {
-    warnings.push(
-      `Theme "${themeName}" not found in Pi — using default "${DEFAULT_CONFIG.themes[fallback]}"`,
-    );
-
-    return DEFAULT_CONFIG.themes[fallback];
-  }
-
-  return themeName;
-}
-
-async function writeJson(
-  filePath: string,
-  config: LoadedConfig,
-): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
-}
-
 export function getConfigPath(scope: ConfigScope, cwd: string): string {
   return scope === "project" ? CONFIG_PATHS.project(cwd) : CONFIG_PATHS.global;
 }
@@ -282,6 +174,7 @@ export async function writeConfigValue(
         ...(nextConfig.themes ?? {}),
         light: String(value),
       };
+
       break;
 
     case "themes.dark":
@@ -289,6 +182,7 @@ export async function writeConfigValue(
         ...(nextConfig.themes ?? {}),
         dark: String(value),
       };
+
       break;
 
     case "detection.pollIntervalMs":
@@ -296,12 +190,122 @@ export async function writeConfigValue(
         ...(nextConfig.detection ?? {}),
         pollIntervalMs: Number(value),
       };
+
       break;
 
     case "isSyncActive":
       nextConfig.isSyncActive = Boolean(value);
+
       break;
   }
 
   await writeJson(filePath, nextConfig);
+}
+
+async function readJsonIfExists(filePath: string): Promise<ReadJsonResult> {
+  let content: string;
+
+  try {
+    content = await fs.readFile(filePath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return {};
+    }
+
+    throw error;
+  }
+
+  try {
+    const parsed = JSON.parse(content) as LoadedConfig;
+
+    return { config: parsed };
+  } catch {
+    return {
+      warning: `Invalid JSON in ${filePath} — file ignored`,
+    };
+  }
+}
+
+function resolveSource<T>(
+  projectValue: T | undefined,
+  globalValue: T | undefined,
+): ConfigScope | "default" {
+  if (projectValue !== undefined) {
+    return "project";
+  }
+
+  if (globalValue !== undefined) {
+    return "global";
+  }
+
+  return "default";
+}
+
+function validateIsSyncActive(
+  value: unknown,
+  scope: string,
+  warnings: string[],
+): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "boolean") {
+    warnings.push(
+      `${scope}: isSyncActive "${JSON.stringify(value)}" is not a boolean — ignored`,
+    );
+
+    return undefined;
+  }
+
+  return value;
+}
+
+function validatePollingIntervalMs(
+  value: number | undefined,
+  scope: string,
+  warnings: string[],
+): number {
+  if (value === undefined) {
+    return DEFAULT_CONFIG.detection.pollIntervalMs;
+  }
+
+  if (typeof value !== "number" || !isValidPollIntervalMs(value)) {
+    warnings.push(
+      `${scope}: pollIntervalMs "${String(value)}" is not a number >= ${POLL_INTERVAL_MIN_MS} — using default (${DEFAULT_CONFIG.detection.pollIntervalMs}ms)`,
+    );
+
+    return DEFAULT_CONFIG.detection.pollIntervalMs;
+  }
+
+  return value;
+}
+
+function validateTheme(
+  themeName: string | undefined,
+  fallback: "light" | "dark",
+  availableThemes: Set<string>,
+  warnings: string[],
+): string {
+  if (!themeName) {
+    return DEFAULT_CONFIG.themes[fallback];
+  }
+
+  if (!availableThemes.has(themeName)) {
+    warnings.push(
+      `Theme "${themeName}" not found in Pi — using default "${DEFAULT_CONFIG.themes[fallback]}"`,
+    );
+
+    return DEFAULT_CONFIG.themes[fallback];
+  }
+
+  return themeName;
+}
+
+async function writeJson(
+  filePath: string,
+  config: LoadedConfig,
+): Promise<void> {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
 }
