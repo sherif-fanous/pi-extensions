@@ -1,3 +1,16 @@
+/**
+ * DEC private mode 2031 subscription-based appearance notifications.
+ *
+ * Owns the DECRQM-2031 support probe (`probeDecMode2031Support`), the
+ * enable / disable lifecycle (`enableDecMode2031Subscription`), the
+ * `DecMode2031Subscription` cleanup contract
+ * (`removePiTerminalInputListener` + `disableTerminalNotifications`),
+ * and the persistent listener that converts unsolicited terminal
+ * notifications into the runtime callback. Does NOT own the
+ * terminal-query primitive (delegates to `./query.ts`) or the runtime's
+ * subscription-over-polling preference (lives in `runtime.ts`).
+ */
+
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Appearance } from "../../types.js";
 import { parseDsr997Reply } from "./dsr-996.js";

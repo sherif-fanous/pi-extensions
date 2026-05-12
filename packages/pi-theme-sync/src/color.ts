@@ -1,3 +1,12 @@
+/**
+ * Hex-to-appearance classifier.
+ *
+ * Owns the single `classifyHexColor` function that turns a `"RRGGBB"`
+ * string into `"light"` / `"dark"` / `"unknown"` via a relative-luminance
+ * heuristic. Does NOT own the terminal query that produces hex colors
+ * (lives in `detectors/terminal/osc-11.ts`).
+ */
+
 import type { Appearance } from "./types.js";
 
 /**

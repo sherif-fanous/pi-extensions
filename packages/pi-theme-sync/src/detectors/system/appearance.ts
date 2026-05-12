@@ -1,3 +1,13 @@
+/**
+ * macOS system-level appearance detection via AppleScript.
+ *
+ * Owns `detectAppearanceViaSystem`, which spawns `osascript` to read
+ * `tell application "System Events" to tell appearance preferences to
+ * return dark mode` and classifies the boolean result. Does NOT own any
+ * non-macOS platform handling (returns `"unknown"` outside macOS) or
+ * terminal-based detection (lives in `../terminal/`).
+ */
+
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { Appearance } from "../../types.js";
