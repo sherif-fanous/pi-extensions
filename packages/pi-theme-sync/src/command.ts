@@ -332,28 +332,43 @@ export async function openThemeSyncOverlay(
 
     const borderFn = (text: string) => theme.fg("accent", text);
 
+    function buildListOverlay(
+      title: string,
+      list: SelectList,
+      hint: string,
+      message?: { text: string; severity?: ConfigMessageSeverity },
+    ): void {
+      rootContainer.addChild(new DynamicBorder(borderFn));
+      rootContainer.addChild(new Spacer(1));
+      rootContainer.addChild(
+        new Text(theme.fg("accent", theme.bold(title)), 1, 0),
+      );
+      rootContainer.addChild(new Spacer(1));
+      rootContainer.addChild(list);
+
+      if (message) {
+        rootContainer.addChild(new Spacer(1));
+        rootContainer.addChild(
+          new Text(theme.fg(message.severity ?? "warning", message.text), 1, 0),
+        );
+      }
+
+      rootContainer.addChild(new Spacer(1));
+      rootContainer.addChild(new Text(theme.fg("dim", hint), 1, 0));
+      rootContainer.addChild(new DynamicBorder(borderFn));
+    }
+
     switch (mode.kind) {
       case "menu": {
         const list = buildMenuSelectList(doneFn);
 
         activeSelectList = list;
 
-        rootContainer.addChild(new DynamicBorder(borderFn));
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(theme.fg("accent", theme.bold("Theme Sync")), 1, 0),
+        buildListOverlay(
+          "Theme Sync",
+          list,
+          "↑↓ navigate • Enter open • Ctrl+C / Esc quit",
         );
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(list);
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(
-            theme.fg("dim", "↑↓ navigate • Enter open • Ctrl+C / Esc quit"),
-            1,
-            0,
-          ),
-        );
-        rootContainer.addChild(new DynamicBorder(borderFn));
 
         break;
       }
@@ -363,35 +378,14 @@ export async function openThemeSyncOverlay(
 
         activeSelectList = list;
 
-        rootContainer.addChild(new DynamicBorder(borderFn));
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(theme.fg("accent", theme.bold("Theme Sync Config")), 1, 0),
+        buildListOverlay(
+          "Theme Sync Config",
+          list,
+          "↑↓ move • Enter edit • Ctrl+S save • Ctrl+R reload • Esc back • Ctrl+C quit",
+          mode.message
+            ? { text: mode.message, severity: mode.messageSeverity }
+            : undefined,
         );
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(list);
-
-        if (mode.message) {
-          const messageColor = mode.messageSeverity ?? "warning";
-
-          rootContainer.addChild(new Spacer(1));
-          rootContainer.addChild(
-            new Text(theme.fg(messageColor, mode.message), 1, 0),
-          );
-        }
-
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(
-            theme.fg(
-              "dim",
-              "↑↓ move • Enter edit • Ctrl+S save • Ctrl+R reload • Esc back • Ctrl+C quit",
-            ),
-            1,
-            0,
-          ),
-        );
-        rootContainer.addChild(new DynamicBorder(borderFn));
 
         break;
       }
@@ -405,25 +399,11 @@ export async function openThemeSyncOverlay(
 
         activeSelectList = list;
 
-        rootContainer.addChild(new DynamicBorder(borderFn));
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(theme.fg("accent", theme.bold(title)), 1, 0),
+        buildListOverlay(
+          title,
+          list,
+          "↑↓ navigate • Enter select • Esc back • Ctrl+C quit",
         );
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(list);
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(
-            theme.fg(
-              "dim",
-              "↑↓ navigate • Enter select • Esc back • Ctrl+C quit",
-            ),
-            1,
-            0,
-          ),
-        );
-        rootContainer.addChild(new DynamicBorder(borderFn));
 
         break;
       }
@@ -433,25 +413,11 @@ export async function openThemeSyncOverlay(
 
         activeSelectList = list;
 
-        rootContainer.addChild(new DynamicBorder(borderFn));
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(theme.fg("accent", theme.bold("Sync Status")), 1, 0),
+        buildListOverlay(
+          "Sync Status",
+          list,
+          "↑↓ navigate • Enter select • Esc back • Ctrl+C quit",
         );
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(list);
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(
-            theme.fg(
-              "dim",
-              "↑↓ navigate • Enter select • Esc back • Ctrl+C quit",
-            ),
-            1,
-            0,
-          ),
-        );
-        rootContainer.addChild(new DynamicBorder(borderFn));
 
         break;
       }
@@ -499,25 +465,11 @@ export async function openThemeSyncOverlay(
 
         activeSelectList = list;
 
-        rootContainer.addChild(new DynamicBorder(borderFn));
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(theme.fg("accent", theme.bold("Write Config To")), 1, 0),
+        buildListOverlay(
+          "Write Config To",
+          list,
+          "↑↓ navigate • Enter save • Esc back • Ctrl+C quit",
         );
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(list);
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(
-            theme.fg(
-              "dim",
-              "↑↓ navigate • Enter save • Esc back • Ctrl+C quit",
-            ),
-            1,
-            0,
-          ),
-        );
-        rootContainer.addChild(new DynamicBorder(borderFn));
 
         break;
       }

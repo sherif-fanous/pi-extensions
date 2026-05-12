@@ -37,10 +37,6 @@ type ReadJsonResult = {
   warning?: string;
 };
 
-export function getConfigPath(scope: ConfigScope, cwd: string): string {
-  return scope === "project" ? CONFIG_PATHS.project(cwd) : CONFIG_PATHS.global;
-}
-
 export function isValidPollIntervalMs(value: number): boolean {
   return Number.isFinite(value) && value >= POLL_INTERVAL_MIN_MS;
 }
@@ -148,15 +144,6 @@ export async function loadConfig(
   };
 }
 
-export async function readConfigForScope(
-  scope: ConfigScope,
-  cwd: string,
-): Promise<LoadedConfig | undefined> {
-  const result = await readJsonIfExists(getConfigPath(scope, cwd));
-
-  return result.config;
-}
-
 export async function writeConfigValue(
   scope: ConfigScope,
   cwd: string,
@@ -200,6 +187,10 @@ export async function writeConfigValue(
   }
 
   await writeJson(filePath, nextConfig);
+}
+
+function getConfigPath(scope: ConfigScope, cwd: string): string {
+  return scope === "project" ? CONFIG_PATHS.project(cwd) : CONFIG_PATHS.global;
 }
 
 async function readJsonIfExists(filePath: string): Promise<ReadJsonResult> {

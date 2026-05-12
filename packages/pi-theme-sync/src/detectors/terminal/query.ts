@@ -3,7 +3,7 @@ import type {
   TerminalInputHandler,
 } from "@mariozechner/pi-coding-agent";
 
-export const DEFAULT_TERMINAL_QUERY_TIMEOUT_MS = 300;
+const DEFAULT_TERMINAL_QUERY_TIMEOUT_MS = 300;
 
 export async function queryWithTerminalListener<T>(
   ctx: ExtensionContext,
