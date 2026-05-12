@@ -1,8 +1,8 @@
-import type { ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
   DynamicBorder,
   getSelectListTheme,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import {
   Container,
   Key,
@@ -11,7 +11,7 @@ import {
   Spacer,
   Text,
   matchesKey,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 import {
   CONFIG_PATHS,
   POLL_INTERVAL_MIN_MS,

@@ -38,10 +38,10 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.15",
+    "@earendil-works/pi-coding-agent": "^0.74.0",
+    "@earendil-works/pi-tui": "^0.74.0",
     "@eslint/js": "^10.0.1",
     "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
-    "@mariozechner/pi-coding-agent": "^0.58.4",
-    "@mariozechner/pi-tui": "^0.58.4",
     "@stylistic/eslint-plugin": "^5.10.0",
     "@types/node": "^25.7.0",
     "eslint": "^10.3.0",
@@ -54,7 +54,8 @@
     "typescript-eslint": "^8.59.3"
   },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
   },
   "pi": {
     "extensions": [

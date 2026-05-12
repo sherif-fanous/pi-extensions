@@ -1,4 +1,4 @@
-import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Appearance } from "../../types.js";
 import { parseDsr997Reply } from "./dsr-996.js";
 import { queryWithTerminalListener } from "./query.js";

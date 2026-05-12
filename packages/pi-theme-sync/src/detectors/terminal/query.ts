@@ -1,7 +1,7 @@
 import type {
   ExtensionContext,
   TerminalInputHandler,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 const DEFAULT_TERMINAL_QUERY_TIMEOUT_MS = 300;
 
