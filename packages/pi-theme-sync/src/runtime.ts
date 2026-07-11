@@ -62,6 +62,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
   let poller: ReturnType<typeof setInterval> | undefined;
   let driftPoller: ReturnType<typeof setInterval> | undefined;
   let decMode2031Subscription: DecMode2031Subscription | undefined;
+  let isShutDown = false;
 
   const applyMappedTheme = (
     ctx: ExtensionContext,
@@ -73,11 +74,15 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
 
     const desiredThemeName = runtimeConfig.themes[detectedAppearance];
 
-    if (desiredThemeName === ctx.ui.theme.name) {
-      return;
-    }
+    try {
+      if (desiredThemeName === ctx.ui.theme.name) {
+        return;
+      }
 
-    ctx.ui.setTheme(desiredThemeName);
+      ctx.ui.setTheme(desiredThemeName);
+    } catch {
+      // Stale ctx after session replacement — nothing to apply.
+    }
   };
 
   const markEvent = (message: string) => {
@@ -90,6 +95,10 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     availablePollingDetectors: PollingDetector[],
   ): Promise<Appearance> => {
     for (const detector of availablePollingDetectors) {
+      if (isShutDown) {
+        return "unknown";
+      }
+
       const detectedAppearance = await detectAppearance(ctx, detector);
 
       if (detectedAppearance !== "unknown") {
@@ -118,10 +127,13 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     decMode2031Subscription?.removePiTerminalInputListener();
     decMode2031Subscription?.disableTerminalNotifications();
     decMode2031Subscription = undefined;
+
+    isShutDown = true;
   };
 
   const setupAppearanceMonitoring = async (ctx: ExtensionContext) => {
     cleanup();
+    isShutDown = false;
 
     const loadedConfig = await loadConfig(ctx);
 
@@ -180,6 +192,10 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
         const subscription = enableDecMode2031Subscription(
           ctx,
           (detectedAppearance: Appearance) => {
+            if (isShutDown) {
+              return;
+            }
+
             if (detectedAppearance !== "unknown") {
               currentAppearance = detectedAppearance;
               detectionStrategy = DETECTOR_LABELS[detector];
@@ -195,6 +211,10 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
           detectionStrategy = DETECTOR_LABELS[detector];
 
           driftPoller = setInterval(() => {
+            if (isShutDown) {
+              return;
+            }
+
             if (currentAppearance !== "unknown") {
               const desiredThemeName = runtimeConfig.themes[currentAppearance];
 
@@ -220,6 +240,10 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
       poller = setInterval(() => {
         void resolvePollingAppearance(ctx, availablePollingDetectors).then(
           (detectedAppearance: Appearance) => {
+            if (isShutDown) {
+              return;
+            }
+
             if (detectedAppearance !== "unknown") {
               currentAppearance = detectedAppearance;
               detectionStrategy = lastResolvedPollingDetector
