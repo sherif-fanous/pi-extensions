@@ -1,4 +1,5 @@
 .env
+.pi/
 node_modules
 package-lock.json
 pi-theme-sync.code-workspace
