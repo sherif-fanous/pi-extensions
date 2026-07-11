@@ -2,6 +2,12 @@
 
 This changelog follows [Common Changelog](https://common-changelog.org/).
 
+## [0.3.1] - 2026-07-10
+
+### Fixed
+
+- Pi no longer crashes when you replace the current session (`/new`, `/fork`, `/clone`, `/resume`, or `/reload`) while theme sync is detecting the terminal or system appearance.
+
 ## [0.3.0] - 2026-05-12
 
 ### Changed
@@ -23,6 +29,7 @@ This changelog follows [Common Changelog](https://common-changelog.org/).
 
 _Initial release._
 
+[0.3.1]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.3.1
 [0.3.0]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.3.0
 [0.2.0]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.2.0
 [0.1.0]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.1.0
