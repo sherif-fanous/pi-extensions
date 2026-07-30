@@ -2,6 +2,12 @@
 
 This changelog follows [Common Changelog](https://common-changelog.org/).
 
+## [0.4.1] - 2026-07-30
+
+### Fixed
+
+- Long lines in the `/theme-sync` overlays now wrap with a hanging indent instead of restarting at the left edge. Status warnings stay aligned under their bullet, long values such as `Available Detectors:` stay aligned under their column, and config messages remain readable at narrow terminal widths.
+
 ## [0.4.0] - 2026-07-30
 
 ### Changed
@@ -41,6 +47,7 @@ This changelog follows [Common Changelog](https://common-changelog.org/).
 
 _Initial release._
 
+[0.4.1]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.4.1
 [0.4.0]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.4.0
 [0.3.1]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.3.1
 [0.3.0]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.3.0
