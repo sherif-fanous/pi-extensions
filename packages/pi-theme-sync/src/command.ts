@@ -15,6 +15,7 @@ import {
   getSelectListTheme,
 } from "@earendil-works/pi-coding-agent";
 import {
+  type Component,
   Container,
   Key,
   type SelectItem,
@@ -22,6 +23,8 @@ import {
   Spacer,
   Text,
   matchesKey,
+  visibleWidth,
+  wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import {
   CONFIG_PATHS,
@@ -43,6 +46,11 @@ type ConfigValueId =
 
 type DraftConfig = Record<ConfigValueId, string>;
 
+type HangingTextLine = Readonly<{
+  prefix: string;
+  body: string;
+}>;
+
 type ThemeSyncOverlayMode =
   | { kind: "menu" }
   | {
@@ -55,6 +63,49 @@ type ThemeSyncOverlayMode =
   | { kind: "syncSelect" }
   | { kind: "pollIntervalEdit"; value: string; error?: string }
   | { kind: "writeTarget" };
+
+/**
+ * Renders prefixed lines with hanging indentation. Owns width-aware wrapping
+ * and continuation indentation; it does not own background fills, caching, or
+ * padding beyond a uniform horizontal margin.
+ */
+class HangingText implements Component {
+  constructor(
+    private readonly lines: readonly HangingTextLine[],
+    private readonly paddingX = 0,
+    private readonly style?: (line: string) => string,
+  ) {}
+
+  invalidate(): void {
+    // The component has no cached rendering state.
+  }
+
+  render(width: number): string[] {
+    const contentWidth = Math.max(1, width - this.paddingX * 2);
+    const leftMargin = " ".repeat(this.paddingX);
+
+    return this.lines.flatMap(({ prefix, body }) => {
+      const prefixWidth = visibleWidth(prefix);
+      const continuationPrefix = " ".repeat(prefixWidth);
+      const wrappedLines = wrapTextWithAnsi(
+        body,
+        Math.max(1, contentWidth - prefixWidth),
+      );
+
+      return wrappedLines.map((line, index) => {
+        const renderedLine = (index === 0 ? prefix : continuationPrefix) + line;
+
+        const lineWithMargin =
+          leftMargin + (this.style?.(renderedLine) ?? renderedLine);
+
+        return lineWithMargin.padEnd(
+          lineWithMargin.length +
+            Math.max(0, width - visibleWidth(lineWithMargin)),
+        );
+      });
+    });
+  }
+}
 
 export async function openThemeSyncOverlay(
   runtime: ThemeSyncRuntime,
@@ -360,7 +411,9 @@ export async function openThemeSyncOverlay(
       if (message) {
         rootContainer.addChild(new Spacer(1));
         rootContainer.addChild(
-          new Text(theme.fg(message.severity ?? "warning", message.text), 1, 0),
+          new HangingText([{ prefix: "", body: message.text }], 1, (line) =>
+            theme.fg(message.severity ?? "warning", line),
+          ),
         );
       }
 
@@ -451,7 +504,9 @@ export async function openThemeSyncOverlay(
         if (mode.error) {
           rootContainer.addChild(new Spacer(1));
           rootContainer.addChild(
-            new Text(theme.fg("warning", mode.error), 1, 0),
+            new HangingText([{ prefix: "", body: mode.error }], 1, (line) =>
+              theme.fg("warning", line),
+            ),
           );
         }
 
@@ -488,16 +543,44 @@ export async function openThemeSyncOverlay(
       case "status": {
         const status = runtime.getStatus(ctx);
 
-        const statusLines = [
-          `Appearance:          ${status.currentAppearance}`,
-          `Applied Theme:       ${status.appliedTheme}`,
-          `Desired Theme:       ${status.desiredTheme ?? "n/a"}`,
-          `Sync Active:         ${status.syncStatus === "active" ? "yes" : "no"}`,
-          `Detection Strategy:  ${status.detectionStrategy}`,
-          `Available Detectors: ${status.availableDetectors.join(", ") || "none"}`,
-          `Polling Interval:    ${status.pollIntervalMs}ms`,
-          `Last Update:         ${status.lastUpdateAt ? new Date(status.lastUpdateAt).toLocaleString() : "never"}`,
-          `Last Event:          ${status.lastEvent}`,
+        const statusLines: HangingTextLine[] = [
+          { prefix: "Appearance:          ", body: status.currentAppearance },
+          { prefix: "Applied Theme:       ", body: status.appliedTheme },
+          {
+            prefix: "Desired Theme:       ",
+            body: status.desiredTheme ?? "n/a",
+          },
+          {
+            prefix: "Sync Active:         ",
+            body: status.syncStatus === "active" ? "yes" : "no",
+          },
+          {
+            prefix: "Detection Strategy:  ",
+            body: status.detectionStrategy,
+          },
+          {
+            prefix: "Available Detectors: ",
+            body: status.availableDetectors.join(", ") || "none",
+          },
+          {
+            prefix: "Polling Interval:    ",
+            body: `${status.pollIntervalMs}ms`,
+          },
+          {
+            prefix: "Last Update:         ",
+            body: status.lastUpdateAt
+              ? new Date(status.lastUpdateAt).toLocaleString()
+              : "never",
+          },
+          { prefix: "Last Event:          ", body: status.lastEvent },
+        ];
+
+        const warningLines: HangingTextLine[] = [
+          { prefix: "", body: "Warnings:" },
+          ...status.warnings.map((warning) => ({
+            prefix: "  - ",
+            body: warning,
+          })),
         ];
 
         rootContainer.addChild(new DynamicBorder(borderFn));
@@ -506,17 +589,14 @@ export async function openThemeSyncOverlay(
           new Text(theme.fg("accent", theme.bold("Theme Sync Status")), 1, 0),
         );
         rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(new Text(statusLines.join("\n"), 1, 0));
+        rootContainer.addChild(new HangingText(statusLines, 1));
 
         if (status.warnings.length > 0) {
-          const warningLines = [
-            "Warnings:",
-            ...status.warnings.map((warning) => `  - ${warning}`),
-          ];
-
           rootContainer.addChild(new Spacer(1));
           rootContainer.addChild(
-            new Text(theme.fg("warning", warningLines.join("\n")), 1, 0),
+            new HangingText(warningLines, 1, (line) =>
+              theme.fg("warning", line),
+            ),
           );
         }
 
