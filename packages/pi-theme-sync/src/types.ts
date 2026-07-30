@@ -45,7 +45,7 @@ export type LoadedRuntimeConfig = {
   warnings: string[];
 };
 
-export type PollingDetector = "dsr-996" | "osc-11" | "system";
+export type PollingDetector = "color-scheme" | "osc-11" | "system";
 
 export type RuntimeConfig = {
   isSyncActive: boolean;
@@ -90,4 +90,4 @@ export type RuntimeStatus = {
   lastEvent: string;
 };
 
-export type SubscriptionDetector = "dec-mode-2031";
+export type SubscriptionDetector = "color-scheme-subscription";

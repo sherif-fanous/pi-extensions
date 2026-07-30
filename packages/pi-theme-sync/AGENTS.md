@@ -79,8 +79,9 @@ project-wide unless noted.
   back / quit suffix stays consistent.
 - Detector-strategy labels live in one place
   (`DETECTOR_LABELS` in `src/runtime.ts`) and use the human-readable
-  form (`"DEC mode 2031"`, `"DSR 996/997"`, `"OSC 11"`, `"System
-  Appearance"`). These show up verbatim in the Status overlay's
+  form (`"Terminal Color Scheme"`, `"Terminal Color Scheme
+  (subscription)"`, `"OSC 11"`, `"System Appearance"`). These show
+  up verbatim in the Status overlay's
   `Detection Strategy:` and `Available Detectors:` rows; do not
   duplicate the strings at call sites.
 
@@ -121,6 +122,14 @@ project-wide unless noted.
   switch arms. New detectors added to the registry should not
   require code changes anywhere except `detectAppearance` (the
   detector-implementation switch) and the per-detector module.
+- `getTuiHandle` in `src/detectors/pi/tui-handle.ts` acquires Pi's
+  live TUI through a transient zero-line `setWidget` factory. This
+  route is off-label and permanent: upstream declined to expose the
+  color-scheme API through `ExtensionUIContext`. Keep the workaround
+  isolated, acquire it once per `setupAppearanceMonitoring` call,
+  thread that session-local handle through detectors, never cache it
+  across sessions, and re-check it whenever the supported Pi floor is
+  raised.
 
 ### API shape
 
@@ -155,34 +164,33 @@ project-wide unless noted.
 
 ### Detection layering
 
-Appearance detection has three concentric layers; understanding the
-boundaries between them is the most useful background for any
-detection-related change.
+Appearance detection separates host API access, raw fallback queries,
+and runtime strategy selection. Understanding those boundaries is the
+most useful background for any detection-related change.
 
-- **The terminal-query primitive** is `queryWithTerminalListener<T>`
-  in `src/detectors/terminal/query.ts`. It writes a query sequence
-  to stdout, subscribes a `TerminalInputHandler` via
-  `ctx.ui.onTerminalInput`, races the reply against a timeout, and
-  always cleans up (`unsubscribe` + `clearTimeout`) before resolving.
-  All per-protocol detectors call this helper rather than reading
-  from stdin directly; do not bypass it.
-- **Per-protocol detectors** live under `src/detectors/terminal/` and
-  follow a two-function shape: an orchestrator
-  (`detectAppearanceViaDsr996(ctx)` etc.) that wires the query
-  sequence to the helper, and a pure parser
-  (`parseDsr997Reply(data: string): Appearance`) that classifies the
-  reply text. Keep the parser separate from the orchestrator so it
-  can be unit-tested without a terminal harness.
+- **Pi's color-scheme API** is the primary terminal source.
+  `src/detectors/pi/color-scheme.ts` wraps
+  `queryTerminalColorScheme`, `onTerminalColorSchemeChange`, and
+  `setTerminalColorSchemeNotifications`; Pi owns DSR 996/997 parsing
+  and notification lifecycle. The extension must not parse color-
+  scheme reports from raw terminal input.
+- **Raw terminal queries** survive only for OSC 11 polling and the
+  DEC mode 2031 DECRQM support probe. Both use
+  `queryWithTerminalListener<T>` in
+  `src/detectors/terminal/query.ts`, which writes a query, races the
+  reply against a timeout, and always cleans up its listener. The
+  DECRQM probe gates subscription availability; it does not own the
+  notification lifecycle.
 - **Strategy classes:**
-  - _Polling_ detectors (`dsr-996`, `osc-11`, `system`) reply
-    on-demand; the runtime calls them in a `setInterval` loop. They
-    are listed in `POLLING_DETECTORS` and dispatched through
-    `detectAppearance(ctx, kind)`.
-  - _Subscription_ detectors (`dec-mode-2031`) emit unsolicited
-    notifications and return a `*Subscription` object whose
-    `removePiTerminalInputListener` / `disableTerminalNotifications`
-    methods MUST be called on cleanup. They are listed in
-    `SUBSCRIPTION_DETECTORS`.
+  - _Polling_ detectors (`color-scheme`, `osc-11`, `system`) reply
+    on demand and are tried in that order. `osc-11` and `system`
+    remain fallbacks when Pi's color-scheme query is unavailable.
+  - The _subscription_ detector (`color-scheme-subscription`) uses
+    Pi's listener API after the DECRQM probe confirms mode 2031. Its
+    cleanup handle removes only the extension's listener. Terminal
+    notifications are shared host state and MUST NOT be disabled by
+    the extension; doing so breaks Pi's built-in automatic theme
+    controller.
 - **Runtime preference: subscription over polling.** When both
   classes have available detectors, the runtime picks the first
   available subscription detector and runs only a low-frequency
