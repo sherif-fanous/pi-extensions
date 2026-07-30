@@ -13,7 +13,7 @@ import type {
   TerminalInputHandler,
 } from "@earendil-works/pi-coding-agent";
 
-const DEFAULT_TERMINAL_QUERY_TIMEOUT_MS = 300;
+export const DEFAULT_TERMINAL_QUERY_TIMEOUT_MS = 300;
 
 export async function queryWithTerminalListener<T>(
   ctx: ExtensionContext,

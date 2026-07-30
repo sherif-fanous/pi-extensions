@@ -3,9 +3,7 @@
 ## Purpose
 
 Extension lifecycle, theme application, runtime state tracking, and reload-driven configuration flow.
-
 ## Requirements
-
 ### Requirement: Theme sync applies mapped themes
 
 The extension SHALL apply the configured light or dark Pi theme that corresponds to the currently resolved appearance when sync is active.
@@ -91,9 +89,9 @@ occurs while detection is in flight never crashes Pi.
 
 #### Scenario: Buffered subscription notification arrives after session replacement
 
-- **WHEN** a DEC mode 2031 subscription callback is dispatched for buffered
-  terminal input after the extension's `session_shutdown` cleanup has removed
-  the listener
+- **WHEN** a color-scheme subscription callback is dispatched for a buffered
+  terminal color-scheme report after the extension's `session_shutdown`
+  cleanup has unsubscribed the listener
 - **THEN** the extension ignores the notification without accessing the
   replaced `ctx`
 
@@ -110,3 +108,4 @@ occurs while detection is in flight never crashes Pi.
   been replaced
 - **THEN** the extension does not propagate the resulting failure as an
   uncaught exception and Pi continues running
+

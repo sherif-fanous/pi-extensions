@@ -8,7 +8,11 @@
  * any interactive UI (lives in `command.ts`).
  */
 
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import {
+  type ExtensionContext,
+  VERSION,
+} from "@earendil-works/pi-coding-agent";
+import type { TUI } from "@earendil-works/pi-tui";
 import { DEFAULT_CONFIG, loadConfig } from "./config.js";
 import {
   detectAppearance,
@@ -16,9 +20,12 @@ import {
   probeAvailableSubscriptionDetectors,
 } from "./detectors/index.js";
 import {
-  type DecMode2031Subscription,
-  enableDecMode2031Subscription,
-} from "./detectors/terminal/dec-mode-2031.js";
+  type ColorSchemeSubscription,
+  detectAppearanceViaColorScheme,
+  enableColorSchemeSubscription,
+  hasColorSchemeApi,
+} from "./detectors/pi/color-scheme.js";
+import { getTuiHandle } from "./detectors/pi/tui-handle.js";
 import type {
   Appearance,
   PollingDetector,
@@ -29,8 +36,8 @@ import type {
 
 const DETECTOR_LABELS: Record<PollingDetector | SubscriptionDetector, string> =
   {
-    "dec-mode-2031": "DEC mode 2031",
-    "dsr-996": "DSR 996/997",
+    "color-scheme": "Terminal Color Scheme",
+    "color-scheme-subscription": "Terminal Color Scheme (subscription)",
     "osc-11": "OSC 11",
     system: "System Appearance",
   };
@@ -61,7 +68,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
 
   let poller: ReturnType<typeof setInterval> | undefined;
   let driftPoller: ReturnType<typeof setInterval> | undefined;
-  let decMode2031Subscription: DecMode2031Subscription | undefined;
+  let colorSchemeSubscription: ColorSchemeSubscription | undefined;
   let isShutDown = false;
 
   const applyMappedTheme = (
@@ -92,6 +99,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
 
   const resolvePollingAppearance = async (
     ctx: ExtensionContext,
+    tui: TUI | undefined,
     availablePollingDetectors: PollingDetector[],
   ): Promise<Appearance> => {
     for (const detector of availablePollingDetectors) {
@@ -99,7 +107,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
         return "unknown";
       }
 
-      const detectedAppearance = await detectAppearance(ctx, detector);
+      const detectedAppearance = await detectAppearance(ctx, detector, tui);
 
       if (detectedAppearance !== "unknown") {
         lastResolvedPollingDetector = detector;
@@ -124,9 +132,8 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
       driftPoller = undefined;
     }
 
-    decMode2031Subscription?.removePiTerminalInputListener();
-    decMode2031Subscription?.disableTerminalNotifications();
-    decMode2031Subscription = undefined;
+    colorSchemeSubscription?.removeColorSchemeListener();
+    colorSchemeSubscription = undefined;
 
     isShutDown = true;
   };
@@ -141,9 +148,20 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     runtimeConfigSources = loadedConfig.runtimeConfigSources;
     warnings = [...loadedConfig.warnings];
 
-    const availablePollingDetectors = await probeAvailablePollingDetectors(ctx);
+    const tui = getTuiHandle(ctx);
+
+    if (ctx.hasUI && !hasColorSchemeApi(tui)) {
+      warnings.push(
+        `Terminal color-scheme API is unavailable in Pi ${VERSION}; falling back to other detectors.`,
+      );
+    }
+
+    const availablePollingDetectors = await probeAvailablePollingDetectors(
+      ctx,
+      tui,
+    );
     const availableSubscriptionDetectors =
-      await probeAvailableSubscriptionDetectors(ctx);
+      await probeAvailableSubscriptionDetectors(ctx, tui);
 
     availableDetectors = [
       ...availableSubscriptionDetectors.map(
@@ -154,6 +172,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
 
     const initialAppearance = await resolvePollingAppearance(
       ctx,
+      tui,
       availablePollingDetectors,
     );
 
@@ -188,9 +207,9 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     }
 
     for (const detector of availableSubscriptionDetectors) {
-      if (detector === "dec-mode-2031") {
-        const subscription = enableDecMode2031Subscription(
-          ctx,
+      if (detector === "color-scheme-subscription") {
+        const subscription = enableColorSchemeSubscription(
+          tui,
           (detectedAppearance: Appearance) => {
             if (isShutDown) {
               return;
@@ -207,24 +226,54 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
         );
 
         if (subscription) {
-          decMode2031Subscription = subscription;
+          colorSchemeSubscription = subscription;
           detectionStrategy = DETECTOR_LABELS[detector];
 
+          // Re-query rather than only re-applying. Pi shares the terminal
+          // notification flag with its own automatic theme controller and can
+          // disable it mid-session, which would silently stop this listener
+          // with no other signal. Re-querying keeps detection self-healing.
+          // The same pass corrects drift when the user changes Pi's theme
+          // manually after we set it.
           driftPoller = setInterval(() => {
-            if (isShutDown) {
-              return;
-            }
-
-            if (currentAppearance !== "unknown") {
-              const desiredThemeName = runtimeConfig.themes[currentAppearance];
-
-              if (desiredThemeName !== ctx.ui.theme.name) {
-                markEvent(
-                  `Drift corrected: reapplied ${currentAppearance} theme`,
-                );
-                applyMappedTheme(ctx, currentAppearance);
+            void (async () => {
+              if (isShutDown) {
+                return;
               }
-            }
+
+              const detectedAppearance =
+                await detectAppearanceViaColorScheme(tui);
+
+              // The await above yields, so the session may have been replaced
+              // before this continuation runs.
+              if (isShutDown) {
+                return;
+              }
+
+              if (
+                detectedAppearance !== "unknown" &&
+                detectedAppearance !== currentAppearance
+              ) {
+                currentAppearance = detectedAppearance;
+
+                markEvent(`Detected ${detectedAppearance} appearance`);
+                applyMappedTheme(ctx, detectedAppearance);
+
+                return;
+              }
+
+              if (currentAppearance !== "unknown") {
+                const desiredThemeName =
+                  runtimeConfig.themes[currentAppearance];
+
+                if (desiredThemeName !== ctx.ui.theme.name) {
+                  markEvent(
+                    `Drift corrected: reapplied ${currentAppearance} theme`,
+                  );
+                  applyMappedTheme(ctx, currentAppearance);
+                }
+              }
+            })();
           }, runtimeConfig.detection.pollIntervalMs);
 
           return;
@@ -238,7 +287,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
         : "Polling";
 
       poller = setInterval(() => {
-        void resolvePollingAppearance(ctx, availablePollingDetectors).then(
+        void resolvePollingAppearance(ctx, tui, availablePollingDetectors).then(
           (detectedAppearance: Appearance) => {
             if (isShutDown) {
               return;
