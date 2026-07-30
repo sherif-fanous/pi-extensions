@@ -2,6 +2,18 @@
 
 This changelog follows [Common Changelog](https://common-changelog.org/).
 
+## [0.4.0] - 2026-07-30
+
+### Changed
+
+- **Breaking:** Pi 0.79.7 is now the supported minimum. Users on older Pi versions should pin `pi-theme-sync@0.3.x`.
+- Terminal appearance now comes from Pi's color-scheme API. The Status overlay's `Detection Strategy:` values are now `Terminal Color Scheme` and `Terminal Color Scheme (subscription)`.
+- Installing on an older Pi is not blocked. Detection falls back to OSC 11 and system appearance, and `/theme-sync` → Status names the host Pi version and the reason.
+
+### Removed
+
+- The extension's raw DSR 996/997 polling detector and DEC mode 2031 notification listener. OSC 11 and system appearance detection remain as fallbacks.
+
 ## [0.3.1] - 2026-07-10
 
 ### Fixed
@@ -29,6 +41,7 @@ This changelog follows [Common Changelog](https://common-changelog.org/).
 
 _Initial release._
 
+[0.4.0]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.4.0
 [0.3.1]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.3.1
 [0.3.0]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.3.0
 [0.2.0]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.2.0
