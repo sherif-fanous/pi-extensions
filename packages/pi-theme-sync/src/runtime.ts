@@ -21,7 +21,6 @@ import {
 } from "./detectors/index.js";
 import {
   type ColorSchemeSubscription,
-  detectAppearanceViaColorScheme,
   enableColorSchemeSubscription,
   hasColorSchemeApi,
 } from "./detectors/pi/color-scheme.js";
@@ -68,7 +67,10 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
 
   let poller: ReturnType<typeof setInterval> | undefined;
   let driftPoller: ReturnType<typeof setInterval> | undefined;
+  let isPollCycleRunning = false;
   let colorSchemeSubscription: ColorSchemeSubscription | undefined;
+  let isColorSchemeSubscriptionDemoted = false;
+  let hasUnreportedAppearanceChange = false;
   let isShutDown = false;
 
   const applyMappedTheme = (
@@ -96,6 +98,11 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     lastEvent = message;
     lastUpdateAt = Date.now();
   };
+
+  const pollingStrategyLabel = (): string =>
+    lastResolvedPollingDetector
+      ? DETECTOR_LABELS[lastResolvedPollingDetector]
+      : "Polling";
 
   const resolvePollingAppearance = async (
     ctx: ExtensionContext,
@@ -135,6 +142,9 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     colorSchemeSubscription?.removeColorSchemeListener();
     colorSchemeSubscription = undefined;
 
+    isColorSchemeSubscriptionDemoted = false;
+    hasUnreportedAppearanceChange = false;
+    isPollCycleRunning = false;
     isShutDown = true;
   };
 
@@ -206,16 +216,49 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
       );
     }
 
+    // One-way for the session. A host that fails to report a change has shown
+    // a static capability gap, so re-promotion would need its own liveness
+    // tracking for no user-visible gain; `/reload` re-probes instead.
+    const demoteColorSchemeSubscription = () => {
+      isColorSchemeSubscriptionDemoted = true;
+      hasUnreportedAppearanceChange = false;
+
+      colorSchemeSubscription?.removeColorSchemeListener();
+      colorSchemeSubscription = undefined;
+
+      // Rebuilding from the polling list drops the subscription detector
+      // without matching on its rendered label.
+      availableDetectors = availablePollingDetectors.map(
+        (pollingDetector) => DETECTOR_LABELS[pollingDetector],
+      );
+      detectionStrategy = pollingStrategyLabel();
+
+      // Silence alone cannot distinguish a terminal that never emits reports
+      // from a notification channel that was switched off underneath us, so
+      // this states what was observed rather than naming a cause.
+      warnings.push(
+        "Terminal color-scheme notifications stopped arriving, so theme sync switched to polling.",
+      );
+
+      markEvent("Switched to polling after notifications stopped arriving");
+    };
+
     for (const detector of availableSubscriptionDetectors) {
       if (detector === "color-scheme-subscription") {
         const subscription = enableColorSchemeSubscription(
           tui,
           (detectedAppearance: Appearance) => {
-            if (isShutDown) {
+            if (isShutDown || isColorSchemeSubscriptionDemoted) {
               return;
             }
 
             if (detectedAppearance !== "unknown") {
+              // Any report proves the channel is alive, including one that
+              // disagrees with what polling just saw. Requiring a specific
+              // value would demote a working subscription whenever appearance
+              // changed twice inside one interval.
+              hasUnreportedAppearanceChange = false;
+
               currentAppearance = detectedAppearance;
               detectionStrategy = DETECTOR_LABELS[detector];
 
@@ -229,49 +272,83 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
           colorSchemeSubscription = subscription;
           detectionStrategy = DETECTOR_LABELS[detector];
 
-          // Re-query rather than only re-applying. Pi shares the terminal
-          // notification flag with its own automatic theme controller and can
-          // disable it mid-session, which would silently stop this listener
-          // with no other signal. Re-querying keeps detection self-healing.
-          // The same pass corrects drift when the user changes Pi's theme
-          // manually after we set it.
+          // Pi can disable shared notifications mid-session, and some hosts
+          // recognize mode 2031 without sending reports. Try the full polling
+          // chain so a working fallback can detect a missed change. This also
+          // restores the configured theme if the user changes Pi's theme
+          // manually.
           driftPoller = setInterval(() => {
+            // The detector chain can outlast a short interval, so skip rather
+            // than let two cycles interleave writes to the cached appearance.
+            if (isPollCycleRunning) {
+              return;
+            }
+
+            isPollCycleRunning = true;
+
             void (async () => {
-              if (isShutDown) {
-                return;
-              }
-
-              const detectedAppearance =
-                await detectAppearanceViaColorScheme(tui);
-
-              // The await above yields, so the session may have been replaced
-              // before this continuation runs.
-              if (isShutDown) {
-                return;
-              }
-
-              if (
-                detectedAppearance !== "unknown" &&
-                detectedAppearance !== currentAppearance
-              ) {
-                currentAppearance = detectedAppearance;
-
-                markEvent(`Detected ${detectedAppearance} appearance`);
-                applyMappedTheme(ctx, detectedAppearance);
-
-                return;
-              }
-
-              if (currentAppearance !== "unknown") {
-                const desiredThemeName =
-                  runtimeConfig.themes[currentAppearance];
-
-                if (desiredThemeName !== ctx.ui.theme.name) {
-                  markEvent(
-                    `Drift corrected: reapplied ${currentAppearance} theme`,
-                  );
-                  applyMappedTheme(ctx, currentAppearance);
+              try {
+                if (isShutDown) {
+                  return;
                 }
+
+                // A notification can land while a poll is already in flight,
+                // so a missed change counts only once it survives to the next
+                // cycle without any report arriving.
+                if (
+                  hasUnreportedAppearanceChange &&
+                  !isColorSchemeSubscriptionDemoted
+                ) {
+                  demoteColorSchemeSubscription();
+                }
+
+                const detectedAppearance = await resolvePollingAppearance(
+                  ctx,
+                  tui,
+                  availablePollingDetectors,
+                );
+
+                // The await above yields, so the session may have been
+                // replaced before this continuation runs.
+                if (isShutDown) {
+                  return;
+                }
+
+                if (
+                  detectedAppearance !== "unknown" &&
+                  detectedAppearance !== currentAppearance
+                ) {
+                  if (isColorSchemeSubscriptionDemoted) {
+                    detectionStrategy = pollingStrategyLabel();
+                  } else {
+                    hasUnreportedAppearanceChange = true;
+                  }
+
+                  currentAppearance = detectedAppearance;
+
+                  markEvent(`Detected ${detectedAppearance} appearance`);
+                  applyMappedTheme(ctx, detectedAppearance);
+
+                  return;
+                }
+
+                if (isColorSchemeSubscriptionDemoted) {
+                  detectionStrategy = pollingStrategyLabel();
+                }
+
+                if (currentAppearance !== "unknown") {
+                  const desiredThemeName =
+                    runtimeConfig.themes[currentAppearance];
+
+                  if (desiredThemeName !== ctx.ui.theme.name) {
+                    markEvent(
+                      `Drift corrected: reapplied ${currentAppearance} theme`,
+                    );
+                    applyMappedTheme(ctx, currentAppearance);
+                  }
+                }
+              } finally {
+                isPollCycleRunning = false;
               }
             })();
           }, runtimeConfig.detection.pollIntervalMs);
@@ -282,28 +359,34 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     }
 
     if (availablePollingDetectors.length > 0) {
-      detectionStrategy = lastResolvedPollingDetector
-        ? DETECTOR_LABELS[lastResolvedPollingDetector]
-        : "Polling";
+      detectionStrategy = pollingStrategyLabel();
 
       poller = setInterval(() => {
-        void resolvePollingAppearance(ctx, tui, availablePollingDetectors).then(
-          (detectedAppearance: Appearance) => {
+        // Same re-entrancy guard as the drift poller: the chain can outlast a
+        // short interval.
+        if (isPollCycleRunning) {
+          return;
+        }
+
+        isPollCycleRunning = true;
+
+        void resolvePollingAppearance(ctx, tui, availablePollingDetectors)
+          .then((detectedAppearance: Appearance) => {
             if (isShutDown) {
               return;
             }
 
             if (detectedAppearance !== "unknown") {
               currentAppearance = detectedAppearance;
-              detectionStrategy = lastResolvedPollingDetector
-                ? DETECTOR_LABELS[lastResolvedPollingDetector]
-                : "Polling";
+              detectionStrategy = pollingStrategyLabel();
 
               markEvent(`Detected ${detectedAppearance} appearance`);
               applyMappedTheme(ctx, detectedAppearance);
             }
-          },
-        );
+          })
+          .finally(() => {
+            isPollCycleRunning = false;
+          });
       }, runtimeConfig.detection.pollIntervalMs);
 
       return;
