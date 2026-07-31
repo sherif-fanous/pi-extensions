@@ -2,6 +2,13 @@
 
 This changelog follows [Common Changelog](https://common-changelog.org/).
 
+## [0.4.2] - 2026-07-31
+
+### Fixed
+
+- Theme sync no longer stops following the terminal on hosts that report support for color-scheme notifications but never send them, such as herdr panes. Appearance is re-checked through the full detector chain, so a terminal that answers only OSC 11 keeps switching themes.
+- `/theme-sync` → Status no longer presents a session as notification-driven once notifications have stopped arriving. `Detection Strategy:` names the detector that answered, `Available Detectors:` drops the subscription, and a warning records the fallback.
+
 ## [0.4.1] - 2026-07-30
 
 ### Fixed
@@ -47,6 +54,7 @@ This changelog follows [Common Changelog](https://common-changelog.org/).
 
 _Initial release._
 
+[0.4.2]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.4.2
 [0.4.1]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.4.1
 [0.4.0]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.4.0
 [0.3.1]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.3.1
