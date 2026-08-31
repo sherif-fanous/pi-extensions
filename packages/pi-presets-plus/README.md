@@ -67,9 +67,9 @@ An optional policy file at `<agent-dir>/presets-plus/policy.json` can warn you b
   "rules": [
     {
       "match": "^/Users/me/work/",
-      "allow": [{ "field": "provider", "pattern": "^anthropic$" }],
-      "prohibit": [{ "pattern": "^personal-" }],
-      "default": { "field": "model", "pattern": "^anthropic/claude-opus" }
+      "allow": [{ "field": "name", "pattern": "^team-" }],
+      "prohibit": [{ "pattern": "^restricted-" }],
+      "default": { "field": "name", "pattern": "^team-default$" }
     }
   ]
 }
@@ -77,13 +77,13 @@ An optional policy file at `<agent-dir>/presets-plus/policy.json` can warn you b
 
 The extension tests each rule's `match` against the current working directory. `allow`, `prohibit`, and `default` use `{ "field", "pattern" }` matchers. The field may be `name`, `provider`, or `model`; it defaults to `name`. A `model` matcher tests the combined `provider/model` value.
 
-All patterns are raw, unanchored JavaScript regular expressions. For example, `apple` matches `apple-opus`, while `^apple-` only matches names with that prefix.
+All patterns are raw, unanchored JavaScript regular expressions. For example, `team` matches `team-default`, while `^team-` only matches names with that prefix.
 
 The extension combines the `allow` and `prohibit` matchers from every rule that matches the current directory. A non-empty allow set acts as a whitelist, and prohibit always wins. If the flag, command, picker, or hotkey tries to activate a non-permitted preset, the extension asks you to Override or Cancel. Session restore does not run this check.
 
 For fresh sessions, the matching default rule whose `match` consumes the longest part of the current directory wins. File order breaks equal-length ties. Its matcher selects the first available preset permitted by the combined rules, using the existing merged preset order. The `--preset` flag and a successful session restore take precedence over this default.
 
-Invalid JSON or an unsupported version disables the file and shows a warning. An invalid rule `match` skips that rule, while an invalid matcher pattern skips only that matcher. Policy errors fail open: a typo will not block activation, and the warning identifies the rule or matcher that the extension skipped. Run `/presets policy` to see the matching rules, combined allow and prohibit sets, and resolved default.
+Invalid JSON or an unsupported version disables the file and shows a warning. An invalid rule `match` skips that rule, while an invalid matcher pattern skips only that matcher. Policy errors fail open: a typo will not block activation, and the warning identifies the rule or matcher that the extension skipped. Run `/presets policy` to see which presets are allowed, which are prohibited, and which default is selected.
 
 ## Commands
 
@@ -94,5 +94,5 @@ Invalid JSON or an unsupported version disables the file and shows a warning. An
 | `/presets clear`              | Clears the active preset and returns to Pi's defaults.          |
 | `/presets reload`             | Re-reads your preset files (use after editing them by hand).    |
 | `/presets status`             | Shows the active preset's settings compared to Pi's defaults.   |
-| `/presets policy`             | Shows the access policy for the current directory.              |
+| `/presets policy`             | Shows allowed and prohibited presets for the current directory. |
 | `/presets show-prompt [name]` | Shows the active preset's prompt, or the named preset's prompt. |
