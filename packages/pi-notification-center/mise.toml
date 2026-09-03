@@ -1,0 +1,57 @@
+[env]
+_.file = ".env"
+_.path = ["{{config_root}}/node_modules/.bin"]
+
+[tasks.check]
+depends = ["format-check", "type-check", "lint", "test"]
+
+[tasks.format]
+run = "prettier --write eslint.config.mjs examples/. package.json src/. tests/. tsconfig.json vitest.config.ts"
+
+[tasks.format-check]
+run = "prettier --check eslint.config.mjs examples/. package.json src/. tests/. tsconfig.json vitest.config.ts"
+
+[tasks.install-deps]
+run = "pnpm add --save-prod"
+
+[tasks.install-dev-deps]
+run = "pnpm add --save-dev"
+
+[tasks.lint]
+run = "biome lint examples/. src/. tests/. && eslint examples/. src/. tests/."
+
+[tasks.lint-fix]
+run = "biome lint examples/. src/. tests/. --fix && eslint examples/. src/. tests/. --fix"
+
+[tasks.login]
+run = "pnpm login"
+
+[tasks.pack-check]
+depends = ["check"]
+run = "pnpm pack --dry-run"
+
+[tasks.publish]
+depends = ["pack-check"]
+run = "pnpm publish --access public"
+
+[tasks.sort-package-json]
+run = "sort-package-json"
+
+[tasks.test]
+run = "vitest --run"
+
+[tasks.test-watch]
+run = "vitest"
+
+[tasks.type-check]
+run = "tsc --noEmit"
+
+[tasks.uninstall-deps]
+run = "pnpm remove"
+
+[tasks.update-deps]
+run = "pnpm update"
+
+[tools]
+node = "lts"
+"npm:pnpm" = "latest"
