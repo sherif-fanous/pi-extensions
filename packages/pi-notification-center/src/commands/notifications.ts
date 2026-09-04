@@ -12,7 +12,10 @@
 import { readNotificationHistory } from "../history.js";
 import { isInteractiveTui } from "../interactive.js";
 import { HISTORY_EMPTY_MESSAGE } from "../ui/history-format.js";
-import { HistoryViewComponent } from "../ui/history-view.js";
+import {
+  HISTORY_MAX_HEIGHT_PERCENT,
+  HistoryViewComponent,
+} from "../ui/history-view.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
 /** Minimal command-context surface used to open the overlay. */
@@ -63,7 +66,9 @@ export async function runNotificationsCommand(
       // on a narrow terminal, where the component falls back to its own
       // minimum and the panes stop shrinking.
       overlayOptions: {
-        maxHeight: "80%",
+        // Same ceiling the component sizes itself to, so its last row is
+        // never clipped away.
+        maxHeight: `${HISTORY_MAX_HEIGHT_PERCENT}%`,
         minWidth: HISTORY_MIN_WIDTH,
         width: "80%",
       },

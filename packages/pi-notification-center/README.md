@@ -81,7 +81,7 @@ the file yourself if you want to change something.
   "toast": {
     "timeout": 3000,
     "maxLines": 5,
-    "width": 50
+    "width": 64
   }
 }
 ```
@@ -91,11 +91,15 @@ the file yourself if you want to change something.
 | `maxToastsVisible` |       5 | integer from 1 through 10      |
 | `toast.timeout`    |    3000 | integer from 250 through 60000 |
 | `toast.maxLines`   |       5 | integer from 1 through 20      |
-| `toast.width`      |      50 | integer from 20 through 80     |
+| `toast.width`      |      64 | integer from 20 through 80     |
 
 `maxToastsVisible` caps how many cards show at once. The `toast` settings
 describe one card: how long it stays (`timeout`, in milliseconds), how
-tall it can grow (`maxLines`), and how wide it is (`width`).
+tall it can grow (`maxLines`), and how wide it can grow (`width`).
+
+Cards are only as wide as the longest message on show, so `width` sets
+the limit rather than the size. Short notifications stay small, and a
+narrow terminal shrinks them further.
 
 Every key is optional, so omit the ones you are happy with. If a value is
 unusable the extension keeps the default for it, warns you once, and

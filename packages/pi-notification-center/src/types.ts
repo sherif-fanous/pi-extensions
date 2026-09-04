@@ -44,7 +44,7 @@ export interface ToastConfig {
   maxLines: number;
   /** Card lifetime in milliseconds, measured from arrival. */
   timeout: number;
-  /** Card width in terminal columns. */
+  /** Widest a card may grow, in terminal columns. */
   width: number;
 }
 
@@ -87,7 +87,7 @@ export const DEFAULT_CONFIG: NotificationConfig = {
   toast: {
     maxLines: 5,
     timeout: 3000,
-    width: 50,
+    width: 64,
   },
 } as const;
 

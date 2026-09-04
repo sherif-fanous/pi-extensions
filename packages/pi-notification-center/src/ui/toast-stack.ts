@@ -8,6 +8,11 @@
  * surface, or history — callers supply the already-bounded list of
  * visible notifications.
  *
+ * `toast.width` is a maximum rather than a fixed size. Cards are sized to
+ * the widest message on show, so a short notification stays small instead
+ * of drawing a mostly empty box over the transcript, and one width is
+ * used for the whole stack so right-anchored cards keep a straight edge.
+ *
  * Rendering is split into a pure `renderToastStack` function and a thin
  * component wrapper so tests can assert on exact lines and widths
  * without constructing a TUI.
@@ -72,20 +77,23 @@ export const TOAST_FRAME_ROWS = 2;
 export const MIN_TERMINAL_HEIGHT = TOAST_FRAME_ROWS + 2;
 
 /**
- * Whether the configured toast surface fits the current terminal.
+ * Whether a toast surface fits the current terminal.
  *
  * Used both as the overlay's `visible` predicate and as a pre-render
  * guard, so an undersized terminal silently omits presentation instead of
  * drawing a broken frame. History is unaffected either way.
+ *
+ * The bound is the narrowest legible card, not the configured width,
+ * because cards shrink to the terminal. A wide `toast.width` on a narrow
+ * terminal yields narrow cards rather than no cards at all.
  */
 export function canRenderToasts(
   terminalWidth: number,
   terminalHeight: number,
-  config: NotificationConfig,
 ): boolean {
   return (
     terminalHeight >= MIN_TERMINAL_HEIGHT &&
-    terminalWidth >= config.toast.width + TOAST_HORIZONTAL_MARGIN
+    terminalWidth >= MIN_TOAST_WIDTH + TOAST_HORIZONTAL_MARGIN
   );
 }
 
@@ -111,17 +119,24 @@ export function renderToastStack(
 ): string[] {
   if (toasts.length === 0) return [];
 
-  if (
-    !canRenderToasts(viewport.terminalWidth, viewport.terminalHeight, config)
-  ) {
+  if (!canRenderToasts(viewport.terminalWidth, viewport.terminalHeight)) {
     return [];
   }
 
-  // Never exceed the width the surface actually granted us, and never
-  // fall below the width where framing stops being legible.
+  const candidates = toasts.slice(-config.maxToastsVisible);
+  // Never exceed the configured maximum, the width the surface granted
+  // us, or the terminal itself, and never fall below the width where
+  // framing stops being legible. Between those bounds the widest message
+  // decides. The terminal is bounded separately because the surface is
+  // created with the configured width, which a later resize can outgrow.
   const cardWidth = Math.max(
     MIN_TOAST_WIDTH,
-    Math.min(config.toast.width, viewport.viewportWidth),
+    Math.min(
+      config.toast.width,
+      viewport.viewportWidth,
+      viewport.terminalWidth - TOAST_HORIZONTAL_MARGIN,
+      naturalCardWidth(candidates),
+    ),
   );
   // The overlay floats over the transcript, so bound the stack to half
   // the terminal height rather than covering the conversation.
@@ -129,7 +144,6 @@ export function renderToastStack(
     TOAST_FRAME_ROWS + 1,
     Math.floor(viewport.terminalHeight / 2),
   );
-  const candidates = toasts.slice(-config.maxToastsVisible);
   const cards: string[][] = [];
 
   let usedRows = 0;
@@ -190,6 +204,27 @@ const TOAST_HORIZONTAL_MARGIN = 2;
 
 /** Narrowest card that still fits a border, a label, and some text. */
 const MIN_TOAST_WIDTH = 20;
+
+/** Border columns and the single space of padding on each side. */
+const TOAST_CARD_CHROME = 4;
+
+/**
+ * Width the widest message would need to avoid wrapping.
+ *
+ * Measured per line so a multiline message is sized by its longest line,
+ * and in visual columns because a message may already carry styling.
+ */
+function naturalCardWidth(toasts: readonly NotificationEntry[]): number {
+  let widest = 0;
+
+  for (const toast of toasts) {
+    for (const line of toast.message.split("\n")) {
+      widest = Math.max(widest, visibleWidth(line));
+    }
+  }
+
+  return widest + TOAST_CARD_CHROME;
+}
 
 const SEVERITY_COLORS: Readonly<
   Record<NotificationEntry["severity"], ThemeColor>

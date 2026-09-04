@@ -12,7 +12,7 @@ describe("configuration constants", () => {
   it("documents the specified defaults", () => {
     expect(DEFAULT_CONFIG).toEqual({
       maxToastsVisible: 5,
-      toast: { maxLines: 5, timeout: 3000, width: 50 },
+      toast: { maxLines: 5, timeout: 3000, width: 64 },
     });
   });
 

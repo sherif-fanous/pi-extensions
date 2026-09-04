@@ -2,8 +2,9 @@
  * Pure formatting for the notification-history browser.
  *
  * Owns entry ordering, severity colors and labels, the one-line list row,
- * the detail body, and the empty state. It does NOT own scrolling,
- * selection, keyboard handling, framing, or session access.
+ * the detail body, its scroll indicators, and the empty state. It does NOT
+ * own scrolling itself, selection, keyboard handling, framing, or session
+ * access.
  *
  * Kept free of TUI state so tests can pin a locale, time zone, width, and
  * a colorless theme and assert on exact output.
@@ -46,6 +47,38 @@ export const SEVERITY_LABELS: Readonly<Record<NotificationSeverity, string>> = {
 
 /** Columns a severity label occupies in a list row. */
 export const SEVERITY_LABEL_WIDTH = 5;
+
+/** Name of the detail pane, with or without a scroll position. */
+const DETAIL_TITLE = "Detail";
+
+/** Drawn at the right edge of the first row when content sits above it. */
+const DETAIL_ABOVE_MARKER = "↑";
+
+/** Drawn at the right edge of the last row when content follows it. */
+const DETAIL_BELOW_MARKER = "↓";
+
+/** Drawn when a one-row pane has content on both sides. */
+const DETAIL_BOTH_MARKER = "↕";
+
+/**
+ * Title for the detail pane, carrying its scroll position.
+ *
+ * A message that fits says nothing, so the position appears only when it
+ * is actionable. When it does not fit, the range answers both "is there
+ * more" and "am I at the end", which the footer hint alone cannot.
+ */
+export function formatDetailTitle(
+  offset: number,
+  rows: number,
+  total: number,
+): string {
+  if (total <= rows) return DETAIL_TITLE;
+
+  const first = Math.min(offset + 1, total);
+  const last = Math.min(offset + rows, total);
+
+  return `${DETAIL_TITLE} ${String(first)}-${String(last)}/${String(total)}`;
+}
 
 /**
  * Format the detail pane for one entry.
@@ -122,6 +155,58 @@ export function formatHistoryRow(
     "selectedBg",
     row.replaceAll(SGR_RESET, `${SGR_RESET}${theme.bg("selectedBg", "")}`),
   );
+}
+
+/**
+ * Mark the visible detail rows that have more content beyond them.
+ *
+ * The pane otherwise cuts at a row boundary with no sign of it, so a
+ * message that happens to break after a sentence reads as complete, and
+ * a scrolled pane gives no hint that its start is off screen. Markers sit
+ * at the right edge, where they read as a scroll column rather than as
+ * part of the message. Both edges are marked, because after one page down
+ * the content above is exactly as hidden as the content below was.
+ */
+export function markDetailScroll(
+  lines: readonly string[],
+  theme: HistoryTheme,
+  width: number,
+  edges: { above: boolean; below: boolean },
+): string[] {
+  const rows = [...lines];
+
+  if (rows.length === 0 || width < 2 || (!edges.above && !edges.below)) {
+    return rows;
+  }
+
+  const mark = (row: string, marker: string): string =>
+    `${padToWidth(row, width - 1)}${theme.fg("dim", marker)}`;
+
+  // A single row carries both directions at once, since it is the first
+  // and last visible row.
+  if (rows.length === 1) {
+    return [
+      mark(
+        rows[0] ?? "",
+        edges.above && edges.below
+          ? DETAIL_BOTH_MARKER
+          : edges.above
+            ? DETAIL_ABOVE_MARKER
+            : DETAIL_BELOW_MARKER,
+      ),
+    ];
+  }
+
+  if (edges.above) rows[0] = mark(rows[0] ?? "", DETAIL_ABOVE_MARKER);
+
+  if (edges.below) {
+    rows[rows.length - 1] = mark(
+      rows[rows.length - 1] ?? "",
+      DETAIL_BELOW_MARKER,
+    );
+  }
+
+  return rows;
 }
 
 /** Full SGR reset, as emitted by the TUI's truncation helper. */
