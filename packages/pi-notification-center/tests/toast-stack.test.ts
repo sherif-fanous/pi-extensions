@@ -50,10 +50,14 @@ describe("toBodyLines", () => {
 });
 
 describe("canRenderToasts", () => {
-  it("requires room for the configured width and a minimal card", () => {
-    expect(canRenderToasts(52, 4, DEFAULT_CONFIG)).toBe(true);
-    expect(canRenderToasts(51, 40, DEFAULT_CONFIG)).toBe(false);
-    expect(canRenderToasts(120, 3, DEFAULT_CONFIG)).toBe(false);
+  it("requires room for a minimal card", () => {
+    expect(canRenderToasts(22, 4)).toBe(true);
+    expect(canRenderToasts(21, 40)).toBe(false);
+    expect(canRenderToasts(120, 3)).toBe(false);
+  });
+
+  it("still shows cards on a terminal narrower than the configured width", () => {
+    expect(canRenderToasts(DEFAULT_CONFIG.toast.width - 10, 40)).toBe(true);
   });
 });
 
@@ -101,6 +105,64 @@ describe("renderToastStack", () => {
     }
   });
 
+  it("fits the card to a short message", () => {
+    const lines = render([
+      createNotificationEntry("Saved your work.", "info", 1),
+    ]);
+
+    // The message plus two borders and a space of padding on each side,
+    // well inside the configured maximum.
+    for (const line of lines) expect(visibleWidth(line)).toBe(16 + 4);
+    expect(visibleWidth(lines[0] ?? "")).toBeLessThan(
+      DEFAULT_CONFIG.toast.width,
+    );
+  });
+
+  it("sizes the whole stack to its widest message", () => {
+    const lines = render([
+      createNotificationEntry("tiny", "info", 1),
+      createNotificationEntry("a message that is rather longer", "info", 2),
+    ]);
+
+    // 31 message columns plus the card's four columns of chrome.
+    for (const line of lines) expect(visibleWidth(line)).toBe(35);
+  });
+
+  it("sizes a multiline message by its longest line", () => {
+    const lines = render([
+      createNotificationEntry("short\nthe longest line here\nmid", "info", 1),
+    ]);
+
+    for (const line of lines) expect(visibleWidth(line)).toBe(21 + 4);
+  });
+
+  it("never grows past the configured width", () => {
+    const lines = render([createNotificationEntry("x".repeat(500), "info", 1)]);
+
+    for (const line of lines) {
+      expect(visibleWidth(line)).toBe(DEFAULT_CONFIG.toast.width);
+    }
+  });
+
+  it("never falls below the minimum card width", () => {
+    const lines = render([createNotificationEntry("hi", "info", 1)]);
+
+    for (const line of lines) expect(visibleWidth(line)).toBe(20);
+  });
+
+  it("shrinks to a terminal narrower than the configured width", () => {
+    const lines = renderToastStack(
+      [createNotificationEntry("x".repeat(500), "info", 1)],
+      THEME,
+      DEFAULT_CONFIG,
+      { terminalHeight: 40, terminalWidth: 40, viewportWidth: 40 },
+    );
+
+    expect(lines.length).toBeGreaterThan(0);
+
+    for (const line of lines) expect(visibleWidth(line)).toBe(38);
+  });
+
   it("gives a multiline message one row per line", () => {
     const lines = render([
       createNotificationEntry("alpha\nbeta\ngamma", "info", 1),
@@ -138,7 +200,7 @@ describe("renderToastStack", () => {
         [createNotificationEntry("a", "info", 1)],
         THEME,
         DEFAULT_CONFIG,
-        { terminalHeight: 40, terminalWidth: 20, viewportWidth: 20 },
+        { terminalHeight: 40, terminalWidth: 21, viewportWidth: 21 },
       ),
     ).toEqual([]);
   });

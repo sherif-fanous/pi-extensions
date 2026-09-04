@@ -1,8 +1,10 @@
 import { createNotificationEntry } from "../src/history.js";
 import {
+  formatDetailTitle,
   formatHistoryDetail,
   formatHistoryRow,
   HISTORY_EMPTY_MESSAGE,
+  markDetailScroll,
   SEVERITY_COLORS,
   SEVERITY_LABELS,
   toPreviewLine,
@@ -216,6 +218,79 @@ describe("formatHistoryDetail", () => {
     );
 
     expect(lines.slice(3)).toEqual(["one", "", "three"]);
+  });
+});
+
+describe("formatDetailTitle", () => {
+  it("stays bare when the whole message fits", () => {
+    expect(formatDetailTitle(0, 10, 10)).toBe("Detail");
+    expect(formatDetailTitle(0, 10, 4)).toBe("Detail");
+  });
+
+  it("reports the visible range when the message overflows", () => {
+    expect(formatDetailTitle(0, 10, 40)).toBe("Detail 1-10/40");
+    expect(formatDetailTitle(10, 10, 40)).toBe("Detail 11-20/40");
+  });
+
+  it("shows the end of the range once scrolled to the bottom", () => {
+    expect(formatDetailTitle(35, 10, 40)).toBe("Detail 36-40/40");
+  });
+});
+
+describe("markDetailScroll", () => {
+  const BELOW = { above: false, below: true };
+  const ABOVE = { above: true, below: false };
+  const BOTH = { above: true, below: true };
+
+  it("marks the last row when content follows", () => {
+    const marked = markDetailScroll(["one", "two"], PLAIN, 10, BELOW);
+
+    expect(marked[0]).toBe("one");
+    expect(marked[1]).toBe("two      ↓");
+    expect(visibleWidth(marked[1] ?? "")).toBe(10);
+  });
+
+  it("marks the first row when content sits above", () => {
+    expect(markDetailScroll(["one", "two"], PLAIN, 10, ABOVE)).toEqual([
+      "one      ↑",
+      "two",
+    ]);
+  });
+
+  it("marks both edges when the pane sits mid-message", () => {
+    expect(markDetailScroll(["one", "two", "three"], PLAIN, 10, BOTH)).toEqual([
+      "one      ↑",
+      "two",
+      "three    ↓",
+    ]);
+  });
+
+  it("combines both directions on a one-row pane", () => {
+    expect(markDetailScroll(["one"], PLAIN, 10, BOTH)).toEqual(["one      ↕"]);
+  });
+
+  it("keeps the pane width when the row is already full", () => {
+    const marked = markDetailScroll(["0123456789"], PLAIN, 10, BELOW);
+
+    expect(visibleWidth(marked[0] ?? "")).toBe(10);
+    expect(marked[0]?.endsWith("↓")).toBe(true);
+  });
+
+  it("styles only the marker", () => {
+    expect(markDetailScroll(["one"], MARKED, 6, BELOW)).toEqual([
+      "one  <dim>↓</dim>",
+    ]);
+  });
+
+  it("returns the rows untouched when there is nothing to mark", () => {
+    expect(markDetailScroll([], PLAIN, 10, BOTH)).toEqual([]);
+    expect(markDetailScroll(["one"], PLAIN, 1, BOTH)).toEqual(["one"]);
+    expect(
+      markDetailScroll(["one", "two"], PLAIN, 10, {
+        above: false,
+        below: false,
+      }),
+    ).toEqual(["one", "two"]);
   });
 });
 

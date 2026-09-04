@@ -11,6 +11,15 @@ import { describe, expect, it, vi } from "vitest";
 
 const FIRST = 1_715_933_350_000;
 
+/** Rendered rows: top border, pane titles, rule, then content. */
+const TITLE_ROW = 1;
+
+/** First content row, just below the pane titles and their rule. */
+const FIRST_CONTENT_ROW = 3;
+
+/** Trailing rows: rule, footer, bottom border. */
+const LAST_CONTENT_ROW = -4;
+
 describe("HistoryViewComponent", () => {
   it("frames every line to the requested width", () => {
     for (const width of [80, 120]) {
@@ -181,6 +190,73 @@ describe("HistoryViewComponent", () => {
         .map((line) => line.split("│")[2] ?? "")
         .join(" "),
     ).toContain("terminus");
+  });
+
+  it("grows for a single long notification instead of forcing a scroll", () => {
+    const view = new HistoryViewComponent({
+      done: () => undefined,
+      entries: [createNotificationEntry(numberedLines(12), "warning", FIRST)],
+      keybindings: createFakeKeybindings(),
+      locale: "en-US",
+      terminalHeight: () => 40,
+      theme: createPlainTheme(),
+      timeZone: "UTC",
+    });
+    const lines = view.render(100);
+    const detailPane = lines.map((line) => line.split("│")[2] ?? "").join(" ");
+
+    expect(detailPane).toContain("detail line 11");
+    // The whole message is on screen, so the footer drops the scroll hint.
+    expect(lines.at(-2)).not.toContain("PgDn");
+  });
+
+  it("advertises hidden detail in the pane title and last row", () => {
+    const view = new HistoryViewComponent({
+      done: () => undefined,
+      entries: [createNotificationEntry(numberedLines(60), "info", FIRST)],
+      keybindings: createFakeKeybindings(),
+      locale: "en-US",
+      terminalHeight: () => 20,
+      theme: createPlainTheme(),
+      timeZone: "UTC",
+    });
+    const detailPane = (): string[] =>
+      view.render(100).map((line) => line.split("│")[2] ?? "");
+
+    const top = detailPane();
+
+    // Title carries the range, last content row carries the marker.
+    expect(top[TITLE_ROW]).toContain("/63");
+    expect(top.at(LAST_CONTENT_ROW)?.trimEnd().endsWith("↓")).toBe(true);
+
+    // Mid-message both directions are marked, so the way back up is as
+    // visible as the way down.
+    view.handleInput("PGDN");
+
+    const middle = detailPane();
+
+    expect(middle[FIRST_CONTENT_ROW]?.trimEnd().endsWith("↑")).toBe(true);
+    expect(middle.at(LAST_CONTENT_ROW)?.trimEnd().endsWith("↓")).toBe(true);
+
+    // At the bottom the range ends at the total, and only the up marker
+    // remains.
+    for (let index = 0; index < 20; index += 1) view.handleInput("PGDN");
+
+    const bottom = detailPane();
+
+    expect(bottom[TITLE_ROW]).toContain("63/63");
+    expect(bottom[FIRST_CONTENT_ROW]?.trimEnd().endsWith("↑")).toBe(true);
+    expect(bottom.at(LAST_CONTENT_ROW)?.trimEnd().endsWith("↓")).toBe(false);
+  });
+
+  it("leaves a message that fits without scroll indicators", () => {
+    const lines = build([
+      createNotificationEntry("short", "info", FIRST),
+    ]).render(100);
+    const detailPane = lines.map((line) => line.split("│")[2] ?? "");
+
+    expect(detailPane[TITLE_ROW]?.trim()).toBe("Detail");
+    expect(detailPane.join(" ")).not.toMatch(/[↑↓↕]/u);
   });
 
   it("fits its whole frame inside a short terminal", () => {

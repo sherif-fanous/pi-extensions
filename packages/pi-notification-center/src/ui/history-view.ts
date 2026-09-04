@@ -14,9 +14,11 @@
 import type { NotificationEntry } from "../types.js";
 import { frameLine, frameSegment, renderSplitFrame } from "./frame.js";
 import {
+  formatDetailTitle,
   formatHistoryDetail,
   formatHistoryRow,
   HISTORY_EMPTY_MESSAGE,
+  markDetailScroll,
   type HistoryTheme,
 } from "./history-format.js";
 import {
@@ -120,8 +122,6 @@ export class HistoryViewComponent implements Component, Focusable {
     );
     const rightWidth = Math.max(MIN_PANE_WIDTH, contentWidth - leftWidth);
 
-    this.rows = this.contentRows();
-
     const entry = this.items[this.selected];
     const detail = entry
       ? formatHistoryDetail(entry, this.options.theme, rightWidth, {
@@ -130,11 +130,24 @@ export class HistoryViewComponent implements Component, Focusable {
         })
       : [];
 
+    // Sized after the detail is formatted, because the taller pane decides
+    // how many rows the browser needs.
+    this.rows = this.contentRows(Math.max(this.items.length, detail.length));
+
     this.detailOffset = clamp(
       this.detailOffset,
       0,
       Math.max(0, detail.length - this.rows),
     );
+
+    const visibleDetail = detail.slice(
+      this.detailOffset,
+      this.detailOffset + this.rows,
+    );
+    const detailEdges = {
+      above: this.detailOffset > 0,
+      below: this.detailOffset + this.rows < detail.length,
+    };
 
     const listStart = clamp(
       this.selected - Math.floor(this.rows / 2),
@@ -161,8 +174,16 @@ export class HistoryViewComponent implements Component, Focusable {
         width: leftWidth,
       },
       right: {
-        lines: detail.slice(this.detailOffset, this.detailOffset + this.rows),
-        title: this.options.theme.fg("dim", "Detail"),
+        lines: markDetailScroll(
+          visibleDetail,
+          this.options.theme,
+          rightWidth,
+          detailEdges,
+        ),
+        title: this.options.theme.fg(
+          "dim",
+          formatDetailTitle(this.detailOffset, this.rows, detail.length),
+        ),
         width: rightWidth,
       },
       rows: this.rows,
@@ -176,21 +197,24 @@ export class HistoryViewComponent implements Component, Focusable {
   /**
    * Content rows to draw.
    *
-   * Enough for the list, generous enough for the detail pane, and always
-   * small enough that the frame's own rows keep the footer on screen.
+   * Enough for whichever pane is taller, so a single long notification
+   * uses the terminal instead of forcing a scroll, and always small
+   * enough that the frame's own rows keep the footer on screen. Without a
+   * known terminal height there is nothing to fit to, so a fixed cap
+   * stands in.
    */
-  private contentRows(): number {
+  private contentRows(neededRows: number): number {
+    const terminalHeight = this.options.terminalHeight?.();
     const available =
-      (this.options.terminalHeight?.() ?? Number.MAX_SAFE_INTEGER) -
-      FRAME_ROWS -
-      1;
+      terminalHeight === undefined
+        ? FALLBACK_CONTENT_ROWS
+        : Math.floor((terminalHeight * HISTORY_MAX_HEIGHT_PERCENT) / 100) -
+          FRAME_ROWS -
+          1;
 
     return Math.max(
       1,
-      Math.min(
-        available,
-        clamp(this.items.length, MIN_CONTENT_ROWS, MAX_CONTENT_ROWS),
-      ),
+      Math.min(available, Math.max(neededRows, MIN_CONTENT_ROWS)),
     );
   }
 
@@ -244,8 +268,11 @@ export class HistoryViewComponent implements Component, Focusable {
 /** Rows the frame itself occupies: borders, titles, rules, and footer. */
 const FRAME_ROWS = 6;
 
-/** Most content rows the browser will draw. */
-const MAX_CONTENT_ROWS = 16;
+/** Percentage of the terminal height the browser may occupy. */
+export const HISTORY_MAX_HEIGHT_PERCENT = 80;
+
+/** Most content rows to draw when the terminal height is unknown. */
+const FALLBACK_CONTENT_ROWS = 16;
 
 /** Fewest content rows worth drawing. */
 const MIN_CONTENT_ROWS = 6;

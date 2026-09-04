@@ -63,8 +63,7 @@ export class ToastManager {
       {
         anchor: "top-right",
         margin: { right: 1, top: 1 },
-        visible: (termWidth, termHeight) =>
-          canRenderToasts(termWidth, termHeight, config),
+        visible: canRenderToasts,
         width: config.toast.width,
       },
     );
