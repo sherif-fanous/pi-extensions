@@ -1,40 +1,10 @@
 # Agents
 
-## mise
+## Tasks
 
-This project uses [mise](https://mise.jdx.dev/) as the task runner. mise
-automatically provisions the correct Node.js version (declared in `mise.toml`
-under `[tools]`) before every command, so the runtime is always consistent.
-
-Run any task with:
-
-```shell
-mise run <task>
-```
-
-### Available tasks
-
-| Task                         | Description                                                                                                                        |
-| :--------------------------- | :--------------------------------------------------------------------------------------------------------------------------------- |
-| `mise run check`             | Run format-check, type-check, lint, and test (the full pre-commit gate)                                                            |
-| `mise run fallow`            | Run both `fallow-dead-code` and `fallow-dupes` as an advisory audit                                                                |
-| `mise run fallow-dead-code`  | Report unused exports / dead code via `fallow dead-code`                                                                           |
-| `mise run fallow-dupes`      | Report duplicated code via `fallow dupes`                                                                                          |
-| `mise run format`            | Auto-format source files with Prettier                                                                                             |
-| `mise run format-check`      | Check formatting without writing changes                                                                                           |
-| `mise run install-deps`      | Install npm dependencies                                                                                                           |
-| `mise run install-dev-deps`  | Install npm dev dependencies (`npm install --save-dev`)                                                                            |
-| `mise run lint`              | Lint source files with Biome and ESLint                                                                                            |
-| `mise run lint-fix`          | Auto-fix lint violations with Biome and ESLint                                                                                     |
-| `mise run login`             | Log in to npm via `pnpm login` (interactive; only needed if you don't use a token in `.env`)                                       |
-| `mise run pack-check`        | Run the full `check` gate, then `pnpm pack --dry-run` to verify the package builds and packs cleanly                               |
-| `mise run publish`           | Run `pack-check`, then publish to npm with `pnpm publish --access public` (auth via `NPM_ACCESS_TOKEN` from `.env` and `./.npmrc`) |
-| `mise run sort-package-json` | Sort `package.json` keys                                                                                                           |
-| `mise run test`              | Execute tests once (CI mode, `vitest --run`)                                                                                       |
-| `mise run test-watch`        | Execute tests in watch mode                                                                                                        |
-| `mise run type-check`        | Run TypeScript type checking                                                                                                       |
-| `mise run uninstall-deps`    | Uninstall npm dependencies                                                                                                         |
-| `mise run update-deps`       | Update npm dependencies                                                                                                            |
+[mise](https://mise.jdx.dev/) is the task runner and provisions Node. See
+`mise.toml` for the full list. `mise run check` is the pre-commit gate;
+`mise run format` and `mise run lint-fix` fix most of what it reports.
 
 ## Code conventions
 
@@ -107,62 +77,24 @@ project-wide unless noted.
   through `ctx.ui.notify`. Tests assert on the formatter's return
   value and never stub `ctx.ui`.
 
-### Documentation
+Every source file opens with a module JSDoc stating its role and what it
+does not own. Keep it change-agnostic: no OpenSpec change names, no future
+extension points. Comments explain why, not what.
 
-- Every source file opens with a module-level JSDoc block stating:
-  (a) the file's role in one line, (b) what it owns vs. what it does
-  NOT own. Keep it high-level and change-agnostic — do NOT mention
-  OpenSpec change names, future-change extension points, or
-  implementation details (those belong on the relevant function/type,
-  in the OpenSpec proposal, or in inline comments).
-- Comments explain _why_, not _what_. Common patterns: rationale on
-  trivial wrappers, behavior matrices in JSDoc for branchy functions,
-  invariant statements, and visual-width / ANSI gotchas.
-- Lifecycle handlers (`session_start`, command handlers) wrap calls in
-  defense-in-depth `try/catch` with a comment explaining why the guard
-  exists.
+## User-facing text
 
-## Commit messages
+This is `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, notification and
+warning text, overlay bodies, empty states, footer hints, and command
+descriptions.
 
-Commit messages MUST follow [Conventional Commits](https://www.conventionalcommits.org/), i.e. `<type>(<optional-scope>): <subject>` on the first line, where `<type>` is one of:
+Run the `humanizer` and `unslop` skills over anything user-facing and
+apply what they report. When unavailable, at minimum: no em or en dashes,
+no AI stock vocabulary, no bold-label lists, active voice, sentence case.
 
-| Type       | Use for                                                                          |
-| :--------- | :------------------------------------------------------------------------------- |
-| `build`    | Build system, package manifest, or dependency changes                            |
-| `chore`    | Maintenance tasks that don't fit elsewhere (e.g. tooling config tweaks)          |
-| `ci`       | CI configuration changes                                                         |
-| `docs`     | Documentation-only changes (README, AGENTS.md, openspec proposals/designs, etc.) |
-| `feat`     | A new user-visible feature                                                       |
-| `fix`      | A bug fix                                                                        |
-| `perf`     | Performance improvements                                                         |
-| `refactor` | Code restructuring with no behavior change                                       |
-| `revert`   | Reverting a previous commit                                                      |
-| `style`    | Formatting / whitespace / lint-only fixes that don't change behavior             |
-| `test`     | Adding or updating tests                                                         |
+Two audiences. `README.md` and `CHANGELOG.md` are for someone using the
+extension: no internal names, event names, or mechanism, because a user
+cannot act on `ctx.ui.notify`. `CONTRIBUTING.md` is for someone changing
+the code, so technical terms belong there. The prose rules above apply to
+both.
 
-Guidelines:
-
-- Subject is in the imperative mood ("add picker", not "added picker" or "adds picker"), lowercase, no trailing period, ideally ≤ 72 characters.
-- Use a scope when it sharpens meaning, e.g. `feat(presets-picker): ...` or `fix(eslint): ...`. Skip the scope when the change is broad.
-- Append `!` after the type/scope (e.g. `feat(presets-storage)!: ...`) for a breaking change, and explain it in the body or a `BREAKING CHANGE:` footer.
-- Optional body (after a blank line) explains _why_; reference the OpenSpec change name when relevant (e.g. `Part of openspec change: add-preset-storage`).
-
-Examples:
-
-```text
-chore: bump prettier to 3.8.3
-docs(openspec): rewrite scaffold-presets-plus spec to be generic
-feat(presets-package): scaffold pi-presets-plus extension shell
-fix(eslint): add @eslint/js + typescript-eslint to devDependencies
-```
-
-### Body conventions for substantial commits
-
-Commits that touch more than ~3 files SHOULD include a structured body. Use this skeleton:
-
-1. **One-paragraph "why"** — what this commit makes possible / what part of the project plan it advances. Reference the OpenSpec change name when relevant.
-2. **`What's in:` bullet list** — one bullet per _role_ (not one per file). Order bullets by purpose-cluster: manifest → build/lint configs → source → docs/legal → repo meta → openspec. Within the repo-meta cluster, list files in dependency order (a file gets introduced before any file that references it; e.g. `mise.toml` before `AGENTS.md`).
-3. **`Verified:` bullet list** — one bullet per check that was actually run (lint, type-check, format-check, install round-trip, pack contents, etc.).
-4. **Footer line** — `Closes openspec change: <name>.` for the commit that finishes a change, or `Part of openspec change: <name>.` for incremental commits.
-
-Keep bullets ≤ 2 lines each; wrap the body at 72 columns.
+`Pi` is the product, `pi` the binary.
