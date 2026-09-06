@@ -1,6 +1,6 @@
 {
   "name": "@sherif-fanous/pi-notification-center",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Pi extension: notification center that replaces transcript notices with passive toasts and a browsable session history.",
   "keywords": [
     "pi",
