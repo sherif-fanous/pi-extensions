@@ -2,6 +2,7 @@ import { createNotificationEntry } from "../src/history.js";
 import {
   DEFAULT_CONFIG,
   type NotificationConfig,
+  type NotificationSeverity,
   type ToastConfig,
 } from "../src/types.js";
 import {
@@ -11,7 +12,7 @@ import {
   ToastStackComponent,
   toBodyLines,
 } from "../src/ui/toast-stack.js";
-import { createPlainTheme } from "./helpers.js";
+import { createMarkerTheme, createPlainTheme } from "./helpers.js";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 
@@ -28,6 +29,21 @@ describe("toBodyLines", () => {
 
   it("preserves blank lines inside a message", () => {
     expect(toBodyLines("one\n\nthree", 40, 5)).toEqual(["one", "", "three"]);
+  });
+
+  it("treats a carriage return and newline pair as one break", () => {
+    expect(toBodyLines("first\r\nsecond\r\nthird", 40, 5)).toEqual([
+      "first",
+      "second",
+      "third",
+    ]);
+  });
+
+  it("carries styling across a line break", () => {
+    const lines = toBodyLines("\u001b[31mred\nstill red\u001b[0m", 40, 5);
+
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain("\u001b[31m");
   });
 
   it("wraps a long paragraph instead of truncating it", () => {
@@ -51,8 +67,8 @@ describe("toBodyLines", () => {
 
 describe("canRenderToasts", () => {
   it("requires room for a minimal card", () => {
-    expect(canRenderToasts(22, 4)).toBe(true);
-    expect(canRenderToasts(21, 40)).toBe(false);
+    expect(canRenderToasts(21, 4)).toBe(true);
+    expect(canRenderToasts(20, 40)).toBe(false);
     expect(canRenderToasts(120, 3)).toBe(false);
   });
 
@@ -93,6 +109,24 @@ describe("renderToastStack", () => {
     );
   });
 
+  // The plain theme every other test here uses discards the color it is
+  // given, so only a marker theme can show which color a card asked for.
+  // Both the border label and the body rows are checked because they are
+  // separate calls that could lose the color independently. Markers are
+  // not zero-width, so this asserts on styling alone and never on width.
+  it("colors the label and the body of every severity", () => {
+    for (const [severity, marker] of [
+      ["info", "<accent>"],
+      ["warning", "<warning>"],
+      ["error", "<error>"],
+    ] as const) {
+      const [label, body] = renderMarked(severity);
+
+      expect(label).toContain(marker);
+      expect(body).toContain(marker);
+    }
+  });
+
   it("keeps every line exactly the configured width", () => {
     const lines = render([
       createNotificationEntry("short", "info", 1),
@@ -112,10 +146,29 @@ describe("renderToastStack", () => {
 
     // The message plus two borders and a space of padding on each side,
     // well inside the configured maximum.
-    for (const line of lines) expect(visibleWidth(line)).toBe(16 + 4);
-    expect(visibleWidth(lines[0] ?? "")).toBeLessThan(
-      DEFAULT_CONFIG.toast.width,
-    );
+    for (const line of lines) expect(cardWidth(line)).toBe(16 + 4);
+    expect(cardWidth(lines[0] ?? "")).toBeLessThan(DEFAULT_CONFIG.toast.width);
+  });
+
+  it("holds a narrow card against the right edge of the surface", () => {
+    const lines = render([
+      createNotificationEntry("Saved your work.", "info", 1),
+    ]);
+
+    expect(lines.length).toBeGreaterThan(0);
+
+    for (const line of lines) {
+      // The surface is anchored by the width it was created with, so a
+      // line that stops short of that width leaves the card mid-screen.
+      expect(visibleWidth(line)).toBe(DEFAULT_CONFIG.toast.width);
+      expect(cardWidth(line)).toBe(16 + 4);
+      expect(line.slice(0, DEFAULT_CONFIG.toast.width - (16 + 4))).toBe(
+        " ".repeat(DEFAULT_CONFIG.toast.width - (16 + 4)),
+      );
+    }
+
+    expect(lines[0]?.trimStart().startsWith("┌")).toBe(true);
+    expect(lines.at(-1)?.trimStart().startsWith("└")).toBe(true);
   });
 
   it("sizes the whole stack to its widest message", () => {
@@ -125,7 +178,7 @@ describe("renderToastStack", () => {
     ]);
 
     // 31 message columns plus the card's four columns of chrome.
-    for (const line of lines) expect(visibleWidth(line)).toBe(35);
+    for (const line of lines) expect(cardWidth(line)).toBe(35);
   });
 
   it("sizes a multiline message by its longest line", () => {
@@ -133,7 +186,7 @@ describe("renderToastStack", () => {
       createNotificationEntry("short\nthe longest line here\nmid", "info", 1),
     ]);
 
-    for (const line of lines) expect(visibleWidth(line)).toBe(21 + 4);
+    for (const line of lines) expect(cardWidth(line)).toBe(21 + 4);
   });
 
   it("never grows past the configured width", () => {
@@ -147,20 +200,27 @@ describe("renderToastStack", () => {
   it("never falls below the minimum card width", () => {
     const lines = render([createNotificationEntry("hi", "info", 1)]);
 
-    for (const line of lines) expect(visibleWidth(line)).toBe(20);
+    for (const line of lines) expect(cardWidth(line)).toBe(20);
   });
 
+  // The surface is granted the terminal less its right margin, never the
+  // whole terminal, so that is what the viewport carries here. A card
+  // fills the region it was granted: reserving the margin a second time
+  // is what used to leave a gap between the card and its own edge.
   it("shrinks to a terminal narrower than the configured width", () => {
     const lines = renderToastStack(
       [createNotificationEntry("x".repeat(500), "info", 1)],
       THEME,
       DEFAULT_CONFIG,
-      { terminalHeight: 40, terminalWidth: 40, viewportWidth: 40 },
+      { terminalHeight: 40, terminalWidth: 40, viewportWidth: 39 },
     );
 
     expect(lines.length).toBeGreaterThan(0);
 
-    for (const line of lines) expect(visibleWidth(line)).toBe(38);
+    for (const line of lines) {
+      expect(cardWidth(line)).toBe(39);
+      expect(visibleWidth(line)).toBe(39);
+    }
   });
 
   it("gives a multiline message one row per line", () => {
@@ -200,7 +260,7 @@ describe("renderToastStack", () => {
         [createNotificationEntry("a", "info", 1)],
         THEME,
         DEFAULT_CONFIG,
-        { terminalHeight: 40, terminalWidth: 21, viewportWidth: 21 },
+        { terminalHeight: 40, terminalWidth: 20, viewportWidth: 19 },
       ),
     ).toEqual([]);
   });
@@ -279,6 +339,11 @@ describe("ToastStackComponent", () => {
   });
 });
 
+/** Visible width of the card itself, ignoring the alignment gutter. */
+function cardWidth(line: string): number {
+  return visibleWidth(line.trimStart());
+}
+
 function render(
   entries: ReturnType<typeof createNotificationEntry>[],
   overrides: { maxToastsVisible?: number; toast?: Partial<ToastConfig> } = {},
@@ -294,4 +359,18 @@ function render(
     terminalWidth: 120,
     viewportWidth: config.toast.width,
   });
+}
+
+/** One card styled with visible color markers instead of ANSI codes. */
+function renderMarked(severity: NotificationSeverity): string[] {
+  return renderToastStack(
+    [createNotificationEntry("a", severity, 1)],
+    createMarkerTheme(),
+    DEFAULT_CONFIG,
+    {
+      terminalHeight: 100,
+      terminalWidth: 120,
+      viewportWidth: DEFAULT_CONFIG.toast.width,
+    },
+  );
 }

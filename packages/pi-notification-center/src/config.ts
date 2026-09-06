@@ -38,11 +38,6 @@ export interface LoadConfigResult {
   warnings: string[];
 }
 
-/** Absolute path of the notification-center configuration file. */
-export function getConfigPath(agentDir: string = getAgentDir()): string {
-  return join(agentDir, "notification-center", "config.json");
-}
-
 /**
  * Load and validate the optional configuration file.
  *
@@ -59,12 +54,12 @@ export function loadConfig(
   agentDir: string = getAgentDir(),
   fs: ConfigFs = DEFAULT_CONFIG_FS,
 ): LoadConfigResult {
-  const path = getConfigPath(agentDir);
+  const configFilePath = join(agentDir, "notification-center", "config.json");
 
   let contents: string;
 
   try {
-    contents = fs.readFileSync(path);
+    contents = fs.readFileSync(configFilePath);
   } catch (err) {
     // A missing file is the documented default state, so only a genuine
     // read failure is worth reporting.
@@ -75,7 +70,7 @@ export function loadConfig(
     return {
       config: defaults(),
       warnings: [
-        `Notification-center configuration at ${path} could not be read. The extension is using default settings.`,
+        `Notification-center configuration at ${configFilePath} could not be read. The extension is using default settings.`,
       ],
     };
   }
@@ -88,7 +83,7 @@ export function loadConfig(
     return {
       config: defaults(),
       warnings: [
-        `Notification-center configuration at ${path} is not valid JSON. The extension is using default settings.`,
+        `Notification-center configuration at ${configFilePath} is not valid JSON. The extension is using default settings.`,
       ],
     };
   }
@@ -97,7 +92,7 @@ export function loadConfig(
     return {
       config: defaults(),
       warnings: [
-        `Notification-center configuration at ${path} must be a JSON object. The extension is using default settings.`,
+        `Notification-center configuration at ${configFilePath} must be a JSON object. The extension is using default settings.`,
       ],
     };
   }
@@ -116,50 +111,55 @@ export function loadConfig(
   const toastRecord = isPlainObject(nested) ? nested : {};
 
   for (const path of CONFIG_PATHS) {
-    const raw =
+    // `undefined` marks the one top-level setting; every other path names a
+    // field of the nested toast object.
+    const leaf =
       path === "maxToastsVisible"
-        ? record[path]
-        : toastRecord[path.slice("toast.".length)];
+        ? undefined
+        : (path.slice("toast.".length) as keyof ToastConfig);
+    const raw = leaf === undefined ? record[path] : toastRecord[leaf];
 
     if (raw === undefined) continue;
 
     const range = CONFIG_RANGES[path];
 
     if (!isValidFieldValue(raw, range)) {
+      // Reported from DEFAULT_CONFIG rather than from `config`, so the text
+      // cannot change if an earlier iteration writes to the same field.
+      const fallback =
+        leaf === undefined
+          ? DEFAULT_CONFIG.maxToastsVisible
+          : DEFAULT_CONFIG.toast[leaf];
+
       warnings.push(
-        `Notification-center setting "${path}" must be an integer from ${String(range.min)} through ${String(range.max)}. The extension is using the default value ${String(defaultFor(path))}.`,
+        `Notification-center setting "${path}" must be an integer from ${String(range.min)} through ${String(range.max)}. The extension is using the default value ${String(fallback)}.`,
       );
 
       continue;
     }
 
-    if (path === "maxToastsVisible") {
+    if (leaf === undefined) {
       config.maxToastsVisible = raw;
     } else {
-      config.toast[path.slice("toast.".length) as keyof ToastConfig] = raw;
+      config.toast[leaf] = raw;
     }
   }
 
   return { config, warnings };
 }
 
-/** Supported configuration paths. Any other key is ignored on read. */
-const CONFIG_PATHS: readonly ConfigPath[] = [
-  "maxToastsVisible",
-  "toast.maxLines",
-  "toast.timeout",
-  "toast.width",
-] as const;
+/**
+ * Supported configuration paths. Any other key is ignored on read.
+ *
+ * Derived from the ranges rather than listed again, so a setting added
+ * there cannot be silently skipped here. Key order is insertion order,
+ * which is the order warnings are reported in.
+ */
+const CONFIG_PATHS = Object.keys(CONFIG_RANGES) as readonly ConfigPath[];
 
 const DEFAULT_CONFIG_FS: ConfigFs = {
   readFileSync: (path) => readFileSync(path, "utf8"),
 };
-
-function defaultFor(path: ConfigPath): number {
-  return path === "maxToastsVisible"
-    ? DEFAULT_CONFIG.maxToastsVisible
-    : DEFAULT_CONFIG.toast[path.slice("toast.".length) as keyof ToastConfig];
-}
 
 /**
  * A fresh, fully-defaulted configuration.

@@ -82,14 +82,14 @@ export const CONFIG_RANGES: {
 export const CUSTOM_ENTRY_TYPE = "notification-center:entry";
 
 /** Documented configuration defaults, used whenever a value is unusable. */
-export const DEFAULT_CONFIG: NotificationConfig = {
+export const DEFAULT_CONFIG = {
   maxToastsVisible: 5,
   toast: {
     maxLines: 5,
     timeout: 3000,
     width: 64,
   },
-} as const;
+} as const satisfies NotificationConfig;
 
 /** Schema version stamped on every persisted notification entry. */
 export const ENTRY_VERSION = 1;

@@ -1,19 +1,28 @@
 /**
  * Pure formatting for the notification-history browser.
  *
- * Owns entry ordering, severity colors and labels, the one-line list row,
- * the detail body, its scroll indicators, and the empty state. It does NOT
- * own scrolling itself, selection, keyboard handling, framing, or session
- * access.
+ * Owns entry ordering, the one-line list row, the detail body, its scroll
+ * indicators, and the empty state. It does NOT own scrolling itself,
+ * selection, keyboard handling, framing, session access, or the severity
+ * colors and labels it draws.
  *
  * Kept free of TUI state so tests can pin a locale, time zone, width, and
  * a colorless theme and assert on exact output.
  */
 
-import type { NotificationEntry, NotificationSeverity } from "../types.js";
+import type { NotificationEntry } from "../types.js";
 import { padToWidth } from "./frame.js";
-import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import {
+  ROW_SEVERITY_LABELS,
+  SEVERITY_COLORS,
+  SEVERITY_LABEL_WIDTH,
+} from "./severity.js";
+import type { Theme } from "@earendil-works/pi-coding-agent";
+import {
+  truncateToWidth,
+  visibleWidth,
+  wrapTextWithAnsi,
+} from "@earendil-works/pi-tui";
 
 /** Locale and time-zone inputs, injectable so tests stay deterministic. */
 export interface HistoryTimeOptions {
@@ -27,26 +36,6 @@ export type HistoryTheme = Pick<Theme, "bg" | "bold" | "fg">;
 /** Shown when the active session branch holds no notifications. */
 export const HISTORY_EMPTY_MESSAGE =
   "No notifications have been captured in this session yet.";
-
-/** Theme color used for each severity, ordered least to most urgent. */
-export const SEVERITY_COLORS: Readonly<
-  Record<NotificationSeverity, ThemeColor>
-> = {
-  // "warning" is the theme's amber; "error" is its red.
-  error: "error",
-  info: "accent",
-  warning: "warning",
-};
-
-/** Fixed-width severity labels, so list rows align in a column. */
-export const SEVERITY_LABELS: Readonly<Record<NotificationSeverity, string>> = {
-  error: "ERROR",
-  info: "INFO",
-  warning: "WARN",
-};
-
-/** Columns a severity label occupies in a list row. */
-export const SEVERITY_LABEL_WIDTH = 5;
 
 /** Name of the detail pane, with or without a scroll position. */
 const DETAIL_TITLE = "Detail";
@@ -84,8 +73,10 @@ export function formatDetailTitle(
  * Format the detail pane for one entry.
  *
  * Shows the full local date and time, the severity, and the complete
- * message wrapped to the pane width. Messages are never truncated here:
- * the caller scrolls, so nothing is lost.
+ * message wrapped to the pane width. The message's own line breaks are
+ * preserved, blank lines the author wrote still occupy a row, and styling
+ * that spans a line break continues onto the rows below it. Messages are
+ * never truncated here: the caller scrolls, so nothing is lost.
  */
 export function formatHistoryDetail(
   entry: NotificationEntry,
@@ -97,17 +88,11 @@ export function formatHistoryDetail(
   const color = SEVERITY_COLORS[entry.severity];
   const lines = [
     theme.fg("dim", formatDateTime(entry.timestamp, options)),
-    theme.fg(color, theme.bold(SEVERITY_LABELS[entry.severity])),
+    theme.fg(color, theme.bold(ROW_SEVERITY_LABELS[entry.severity])),
     "",
   ];
 
-  for (const paragraph of entry.message.split("\n")) {
-    // An empty paragraph still occupies a row so the author's own blank
-    // lines survive into the detail pane.
-    lines.push(
-      ...(paragraph === "" ? [""] : wrapTextWithAnsi(paragraph, paneWidth)),
-    );
-  }
+  lines.push(...wrapTextWithAnsi(entry.message, paneWidth));
 
   return lines;
 }
@@ -128,13 +113,15 @@ export function formatHistoryRow(
   const color = SEVERITY_COLORS[entry.severity];
   const time = formatTime(entry.timestamp, options);
   const label = padToWidth(
-    SEVERITY_LABELS[entry.severity],
+    ROW_SEVERITY_LABELS[entry.severity],
     SEVERITY_LABEL_WIDTH,
   );
-  // Reserve the time, label, and two single-space gaps.
+  // Reserve the time, label, and two single-space gaps. The time is
+  // measured in columns rather than characters: the caller chooses the
+  // locale, and some numbering systems format the hour in wide digits.
   const previewWidth = Math.max(
     1,
-    rowWidth - time.length - SEVERITY_LABEL_WIDTH - 2,
+    rowWidth - visibleWidth(time) - SEVERITY_LABEL_WIDTH - 2,
   );
   const preview = truncateToWidth(
     toPreviewLine(entry.message),

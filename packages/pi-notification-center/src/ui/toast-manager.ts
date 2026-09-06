@@ -13,29 +13,27 @@
  */
 
 import type { NotificationConfig, NotificationEntry } from "../types.js";
-import { canRenderToasts, ToastStackComponent } from "./toast-stack.js";
+import {
+  canRenderToasts,
+  TOAST_HORIZONTAL_MARGIN,
+  ToastStackComponent,
+} from "./toast-stack.js";
 import {
   createToastSurface,
   type BridgeUi,
   type ToastSurface,
 } from "./tui-bridge.js";
 
-/** Injectable timer functions so tests can drive expiry deterministically. */
-export interface ToastTimers {
-  clearTimeout: (handle: ReturnType<ToastTimers["setTimeout"]>) => void;
-  setTimeout: (
-    callback: () => void,
-    ms: number,
-  ) => ReturnType<typeof globalThis.setTimeout>;
-}
-
-type TimerHandle = ReturnType<ToastTimers["setTimeout"]>;
+type TimerHandle = ReturnType<typeof globalThis.setTimeout>;
 
 /**
  * Manages the passive toast surface and the cards currently inside it.
  *
- * The surface is created lazily on the first toast and removed when the
- * stack empties, so an idle session carries no surface at all.
+ * The surface is created once, at construction, and toggled hidden when
+ * the stack empties. It is never removed and re-pushed, because a
+ * surface that joins the overlay stack late consumes the close of
+ * whatever was already open. See `tui-bridge.ts` for why that ordering
+ * is load-bearing.
  */
 export class ToastManager {
   private disposed = false;
@@ -54,7 +52,6 @@ export class ToastManager {
   constructor(
     ui: BridgeUi,
     private readonly config: NotificationConfig,
-    private readonly clock: ToastTimers = DEFAULT_TIMERS,
   ) {
     this.surface = createToastSurface(
       ui,
@@ -62,7 +59,7 @@ export class ToastManager {
         new ToastStackComponent(theme, config, terminalSize),
       {
         anchor: "top-right",
-        margin: { right: 1, top: 1 },
+        margin: { right: TOAST_HORIZONTAL_MARGIN, top: 1 },
         visible: canRenderToasts,
         width: config.toast.width,
       },
@@ -76,7 +73,7 @@ export class ToastManager {
     this.disposed = true;
 
     for (const handle of this.timers.values()) {
-      this.clock.clearTimeout(handle);
+      globalThis.clearTimeout(handle);
     }
 
     this.timers.clear();
@@ -90,6 +87,10 @@ export class ToastManager {
    *
    * Fully synchronous, so an emitting extension never awaits UI work and
    * the expiration timer starts at the moment of arrival.
+   *
+   * Each call must pass its own entry. Timers are keyed by entry, so the
+   * same object shown twice would strand its first timer and dismiss
+   * only one of the two cards.
    */
   show(entry: NotificationEntry): void {
     if (this.disposed) return;
@@ -106,7 +107,7 @@ export class ToastManager {
 
     this.timers.set(
       entry,
-      this.clock.setTimeout(() => {
+      globalThis.setTimeout(() => {
         this.expire(entry);
       }, this.config.toast.timeout),
     );
@@ -118,7 +119,7 @@ export class ToastManager {
     const handle = this.timers.get(entry);
 
     if (handle !== undefined) {
-      this.clock.clearTimeout(handle);
+      globalThis.clearTimeout(handle);
       this.timers.delete(entry);
     }
   }
@@ -152,10 +153,3 @@ export class ToastManager {
     this.surface.requestRender();
   }
 }
-
-const DEFAULT_TIMERS: ToastTimers = {
-  clearTimeout: (handle) => {
-    globalThis.clearTimeout(handle);
-  },
-  setTimeout: (callback, ms) => globalThis.setTimeout(callback, ms),
-};

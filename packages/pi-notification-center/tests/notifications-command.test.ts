@@ -75,15 +75,32 @@ describe("runNotificationsCommand", () => {
   });
 
   it("falls back to a notification outside the interactive TUI", async () => {
+    const harness = setup(
+      [
+        createNotificationEntry("one", "info", FIRST),
+        createNotificationEntry("two", "info", FIRST),
+      ],
+      { mode: "rpc" },
+    );
+
+    await runNotificationsCommand(harness.ctx);
+
+    expect(harness.component).toBeUndefined();
+    expect(harness.notify).toHaveBeenCalledWith(
+      "2 notifications have been captured in this session.",
+      "info",
+    );
+  });
+
+  it("counts a single notification in the singular", async () => {
     const harness = setup([createNotificationEntry("one", "info", FIRST)], {
       mode: "rpc",
     });
 
     await runNotificationsCommand(harness.ctx);
 
-    expect(harness.component).toBeUndefined();
     expect(harness.notify).toHaveBeenCalledWith(
-      "1 notifications have been captured in this session.",
+      "1 notification has been captured in this session.",
       "info",
     );
   });
@@ -99,6 +116,65 @@ describe("runNotificationsCommand", () => {
       "info",
     );
   });
+
+  it("answers in words when the terminal is too narrow for the browser", async () => {
+    const harness = setup([
+      createNotificationEntry("one", "info", FIRST),
+      createNotificationEntry("two", "info", FIRST),
+    ]);
+
+    await runNotificationsCommand(harness.ctx, () => 38);
+
+    expect(harness.component).toBeUndefined();
+    expect(harness.notify).toHaveBeenCalledWith(
+      "2 notifications have been captured in this session.",
+      "info",
+    );
+  });
+
+  it("reports the empty state when the terminal is too narrow", async () => {
+    const harness = setup([]);
+
+    await runNotificationsCommand(harness.ctx, () => 38);
+
+    expect(harness.component).toBeUndefined();
+    expect(harness.notify).toHaveBeenCalledWith(
+      "No notifications have been captured in this session yet.",
+      "info",
+    );
+  });
+
+  it("opens the browser at the narrowest width that fits it", async () => {
+    const harness = setup([createNotificationEntry("one", "info", FIRST)]);
+
+    await runNotificationsCommand(harness.ctx, () => 39);
+
+    expect(harness.component).toBeInstanceOf(HistoryViewComponent);
+    expect(harness.notify).not.toHaveBeenCalled();
+  });
+
+  // Suppressing a browser that would have worked is the worse mistake, so
+  // an unreadable width opens it and lets the overlay predicate decide.
+  it("opens the browser when the terminal width cannot be read", async () => {
+    const harness = setup([createNotificationEntry("one", "info", FIRST)]);
+
+    await runNotificationsCommand(harness.ctx, () => undefined);
+
+    expect(harness.component).toBeInstanceOf(HistoryViewComponent);
+    expect(harness.notify).not.toHaveBeenCalled();
+  });
+
+  it("withdraws the overlay when the terminal is narrowed while it is open", async () => {
+    const harness = setup([createNotificationEntry("one", "info", FIRST)]);
+
+    await runNotificationsCommand(harness.ctx, () => 100);
+
+    const visible = harness.overlayOptions?.visible;
+
+    expect(visible?.(100, 40)).toBe(true);
+    expect(visible?.(39, 40)).toBe(true);
+    expect(visible?.(38, 40)).toBe(false);
+  });
 });
 
 interface CommandHarness {
@@ -107,8 +183,14 @@ interface CommandHarness {
   ctx: NotificationsCommandContext;
   notify: ReturnType<typeof vi.fn>;
   overlay: boolean | undefined;
-  overlayOptions: { minWidth?: number; width?: number | string } | undefined;
+  overlayOptions: OverlayOptionsProbe | undefined;
   setEntries: (entries: NotificationEntry[]) => void;
+}
+
+interface OverlayOptionsProbe {
+  minWidth?: number;
+  visible?: (termWidth: number, termHeight: number) => boolean;
+  width?: number | string;
 }
 
 function setup(
@@ -156,7 +238,7 @@ function setup(
         ) => Component,
         customOptions?: {
           overlay?: boolean;
-          overlayOptions?: { minWidth?: number; width?: number | string };
+          overlayOptions?: OverlayOptionsProbe;
         },
       ) => {
         harness.overlay = customOptions?.overlay;

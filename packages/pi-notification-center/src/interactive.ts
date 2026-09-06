@@ -14,15 +14,12 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-/** Minimal context surface needed to answer the mode question. */
-export type InteractiveProbeContext = Pick<ExtensionContext, "mode">;
-
 /**
  * Whether Pi is running its interactive terminal UI.
  *
  * Returns `false` for `print`, `json`, and `rpc`, none of which can host
  * a terminal overlay.
  */
-export function isInteractiveTui(ctx: InteractiveProbeContext): boolean {
+export function isInteractiveTui(ctx: Pick<ExtensionContext, "mode">): boolean {
   return ctx.mode === "tui";
 }

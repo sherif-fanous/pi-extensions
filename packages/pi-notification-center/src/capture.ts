@@ -25,7 +25,7 @@ import {
   type NotificationConfig,
   type NotificationSeverity,
 } from "./types.js";
-import { ToastManager, type ToastTimers } from "./ui/toast-manager.js";
+import { ToastManager } from "./ui/toast-manager.js";
 import type { BridgeUi } from "./ui/tui-bridge.js";
 import type {
   ExtensionAPI,
@@ -71,13 +71,12 @@ export class CaptureRuntime {
     ctx: CaptureContext,
     pi: CapturePi,
     config: NotificationConfig,
-    timers?: ToastTimers,
   ): CaptureRuntime | undefined {
     if (!isInteractiveTui(ctx)) return undefined;
 
     const runtime = new CaptureRuntime(ctx, pi);
 
-    runtime.manager = new ToastManager(ctx.ui, config, timers);
+    runtime.manager = new ToastManager(ctx.ui, config);
     // Stored by reference, not bound: restoration must put back the
     // exact same function object the context had before installation.
     runtime.original = ctx.ui.notify;

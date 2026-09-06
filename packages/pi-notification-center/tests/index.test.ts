@@ -132,6 +132,21 @@ describe("notification-center lifecycle", () => {
       "error",
     );
   });
+
+  it("does not double the full stop when the failure is already a sentence", () => {
+    const harness = setup();
+
+    harness.configLoader.mockImplementation(() => {
+      throw new Error("Disk on fire.");
+    });
+
+    harness.start();
+
+    expect(harness.notify).toHaveBeenCalledWith(
+      "The notification center failed to start: Disk on fire.",
+      "error",
+    );
+  });
 });
 
 interface IndexHarness {

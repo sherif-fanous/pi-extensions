@@ -5,8 +5,6 @@ import {
   formatHistoryRow,
   HISTORY_EMPTY_MESSAGE,
   markDetailScroll,
-  SEVERITY_COLORS,
-  SEVERITY_LABELS,
   toPreviewLine,
 } from "../src/ui/history-format.js";
 import { createMarkerTheme, createPlainTheme } from "./helpers.js";
@@ -19,24 +17,6 @@ const TIME = { locale: "en-US", timeZone: "UTC" } as const;
 
 // 2024-05-17T08:09:10Z.
 const FIRST = 1_715_933_350_000;
-
-describe("severity presentation", () => {
-  it("maps each severity to its theme color", () => {
-    expect(SEVERITY_COLORS).toEqual({
-      error: "error",
-      info: "accent",
-      warning: "warning",
-    });
-  });
-
-  it("uses fixed-width labels so rows align", () => {
-    expect(SEVERITY_LABELS).toEqual({
-      error: "ERROR",
-      info: "INFO",
-      warning: "WARN",
-    });
-  });
-});
 
 describe("toPreviewLine", () => {
   it("collapses newlines and whitespace runs into single spaces", () => {
@@ -58,6 +38,22 @@ describe("formatHistoryRow", () => {
     expect(row).toBe(
       `08:09 WARN  a message${" ".repeat(60 - "08:09 WARN  a message".length)}`,
     );
+  });
+
+  it("fills the row exactly when the locale formats the time in wide digits", () => {
+    // Han decimal digits are one character each but occupy two columns, so
+    // this row is a case where measuring the time by character count and
+    // by display width disagree. The row must still fill its width exactly.
+    for (const width of [20, 40, 60]) {
+      const row = formatHistoryRow(
+        createNotificationEntry("x".repeat(50), "warning", FIRST),
+        PLAIN,
+        width,
+        { locale: "zh-Hans-CN-u-nu-hanidec", timeZone: "UTC" },
+      );
+
+      expect(visibleWidth(row)).toBe(width);
+    }
   });
 
   it("colors the severity label and dims the time", () => {
@@ -218,6 +214,33 @@ describe("formatHistoryDetail", () => {
     );
 
     expect(lines.slice(3)).toEqual(["one", "", "three"]);
+  });
+
+  it("treats a carriage return and newline pair as one break", () => {
+    const lines = formatHistoryDetail(
+      createNotificationEntry("one\r\ntwo", "info", FIRST),
+      PLAIN,
+      40,
+      TIME,
+    );
+
+    expect(lines.slice(3)).toEqual(["one", "two"]);
+  });
+
+  it("carries styling across a line break", () => {
+    const lines = formatHistoryDetail(
+      createNotificationEntry(
+        "\u001b[31mred\nstill red\u001b[0m",
+        "info",
+        FIRST,
+      ),
+      PLAIN,
+      40,
+      TIME,
+    );
+
+    expect(lines.slice(3)).toHaveLength(2);
+    expect(lines[4]).toContain("\u001b[31m");
   });
 });
 
