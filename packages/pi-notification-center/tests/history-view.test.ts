@@ -1,6 +1,11 @@
 import { createNotificationEntry } from "../src/history.js";
 import type { NotificationEntry } from "../src/types.js";
-import { HistoryViewComponent } from "../src/ui/history-view.js";
+import {
+  canShowHistoryBrowser,
+  HistoryViewComponent,
+  layoutHistory,
+  type HistoryLayout,
+} from "../src/ui/history-view.js";
 import {
   createFakeKeybindings,
   createMarkerTheme,
@@ -11,14 +16,8 @@ import { describe, expect, it, vi } from "vitest";
 
 const FIRST = 1_715_933_350_000;
 
-/** Rendered rows: top border, pane titles, rule, then content. */
+/** The frame row carrying both pane titles. */
 const TITLE_ROW = 1;
-
-/** First content row, just below the pane titles and their rule. */
-const FIRST_CONTENT_ROW = 3;
-
-/** Trailing rows: rule, footer, bottom border. */
-const LAST_CONTENT_ROW = -4;
 
 describe("HistoryViewComponent", () => {
   it("frames every line to the requested width", () => {
@@ -29,15 +28,20 @@ describe("HistoryViewComponent", () => {
     }
   });
 
-  it("keeps its own minimum width on a narrow terminal", () => {
-    const lines = build(entries(3)).render(20);
-    const width = visibleWidth(lines[0] ?? "");
+  // Drawing a frame wider than the viewport is what Pi then slices, so
+  // the user sees a border that stops short. Nothing at all is the
+  // documented answer, and `/notifications` says so in words instead.
+  it("draws nothing rather than overflow a narrow terminal", () => {
+    expect(build(entries(3)).render(20)).toEqual([]);
+    expect(build([]).render(20)).toEqual([]);
+  });
 
-    expect(width).toBeGreaterThan(20);
+  it("draws again once the terminal is widened", () => {
+    const view = build(entries(3));
 
-    for (const line of lines) {
-      expect(visibleWidth(line)).toBe(width);
-    }
+    expect(view.render(20)).toEqual([]);
+    expect(view.render(100)).not.toEqual([]);
+    expect(view.render(20)).toEqual([]);
   });
 
   it("draws two panes divided by a vertical rule", () => {
@@ -51,16 +55,26 @@ describe("HistoryViewComponent", () => {
   });
 
   it("lists newest first and details the newest by default", () => {
-    const lines = build([
+    const layout = layout2([
       createNotificationEntry("oldest", "info", FIRST),
       createNotificationEntry("newest", "error", FIRST + 1000),
-    ]).render(100);
-    const listPane = lines.map((line) => line.split("│")[1] ?? "").join(" ");
-    const detailPane = lines.map((line) => line.split("│")[2] ?? "").join(" ");
+    ]);
+    const list = layout.left.join(" ");
 
-    expect(listPane.indexOf("newest")).toBeLessThan(listPane.indexOf("oldest"));
-    expect(detailPane).toContain("newest");
-    expect(detailPane).not.toContain("oldest");
+    expect(list.indexOf("newest")).toBeLessThan(list.indexOf("oldest"));
+    expect(layout.right.join(" ")).toContain("newest");
+    expect(layout.right.join(" ")).not.toContain("oldest");
+  });
+
+  // The old assertions recovered a pane by splitting each rendered line
+  // on the divider character, so a message containing that character
+  // shifted every field one pane to the right.
+  it("reads a message that contains the divider character", () => {
+    const layout = layout2([
+      createNotificationEntry("a │ b │ c", "info", FIRST),
+    ]);
+
+    expect(layout.right.join(" ")).toContain("a │ b │ c");
   });
 
   it("shows the selection count", () => {
@@ -74,22 +88,17 @@ describe("HistoryViewComponent", () => {
   });
 
   it("moves the detail pane with the selection", () => {
-    const view = build([
+    const list = [
       createNotificationEntry("older entry", "info", FIRST),
       createNotificationEntry("newer entry", "warning", FIRST + 1000),
-    ]);
-    const detail = (): string =>
-      view
-        .render(100)
-        .map((line) => line.split("│")[2] ?? "")
-        .join(" ");
+    ];
 
-    expect(detail()).toContain("newer entry");
+    expect(layout2(list).right.join(" ")).toContain("newer entry");
 
-    view.handleInput("DOWN");
+    const moved = layout2(list, { selected: 1 });
 
-    expect(detail()).toContain("older entry");
-    expect(detail()).not.toContain("newer entry");
+    expect(moved.right.join(" ")).toContain("older entry");
+    expect(moved.right.join(" ")).not.toContain("newer entry");
   });
 
   it("colorizes severities in both panes", () => {
@@ -153,20 +162,15 @@ describe("HistoryViewComponent", () => {
       createNotificationEntry("second entry", "info", FIRST),
       createNotificationEntry(long, "info", FIRST + 1000),
     ]);
-    const detail = (): string =>
-      view
-        .render(100)
-        .map((line) => line.split("│")[2] ?? "")
-        .join(" ");
-    const top = detail();
+    const top = view.render(100);
 
     view.handleInput("PGDN");
 
-    expect(detail()).not.toBe(top);
+    expect(view.render(100)).not.toEqual(top);
 
     view.handleInput("PGUP");
 
-    expect(detail()).toBe(top);
+    expect(view.render(100)).toEqual(top);
 
     // Scroll away, move selection, and come back: the pane starts at the
     // top rather than keeping a stale offset.
@@ -174,7 +178,32 @@ describe("HistoryViewComponent", () => {
     view.handleInput("DOWN");
     view.handleInput("UP");
 
-    expect(detail()).toBe(top);
+    expect(view.render(100)).toEqual(top);
+  });
+
+  // The page height is a property of the layout about to be drawn, not of
+  // whichever one happened to run last, so a page key that arrives before
+  // the first render still moves by a full page.
+  it("pages by the real page height before the first render", () => {
+    const entry = createNotificationEntry(numberedLines(200), "info", FIRST);
+    const early = build([entry]);
+    const late = build([entry]);
+
+    early.handleInput("PGDN");
+    late.render(100);
+    late.handleInput("PGDN");
+
+    expect(early.render(100)).toEqual(late.render(100));
+    // Both moved, so the two are not merely agreeing on doing nothing.
+    expect(early.render(100)).not.toEqual(build([entry]).render(100));
+  });
+
+  it("moves one whole page, not a fixed number of rows", () => {
+    const list = [createNotificationEntry(numberedLines(200), "info", FIRST)];
+
+    expect(layout2(list, { pendingPages: 1 }).detailOffset).toBe(
+      layout2(list).rows,
+    );
   });
 
   it("keeps a long message reachable rather than truncating it", () => {
@@ -184,79 +213,51 @@ describe("HistoryViewComponent", () => {
 
     for (let index = 0; index < 40; index += 1) view.handleInput("PGDN");
 
-    expect(
-      view
-        .render(100)
-        .map((line) => line.split("│")[2] ?? "")
-        .join(" "),
-    ).toContain("terminus");
+    expect(view.render(100).join(" ")).toContain("terminus");
   });
 
   it("grows for a single long notification instead of forcing a scroll", () => {
-    const view = new HistoryViewComponent({
-      done: () => undefined,
-      entries: [createNotificationEntry(numberedLines(12), "warning", FIRST)],
-      keybindings: createFakeKeybindings(),
-      locale: "en-US",
-      terminalHeight: () => 40,
-      theme: createPlainTheme(),
-      timeZone: "UTC",
-    });
-    const lines = view.render(100);
-    const detailPane = lines.map((line) => line.split("│")[2] ?? "").join(" ");
+    const layout = layout2(
+      [createNotificationEntry(numberedLines(12), "warning", FIRST)],
+      { terminalHeight: 40 },
+    );
 
-    expect(detailPane).toContain("detail line 11");
+    expect(layout.right.join(" ")).toContain("detail line 11");
     // The whole message is on screen, so the footer drops the scroll hint.
-    expect(lines.at(-2)).not.toContain("PgDn");
+    expect(layout.lines.at(-2)).not.toContain("PgDn");
   });
 
   it("advertises hidden detail in the pane title and last row", () => {
-    const view = new HistoryViewComponent({
-      done: () => undefined,
-      entries: [createNotificationEntry(numberedLines(60), "info", FIRST)],
-      keybindings: createFakeKeybindings(),
-      locale: "en-US",
-      terminalHeight: () => 20,
-      theme: createPlainTheme(),
-      timeZone: "UTC",
-    });
-    const detailPane = (): string[] =>
-      view.render(100).map((line) => line.split("│")[2] ?? "");
+    const list = [createNotificationEntry(numberedLines(60), "info", FIRST)];
+    const at = (pendingPages: number): HistoryLayout =>
+      layout2(list, { pendingPages, terminalHeight: 20 });
+    const top = at(0);
 
-    const top = detailPane();
-
-    // Title carries the range, last content row carries the marker.
-    expect(top[TITLE_ROW]).toContain("/63");
-    expect(top.at(LAST_CONTENT_ROW)?.trimEnd().endsWith("↓")).toBe(true);
+    // Title carries the range, last visible row carries the marker.
+    expect(top.lines[TITLE_ROW]).toContain("/63");
+    expect(top.right.at(-1)?.trimEnd().endsWith("↓")).toBe(true);
 
     // Mid-message both directions are marked, so the way back up is as
     // visible as the way down.
-    view.handleInput("PGDN");
+    const middle = at(1);
 
-    const middle = detailPane();
-
-    expect(middle[FIRST_CONTENT_ROW]?.trimEnd().endsWith("↑")).toBe(true);
-    expect(middle.at(LAST_CONTENT_ROW)?.trimEnd().endsWith("↓")).toBe(true);
+    expect(middle.right[0]?.trimEnd().endsWith("↑")).toBe(true);
+    expect(middle.right.at(-1)?.trimEnd().endsWith("↓")).toBe(true);
 
     // At the bottom the range ends at the total, and only the up marker
     // remains.
-    for (let index = 0; index < 20; index += 1) view.handleInput("PGDN");
+    const bottom = at(20);
 
-    const bottom = detailPane();
-
-    expect(bottom[TITLE_ROW]).toContain("63/63");
-    expect(bottom[FIRST_CONTENT_ROW]?.trimEnd().endsWith("↑")).toBe(true);
-    expect(bottom.at(LAST_CONTENT_ROW)?.trimEnd().endsWith("↓")).toBe(false);
+    expect(bottom.lines[TITLE_ROW]).toContain("63/63");
+    expect(bottom.right[0]?.trimEnd().endsWith("↑")).toBe(true);
+    expect(bottom.right.at(-1)?.trimEnd().endsWith("↓")).toBe(false);
   });
 
   it("leaves a message that fits without scroll indicators", () => {
-    const lines = build([
-      createNotificationEntry("short", "info", FIRST),
-    ]).render(100);
-    const detailPane = lines.map((line) => line.split("│")[2] ?? "");
+    const layout = layout2([createNotificationEntry("short", "info", FIRST)]);
 
-    expect(detailPane[TITLE_ROW]?.trim()).toBe("Detail");
-    expect(detailPane.join(" ")).not.toMatch(/[↑↓↕]/u);
+    expect(layout.lines[TITLE_ROW]).toContain("Detail");
+    expect(layout.right.join(" ")).not.toMatch(/[↑↓↕]/u);
   });
 
   it("fits its whole frame inside a short terminal", () => {
@@ -314,6 +315,32 @@ describe("HistoryViewComponent", () => {
   });
 });
 
+describe("canShowHistoryBrowser", () => {
+  // Two panes of sixteen columns, plus the frame's seven columns of
+  // chrome. Stated as a literal so a change to either has to be meant.
+  const MINIMUM = 39;
+
+  it("refuses one column below the minimum", () => {
+    expect(canShowHistoryBrowser(MINIMUM - 1)).toBe(false);
+  });
+
+  it("accepts exactly the minimum", () => {
+    expect(canShowHistoryBrowser(MINIMUM)).toBe(true);
+  });
+
+  it("accepts one column above the minimum", () => {
+    expect(canShowHistoryBrowser(MINIMUM + 1)).toBe(true);
+  });
+
+  it("agrees with what the browser actually draws", () => {
+    for (const width of [MINIMUM - 1, MINIMUM, MINIMUM + 1, 100]) {
+      const drawn = build(entries(3)).render(width).length > 0;
+
+      expect(canShowHistoryBrowser(width)).toBe(drawn);
+    }
+  });
+});
+
 function build(
   list: NotificationEntry[],
   done: () => void = () => undefined,
@@ -324,6 +351,9 @@ function build(
     entries: list,
     keybindings: createFakeKeybindings(),
     locale: "en-US",
+    // Tall enough that the row budget never binds, so a test that is not
+    // about height asserts on content alone.
+    terminalHeight: () => 40,
     theme,
     timeZone: "UTC",
   });
@@ -337,6 +367,29 @@ function entries(count: number): NotificationEntry[] {
       FIRST + index * 1000,
     ),
   );
+}
+
+/** Lay out directly, so a case asserts on panes rather than on borders. */
+function layout2(
+  list: NotificationEntry[],
+  overrides: Partial<Parameters<typeof layoutHistory>[0]> = {},
+): HistoryLayout {
+  const layout = layoutHistory({
+    detailOffset: 0,
+    items: [...list].reverse(),
+    locale: "en-US",
+    pendingPages: 0,
+    selected: 0,
+    terminalHeight: 40,
+    theme: createPlainTheme(),
+    timeZone: "UTC",
+    width: 100,
+    ...overrides,
+  });
+
+  if (!layout) throw new Error("expected a layout at this width");
+
+  return layout;
 }
 
 function numberedLines(count: number): string {

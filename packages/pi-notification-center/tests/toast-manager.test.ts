@@ -105,6 +105,10 @@ describe("ToastManager", () => {
     expect(shown).toHaveLength(2 * (TOAST_FRAME_ROWS + 1));
     expect(shown[1]).toContain("b");
     expect(shown[4]).toContain("c");
+    // The evicted toast's timer leaves with it. A survivor would fire
+    // against an entry that is no longer in the stack, holding a
+    // reference to it and forcing a render that changes nothing.
+    expect(vi.getTimerCount()).toBe(2);
   });
 
   it("hides but keeps the surface once the stack empties", async () => {
