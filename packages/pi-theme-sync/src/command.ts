@@ -6,7 +6,7 @@
  * `rebuild()` rendering pipeline including the shared `buildListOverlay`
  * helper, and the in-flight config-edit drafts. Does NOT own runtime
  * detection (delegates to the `ThemeSyncRuntime` passed in) or config
- * persistence (delegates to `writeConfigValue` in `config.ts`).
+ * persistence (delegates to `writeConfigChanges` in `config.ts`).
  */
 
 import {
@@ -14,10 +14,14 @@ import {
   isValidPollIntervalMs,
   loadConfig,
   POLL_INTERVAL_MIN_MS,
-  writeConfigValue,
+  writeConfigChanges,
 } from "./config.js";
 import type { ThemeSyncRuntime } from "./runtime.js";
-import type { ConfigScope, ConfigSource } from "./types.js";
+import type {
+  ConfigScope,
+  ConfigSource,
+  EditableConfigChanges,
+} from "./types.js";
 import {
   DynamicBorder,
   getSelectListTheme,
@@ -38,10 +42,7 @@ import {
 
 type ConfigMessageSeverity = "success" | "error" | "warning";
 
-type ConfigValueId =
-  "themes.light" | "themes.dark" | "detection.pollIntervalMs" | "isSyncActive";
-
-type DraftConfig = Record<ConfigValueId, string>;
+type DraftConfig = Record<keyof EditableConfigChanges, string>;
 
 type HangingTextLine = Readonly<{
   prefix: string;
@@ -609,34 +610,32 @@ export async function openThemeSyncOverlay(
   }
 
   async function save(scope: ConfigScope): Promise<void> {
-    const updates: Array<[ConfigValueId, string | boolean | number]> = [];
+    const changes: EditableConfigChanges = {};
 
     if (
       desiredStateDraft["themes.light"] !== currentStateDraft["themes.light"]
     ) {
-      updates.push(["themes.light", desiredStateDraft["themes.light"]]);
+      changes["themes.light"] = desiredStateDraft["themes.light"];
     }
 
     if (desiredStateDraft["themes.dark"] !== currentStateDraft["themes.dark"]) {
-      updates.push(["themes.dark", desiredStateDraft["themes.dark"]]);
+      changes["themes.dark"] = desiredStateDraft["themes.dark"];
     }
 
     if (
       desiredStateDraft["detection.pollIntervalMs"] !==
       currentStateDraft["detection.pollIntervalMs"]
     ) {
-      updates.push([
-        "detection.pollIntervalMs",
-        Number(desiredStateDraft["detection.pollIntervalMs"]),
-      ]);
+      changes["detection.pollIntervalMs"] = Number(
+        desiredStateDraft["detection.pollIntervalMs"],
+      );
     }
 
     if (desiredStateDraft.isSyncActive !== currentStateDraft.isSyncActive) {
-      updates.push([
-        "isSyncActive",
-        desiredStateDraft.isSyncActive === "active",
-      ]);
+      changes.isSyncActive = desiredStateDraft.isSyncActive === "active";
     }
+
+    const changeCount = Object.keys(changes).length;
 
     setMode({
       kind: "config",
@@ -645,9 +644,7 @@ export async function openThemeSyncOverlay(
     });
 
     try {
-      for (const [key, value] of updates) {
-        await writeConfigValue(scope, ctx.cwd, key, value);
-      }
+      await writeConfigChanges(scope, ctx.cwd, changes);
 
       currentStateDraft["themes.light"] = desiredStateDraft["themes.light"];
       currentStateDraft["themes.dark"] = desiredStateDraft["themes.dark"];
@@ -658,10 +655,10 @@ export async function openThemeSyncOverlay(
       setMode({
         kind: "config",
         message:
-          updates.length === 0
+          changeCount === 0
             ? "No changes to save."
-            : `Saved ${updates.length} changed setting(s) to ${scope === "project" ? "Project" : "Global"}.`,
-        messageSeverity: updates.length === 0 ? "warning" : "success",
+            : `Saved ${changeCount} changed setting(s) to ${scope === "project" ? "Project" : "Global"}.`,
+        messageSeverity: changeCount === 0 ? "warning" : "success",
       });
     } catch (error) {
       setMode({

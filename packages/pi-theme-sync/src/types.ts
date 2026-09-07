@@ -14,10 +14,12 @@ export type ConfigScope = "project" | "global";
 
 export type ConfigSource = ConfigScope | "default";
 
-export type EditableConfigKey =
-  "themes.light" | "themes.dark" | "detection.pollIntervalMs" | "isSyncActive";
-
-export type EditableConfigValue = string | number | boolean;
+export type EditableConfigChanges = Partial<{
+  "themes.light": string;
+  "themes.dark": string;
+  "detection.pollIntervalMs": number;
+  isSyncActive: boolean;
+}>;
 
 export type LoadedConfig = {
   isSyncActive?: boolean;

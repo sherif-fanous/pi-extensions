@@ -2,7 +2,7 @@
  * Configuration load / persist / validation.
  *
  * Owns the global and project JSON file paths, the `loadConfig` and
- * `writeConfigValue` APIs, and the per-key validation helpers that emit
+ * `writeConfigChanges` APIs, and the per-key validation helpers that emit
  * warnings rather than throwing. Does NOT own runtime application of
  * config (lives in `runtime.ts`) or the editing UI (lives in `command.ts`).
  */
@@ -13,8 +13,7 @@ import path from "node:path";
 
 import type {
   ConfigScope,
-  EditableConfigKey,
-  EditableConfigValue,
+  EditableConfigChanges,
   LoadedConfig,
   LoadedRuntimeConfig,
   RuntimeConfig,
@@ -156,46 +155,42 @@ export async function loadConfig(
   };
 }
 
-export async function writeConfigValue(
+export async function writeConfigChanges(
   scope: ConfigScope,
   cwd: string,
-  key: EditableConfigKey,
-  value: EditableConfigValue,
+  changes: EditableConfigChanges,
 ): Promise<void> {
+  if (Object.keys(changes).length === 0) {
+    return;
+  }
+
   const filePath = getConfigPath(scope, cwd);
   const result = await readJsonIfExists(filePath);
-  const existingConfig = result.config ?? {};
-  const nextConfig: LoadedConfig = structuredClone(existingConfig);
+  const nextConfig: LoadedConfig = structuredClone(result.config ?? {});
 
-  switch (key) {
-    case "themes.light":
-      nextConfig.themes = {
-        ...(nextConfig.themes ?? {}),
-        light: String(value),
-      };
+  if (changes["themes.light"] !== undefined) {
+    nextConfig.themes = {
+      ...(nextConfig.themes ?? {}),
+      light: changes["themes.light"],
+    };
+  }
 
-      break;
+  if (changes["themes.dark"] !== undefined) {
+    nextConfig.themes = {
+      ...(nextConfig.themes ?? {}),
+      dark: changes["themes.dark"],
+    };
+  }
 
-    case "themes.dark":
-      nextConfig.themes = {
-        ...(nextConfig.themes ?? {}),
-        dark: String(value),
-      };
+  if (changes["detection.pollIntervalMs"] !== undefined) {
+    nextConfig.detection = {
+      ...(nextConfig.detection ?? {}),
+      pollIntervalMs: changes["detection.pollIntervalMs"],
+    };
+  }
 
-      break;
-
-    case "detection.pollIntervalMs":
-      nextConfig.detection = {
-        ...(nextConfig.detection ?? {}),
-        pollIntervalMs: Number(value),
-      };
-
-      break;
-
-    case "isSyncActive":
-      nextConfig.isSyncActive = Boolean(value);
-
-      break;
+  if (changes.isSyncActive !== undefined) {
+    nextConfig.isSyncActive = changes.isSyncActive;
   }
 
   await writeJson(filePath, nextConfig);

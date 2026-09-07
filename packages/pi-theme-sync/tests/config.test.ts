@@ -1,11 +1,17 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { promises as fs } from "node:fs";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { CONFIG_PATHS, DEFAULT_CONFIG, loadConfig } from "../src/config.js";
-import type { LoadedConfig } from "../src/types.js";
+import {
+  CONFIG_PATHS,
+  DEFAULT_CONFIG,
+  loadConfig,
+  writeConfigChanges,
+} from "../src/config.js";
+import type { ConfigScope, LoadedConfig } from "../src/types.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const availableThemeNames = ["light", "dark", "project-light", "global-dark"];
 
@@ -178,6 +184,119 @@ describe("loadConfig", () => {
   });
 });
 
+describe("writeConfigChanges", () => {
+  test.each([
+    { scope: "project" as const, targetName: "project" },
+    { scope: "global" as const, targetName: "global" },
+  ])(
+    "writes multiple changes to the $targetName target with one read and write",
+    async ({ scope }) => {
+      const filePath = getConfigFilePath(scope);
+      const existingConfig = {
+        detection: { pollIntervalMs: 3000, strategy: "custom" },
+        isSyncActive: true,
+        pluginSetting: { enabled: true },
+        themes: { dark: "global-dark", light: "light" },
+      };
+
+      await writeConfigFile(filePath, existingConfig);
+
+      const readSpy = vi.spyOn(fs, "readFile");
+      const writeSpy = vi.spyOn(fs, "writeFile");
+
+      try {
+        await writeConfigChanges(scope, projectDirectory, {
+          "detection.pollIntervalMs": 4500,
+          "themes.light": "project-light",
+          isSyncActive: false,
+        });
+
+        expect(readSpy).toHaveBeenCalledTimes(1);
+        expect(writeSpy).toHaveBeenCalledTimes(1);
+        expect(await readJson(filePath)).toEqual({
+          detection: { pollIntervalMs: 4500, strategy: "custom" },
+          isSyncActive: false,
+          pluginSetting: { enabled: true },
+          themes: { dark: "global-dark", light: "project-light" },
+        });
+      } finally {
+        readSpy.mockRestore();
+        writeSpy.mockRestore();
+      }
+    },
+  );
+
+  test("rereads the selected file for each batch write", async () => {
+    const filePath = CONFIG_PATHS.project(projectDirectory);
+
+    await writeConfigFile(filePath, {
+      themes: { dark: "dark", light: "light" },
+    });
+
+    await writeConfigChanges("project", projectDirectory, {
+      "themes.dark": "global-dark",
+    });
+
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        externalRevision: 2,
+        themes: { dark: "external-dark" },
+      }),
+    );
+
+    await writeConfigChanges("project", projectDirectory, {
+      "themes.light": "project-light",
+    });
+
+    expect(await readJson(filePath)).toEqual({
+      externalRevision: 2,
+      themes: { dark: "external-dark", light: "project-light" },
+    });
+  });
+
+  test("does no filesystem work when there are no changes", async () => {
+    const readSpy = vi.spyOn(fs, "readFile");
+    const writeSpy = vi.spyOn(fs, "writeFile");
+
+    try {
+      await writeConfigChanges("project", projectDirectory, {});
+
+      expect(readSpy).not.toHaveBeenCalled();
+      expect(writeSpy).not.toHaveBeenCalled();
+    } finally {
+      readSpy.mockRestore();
+      writeSpy.mockRestore();
+    }
+  });
+
+  test("reports a write failure after one attempted batch write", async () => {
+    const filePath = CONFIG_PATHS.project(projectDirectory);
+
+    await writeConfigFile(filePath, { isSyncActive: true });
+
+    const readSpy = vi.spyOn(fs, "readFile");
+    const writeSpy = vi
+      .spyOn(fs, "writeFile")
+      .mockRejectedValueOnce(new Error("expected write failure"));
+
+    try {
+      await expect(
+        writeConfigChanges("project", projectDirectory, {
+          "themes.light": "project-light",
+          isSyncActive: false,
+        }),
+      ).rejects.toThrow("expected write failure");
+
+      expect(readSpy).toHaveBeenCalledTimes(1);
+      expect(writeSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      readSpy.mockRestore();
+      writeSpy.mockRestore();
+    }
+  });
+});
+
 function createContext(): ExtensionContext {
   return {
     cwd: projectDirectory,
@@ -185,6 +304,16 @@ function createContext(): ExtensionContext {
       getAllThemes: () => availableThemeNames.map((name) => ({ name })),
     },
   } as unknown as ExtensionContext;
+}
+
+function getConfigFilePath(scope: ConfigScope): string {
+  return scope === "project"
+    ? CONFIG_PATHS.project(projectDirectory)
+    : CONFIG_PATHS.global;
+}
+
+async function readJson(filePath: string): Promise<unknown> {
+  return JSON.parse(await readFile(filePath, "utf8")) as unknown;
 }
 
 async function writeConfigFile(
