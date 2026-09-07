@@ -21,7 +21,8 @@ export async function queryWithTerminalListener<T>(
   parse: (data: string) => T | undefined,
   timeoutMs = DEFAULT_TERMINAL_QUERY_TIMEOUT_MS,
 ): Promise<T | undefined> {
-  if (!ctx.hasUI) {
+  // RPC also has UI support, but stdout carries its JSON protocol.
+  if (ctx.mode !== "tui") {
     return undefined;
   }
 

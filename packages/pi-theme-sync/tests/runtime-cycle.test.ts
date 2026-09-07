@@ -115,7 +115,12 @@ async function createRuntimeHarness(
     },
     theme,
   };
-  const ctx = { cwd, hasUI: true, ui } as unknown as ExtensionContext;
+  const ctx = {
+    cwd,
+    hasUI: true,
+    mode: "tui",
+    ui,
+  } as unknown as ExtensionContext;
 
   return {
     appliedThemes,

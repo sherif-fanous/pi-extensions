@@ -728,11 +728,14 @@ function formatSource(source: ConfigSource): string {
 }
 
 function requireUI(ctx: ExtensionCommandContext, commandName: string): boolean {
-  if (ctx.hasUI) {
+  if (ctx.mode === "tui") {
     return true;
   }
 
-  ctx.ui.notify(`UI support is required for ${commandName}`, "error");
+  ctx.ui.notify(
+    `Interactive TUI mode is required for ${commandName}.`,
+    "error",
+  );
 
   return false;
 }
