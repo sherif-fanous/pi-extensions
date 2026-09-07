@@ -85,33 +85,49 @@ export async function loadConfig(
     warnings,
   );
 
-  const rawPollIntervalMs =
+  const lightThemeSource = resolveSource(
+    projectLoadedConfig?.themes?.light,
+    globalLoadedConfig?.themes?.light,
+  );
+  const lightTheme = validateTheme(
+    projectLoadedConfig?.themes?.light ?? globalLoadedConfig?.themes?.light,
+    "light",
+    lightThemeSource,
+    availableThemes,
+    warnings,
+  );
+  const darkThemeSource = resolveSource(
+    projectLoadedConfig?.themes?.dark,
+    globalLoadedConfig?.themes?.dark,
+  );
+  const darkTheme = validateTheme(
+    projectLoadedConfig?.themes?.dark ?? globalLoadedConfig?.themes?.dark,
+    "dark",
+    darkThemeSource,
+    availableThemes,
+    warnings,
+  );
+  const pollIntervalMsSource = resolveSource(
+    projectLoadedConfig?.detection?.pollIntervalMs,
+    globalLoadedConfig?.detection?.pollIntervalMs,
+  );
+  const pollIntervalMs = validatePollingIntervalMs(
     projectLoadedConfig?.detection?.pollIntervalMs ??
-    globalLoadedConfig?.detection?.pollIntervalMs;
-  const pollIntervalMsScope =
-    projectLoadedConfig?.detection?.pollIntervalMs !== undefined
-      ? "Project config"
-      : "Global config";
+      globalLoadedConfig?.detection?.pollIntervalMs,
+    pollIntervalMsSource,
+    warnings,
+  );
 
   const runtimeConfigSources: RuntimeConfigSources = {
     isSyncActive: resolveSource(projectIsSyncActive, globalIsSyncActive),
 
     themes: {
-      light: resolveSource(
-        projectLoadedConfig?.themes?.light,
-        globalLoadedConfig?.themes?.light,
-      ),
-      dark: resolveSource(
-        projectLoadedConfig?.themes?.dark,
-        globalLoadedConfig?.themes?.dark,
-      ),
+      light: lightTheme.source,
+      dark: darkTheme.source,
     },
 
     detection: {
-      pollIntervalMs: resolveSource(
-        projectLoadedConfig?.detection?.pollIntervalMs,
-        globalLoadedConfig?.detection?.pollIntervalMs,
-      ),
+      pollIntervalMs: pollIntervalMs.source,
     },
   };
 
@@ -120,26 +136,12 @@ export async function loadConfig(
       projectIsSyncActive ?? globalIsSyncActive ?? DEFAULT_CONFIG.isSyncActive,
 
     themes: {
-      light: validateTheme(
-        projectLoadedConfig?.themes?.light ?? globalLoadedConfig?.themes?.light,
-        "light",
-        availableThemes,
-        warnings,
-      ),
-      dark: validateTheme(
-        projectLoadedConfig?.themes?.dark ?? globalLoadedConfig?.themes?.dark,
-        "dark",
-        availableThemes,
-        warnings,
-      ),
+      light: lightTheme.value,
+      dark: darkTheme.value,
     },
 
     detection: {
-      pollIntervalMs: validatePollingIntervalMs(
-        rawPollIntervalMs,
-        pollIntervalMsScope,
-        warnings,
-      ),
+      pollIntervalMs: pollIntervalMs.value,
     },
   };
 
@@ -228,14 +230,14 @@ async function readJsonIfExists(filePath: string): Promise<ReadJsonResult> {
 }
 
 function resolveSource<T>(
-  projectValue: T | undefined,
-  globalValue: T | undefined,
+  projectValue: T | null | undefined,
+  globalValue: T | null | undefined,
 ): ConfigScope | "default" {
-  if (projectValue !== undefined) {
+  if (projectValue != null) {
     return "project";
   }
 
-  if (globalValue !== undefined) {
+  if (globalValue != null) {
     return "global";
   }
 
@@ -264,32 +266,41 @@ function validateIsSyncActive(
 
 function validatePollingIntervalMs(
   value: number | undefined,
-  scope: string,
+  source: ConfigScope | "default",
   warnings: string[],
-): number {
+): { source: ConfigScope | "default"; value: number } {
   if (value === undefined) {
-    return DEFAULT_CONFIG.detection.pollIntervalMs;
+    return {
+      source: "default",
+      value: DEFAULT_CONFIG.detection.pollIntervalMs,
+    };
   }
 
   if (typeof value !== "number" || !isValidPollIntervalMs(value)) {
+    const scope = source === "project" ? "Project config" : "Global config";
+
     warnings.push(
       `${scope}: pollIntervalMs "${String(value)}" is not a number >= ${POLL_INTERVAL_MIN_MS} — using default (${DEFAULT_CONFIG.detection.pollIntervalMs}ms)`,
     );
 
-    return DEFAULT_CONFIG.detection.pollIntervalMs;
+    return {
+      source: "default",
+      value: DEFAULT_CONFIG.detection.pollIntervalMs,
+    };
   }
 
-  return value;
+  return { source, value };
 }
 
 function validateTheme(
   themeName: string | undefined,
   fallback: "light" | "dark",
+  source: ConfigScope | "default",
   availableThemes: Set<string>,
   warnings: string[],
-): string {
+): { source: ConfigScope | "default"; value: string } {
   if (!themeName) {
-    return DEFAULT_CONFIG.themes[fallback];
+    return { source: "default", value: DEFAULT_CONFIG.themes[fallback] };
   }
 
   if (!availableThemes.has(themeName)) {
@@ -297,10 +308,10 @@ function validateTheme(
       `Theme "${themeName}" not found in Pi — using default "${DEFAULT_CONFIG.themes[fallback]}"`,
     );
 
-    return DEFAULT_CONFIG.themes[fallback];
+    return { source: "default", value: DEFAULT_CONFIG.themes[fallback] };
   }
 
-  return themeName;
+  return { source, value: themeName };
 }
 
 async function writeJson(
