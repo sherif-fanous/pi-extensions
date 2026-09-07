@@ -33,6 +33,11 @@ import type {
   SubscriptionDetector,
 } from "./types.js";
 
+type ScheduleRecurringCycle = (
+  cycle: () => void,
+  intervalMs: number,
+) => () => void;
+
 const DETECTOR_LABELS: Record<PollingDetector | SubscriptionDetector, string> =
   {
     "color-scheme": "Terminal Color Scheme",
@@ -40,11 +45,21 @@ const DETECTOR_LABELS: Record<PollingDetector | SubscriptionDetector, string> =
     "osc-11": "OSC 11",
     system: "System Appearance",
   };
+const RECURRING_CYCLE_FAILURE_WARNING =
+  "A recurring appearance update failed; theme sync will retry.";
+const scheduleRecurringCycle: ScheduleRecurringCycle = (cycle, intervalMs) => {
+  const timer = setInterval(cycle, intervalMs);
+
+  return () => clearInterval(timer);
+};
 
 export type ThemeSyncRuntime = {
   cleanup: () => void;
   getStatus: (ctx: ExtensionContext) => RuntimeStatus;
-  setupAppearanceMonitoring: (ctx: ExtensionContext) => Promise<void>;
+  setupAppearanceMonitoring: (
+    ctx: ExtensionContext,
+    schedule?: ScheduleRecurringCycle,
+  ) => Promise<void>;
 };
 
 export function createThemeSyncRuntime(): ThemeSyncRuntime {
@@ -65,9 +80,8 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     detection: { pollIntervalMs: "default" },
   } as RuntimeStatus["configSources"];
 
-  let poller: ReturnType<typeof setInterval> | undefined;
-  let driftPoller: ReturnType<typeof setInterval> | undefined;
-  let isPollCycleRunning = false;
+  let stopRecurringCycle: (() => void) | undefined;
+  let isRecurringCycleRunning = false;
   let colorSchemeSubscription: ColorSchemeSubscription | undefined;
   let isColorSchemeSubscriptionDemoted = false;
   let hasUnreportedAppearanceChange = false;
@@ -128,31 +142,60 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     return "unknown";
   };
 
-  const cleanup = () => {
-    if (poller) {
-      clearInterval(poller);
-      poller = undefined;
+  const runRecurringCycle = (cycle: () => Promise<void>) => {
+    if (isShutDown || isRecurringCycleRunning) {
+      return;
     }
 
-    if (driftPoller) {
-      clearInterval(driftPoller);
-      driftPoller = undefined;
-    }
+    isRecurringCycleRunning = true;
+
+    void cycle()
+      .catch(() => {
+        if (
+          !isShutDown &&
+          !warnings.includes(RECURRING_CYCLE_FAILURE_WARNING)
+        ) {
+          warnings.push(RECURRING_CYCLE_FAILURE_WARNING);
+        }
+      })
+      .finally(() => {
+        isRecurringCycleRunning = false;
+      });
+  };
+
+  const startRecurringCycle = (
+    cycle: () => Promise<void>,
+    intervalMs: number,
+    schedule: ScheduleRecurringCycle,
+  ) => {
+    stopRecurringCycle = schedule(() => runRecurringCycle(cycle), intervalMs);
+  };
+
+  const cleanup = () => {
+    stopRecurringCycle?.();
+    stopRecurringCycle = undefined;
 
     colorSchemeSubscription?.removeColorSchemeListener();
     colorSchemeSubscription = undefined;
 
     isColorSchemeSubscriptionDemoted = false;
     hasUnreportedAppearanceChange = false;
-    isPollCycleRunning = false;
+    isRecurringCycleRunning = false;
     isShutDown = true;
   };
 
-  const setupAppearanceMonitoring = async (ctx: ExtensionContext) => {
+  const setupAppearanceMonitoring = async (
+    ctx: ExtensionContext,
+    schedule: ScheduleRecurringCycle = scheduleRecurringCycle,
+  ) => {
     cleanup();
     isShutDown = false;
 
     const loadedConfig = await loadConfig(ctx);
+
+    if (isShutDown) {
+      return;
+    }
 
     runtimeConfig = loadedConfig.runtimeConfig;
     runtimeConfigSources = loadedConfig.runtimeConfigSources;
@@ -170,8 +213,17 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
       ctx,
       tui,
     );
+
+    if (isShutDown) {
+      return;
+    }
+
     const availableSubscriptionDetectors =
       await probeAvailableSubscriptionDetectors(ctx, tui);
+
+    if (isShutDown) {
+      return;
+    }
 
     availableDetectors = [
       ...availableSubscriptionDetectors.map(
@@ -185,6 +237,10 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
       tui,
       availablePollingDetectors,
     );
+
+    if (isShutDown) {
+      return;
+    }
 
     if (initialAppearance !== "unknown") {
       currentAppearance = initialAppearance;
@@ -277,81 +333,67 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
           // chain so a working fallback can detect a missed change. This also
           // restores the configured theme if the user changes Pi's theme
           // manually.
-          driftPoller = setInterval(() => {
-            // The detector chain can outlast a short interval, so skip rather
-            // than let two cycles interleave writes to the cached appearance.
-            if (isPollCycleRunning) {
-              return;
-            }
+          startRecurringCycle(
+            async () => {
+              // A notification can land while a poll is already in flight, so a
+              // missed change counts only once it survives to the next cycle
+              // without any report arriving.
+              if (
+                hasUnreportedAppearanceChange &&
+                !isColorSchemeSubscriptionDemoted
+              ) {
+                demoteColorSchemeSubscription();
+              }
 
-            isPollCycleRunning = true;
+              const detectedAppearance = await resolvePollingAppearance(
+                ctx,
+                tui,
+                availablePollingDetectors,
+              );
 
-            void (async () => {
-              try {
-                if (isShutDown) {
-                  return;
-                }
+              // The await above yields, so the session may have been replaced
+              // before this continuation runs.
+              if (isShutDown) {
+                return;
+              }
 
-                // A notification can land while a poll is already in flight,
-                // so a missed change counts only once it survives to the next
-                // cycle without any report arriving.
-                if (
-                  hasUnreportedAppearanceChange &&
-                  !isColorSchemeSubscriptionDemoted
-                ) {
-                  demoteColorSchemeSubscription();
-                }
-
-                const detectedAppearance = await resolvePollingAppearance(
-                  ctx,
-                  tui,
-                  availablePollingDetectors,
-                );
-
-                // The await above yields, so the session may have been
-                // replaced before this continuation runs.
-                if (isShutDown) {
-                  return;
-                }
-
-                if (
-                  detectedAppearance !== "unknown" &&
-                  detectedAppearance !== currentAppearance
-                ) {
-                  if (isColorSchemeSubscriptionDemoted) {
-                    detectionStrategy = pollingStrategyLabel();
-                  } else {
-                    hasUnreportedAppearanceChange = true;
-                  }
-
-                  currentAppearance = detectedAppearance;
-
-                  markEvent(`Detected ${detectedAppearance} appearance`);
-                  applyMappedTheme(ctx, detectedAppearance);
-
-                  return;
-                }
-
+              if (
+                detectedAppearance !== "unknown" &&
+                detectedAppearance !== currentAppearance
+              ) {
                 if (isColorSchemeSubscriptionDemoted) {
                   detectionStrategy = pollingStrategyLabel();
+                } else {
+                  hasUnreportedAppearanceChange = true;
                 }
 
-                if (currentAppearance !== "unknown") {
-                  const desiredThemeName =
-                    runtimeConfig.themes[currentAppearance];
+                currentAppearance = detectedAppearance;
 
-                  if (desiredThemeName !== ctx.ui.theme.name) {
-                    markEvent(
-                      `Drift corrected: reapplied ${currentAppearance} theme`,
-                    );
-                    applyMappedTheme(ctx, currentAppearance);
-                  }
-                }
-              } finally {
-                isPollCycleRunning = false;
+                markEvent(`Detected ${detectedAppearance} appearance`);
+                applyMappedTheme(ctx, detectedAppearance);
+
+                return;
               }
-            })();
-          }, runtimeConfig.detection.pollIntervalMs);
+
+              if (isColorSchemeSubscriptionDemoted) {
+                detectionStrategy = pollingStrategyLabel();
+              }
+
+              if (currentAppearance !== "unknown") {
+                const desiredThemeName =
+                  runtimeConfig.themes[currentAppearance];
+
+                if (desiredThemeName !== ctx.ui.theme.name) {
+                  markEvent(
+                    `Drift corrected: reapplied ${currentAppearance} theme`,
+                  );
+                  applyMappedTheme(ctx, currentAppearance);
+                }
+              }
+            },
+            runtimeConfig.detection.pollIntervalMs,
+            schedule,
+          );
 
           return;
         }
@@ -361,33 +403,29 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     if (availablePollingDetectors.length > 0) {
       detectionStrategy = pollingStrategyLabel();
 
-      poller = setInterval(() => {
-        // Same re-entrancy guard as the drift poller: the chain can outlast a
-        // short interval.
-        if (isPollCycleRunning) {
-          return;
-        }
+      startRecurringCycle(
+        async () => {
+          const detectedAppearance = await resolvePollingAppearance(
+            ctx,
+            tui,
+            availablePollingDetectors,
+          );
 
-        isPollCycleRunning = true;
+          if (isShutDown) {
+            return;
+          }
 
-        void resolvePollingAppearance(ctx, tui, availablePollingDetectors)
-          .then((detectedAppearance: Appearance) => {
-            if (isShutDown) {
-              return;
-            }
+          if (detectedAppearance !== "unknown") {
+            currentAppearance = detectedAppearance;
+            detectionStrategy = pollingStrategyLabel();
 
-            if (detectedAppearance !== "unknown") {
-              currentAppearance = detectedAppearance;
-              detectionStrategy = pollingStrategyLabel();
-
-              markEvent(`Detected ${detectedAppearance} appearance`);
-              applyMappedTheme(ctx, detectedAppearance);
-            }
-          })
-          .finally(() => {
-            isPollCycleRunning = false;
-          });
-      }, runtimeConfig.detection.pollIntervalMs);
+            markEvent(`Detected ${detectedAppearance} appearance`);
+            applyMappedTheme(ctx, detectedAppearance);
+          }
+        },
+        runtimeConfig.detection.pollIntervalMs,
+        schedule,
+      );
 
       return;
     }
