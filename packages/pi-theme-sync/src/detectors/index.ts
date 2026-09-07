@@ -10,8 +10,6 @@
  * detection loop (lives in `runtime.ts`).
  */
 
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { TUI } from "@earendil-works/pi-tui";
 import type {
   Appearance,
   PollingDetector,
@@ -24,6 +22,8 @@ import {
 import { detectAppearanceViaSystem } from "./system/appearance.js";
 import { probeDecMode2031Support } from "./terminal/dec-mode-2031.js";
 import { detectAppearanceViaOsc11Background } from "./terminal/osc-11.js";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { TUI } from "@earendil-works/pi-tui";
 
 const POLLING_DETECTORS = [
   "color-scheme",

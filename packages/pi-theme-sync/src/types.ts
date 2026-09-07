@@ -15,10 +15,7 @@ export type ConfigScope = "project" | "global";
 export type ConfigSource = ConfigScope | "default";
 
 export type EditableConfigKey =
-  | "themes.light"
-  | "themes.dark"
-  | "detection.pollIntervalMs"
-  | "isSyncActive";
+  "themes.light" | "themes.dark" | "detection.pollIntervalMs" | "isSyncActive";
 
 export type EditableConfigValue = string | number | boolean;
 

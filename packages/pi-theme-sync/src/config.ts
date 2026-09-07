@@ -7,10 +7,10 @@
  * config (lives in `runtime.ts`) or the editing UI (lives in `command.ts`).
  */
 
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+
 import type {
   ConfigScope,
   EditableConfigKey,
@@ -20,6 +20,7 @@ import type {
   RuntimeConfig,
   RuntimeConfigSources,
 } from "./types.js";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 export const CONFIG_PATHS = {
   global: path.join(homedir(), ".pi", "agent", "theme-sync.json"),

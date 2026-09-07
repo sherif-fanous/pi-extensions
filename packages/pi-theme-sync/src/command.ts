@@ -9,40 +9,37 @@
  * persistence (delegates to `writeConfigValue` in `config.ts`).
  */
 
-import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import {
-  DynamicBorder,
-  getSelectListTheme,
-} from "@earendil-works/pi-coding-agent";
-import {
-  type Component,
-  Container,
-  Key,
-  type SelectItem,
-  SelectList,
-  Spacer,
-  Text,
-  matchesKey,
-  visibleWidth,
-  wrapTextWithAnsi,
-} from "@earendil-works/pi-tui";
 import {
   CONFIG_PATHS,
-  POLL_INTERVAL_MIN_MS,
   isValidPollIntervalMs,
   loadConfig,
+  POLL_INTERVAL_MIN_MS,
   writeConfigValue,
 } from "./config.js";
 import type { ThemeSyncRuntime } from "./runtime.js";
 import type { ConfigScope, ConfigSource } from "./types.js";
+import {
+  DynamicBorder,
+  getSelectListTheme,
+  type ExtensionCommandContext,
+} from "@earendil-works/pi-coding-agent";
+import {
+  Container,
+  Key,
+  matchesKey,
+  SelectList,
+  Spacer,
+  Text,
+  visibleWidth,
+  wrapTextWithAnsi,
+  type Component,
+  type SelectItem,
+} from "@earendil-works/pi-tui";
 
 type ConfigMessageSeverity = "success" | "error" | "warning";
 
 type ConfigValueId =
-  | "themes.light"
-  | "themes.dark"
-  | "detection.pollIntervalMs"
-  | "isSyncActive";
+  "themes.light" | "themes.dark" | "detection.pollIntervalMs" | "isSyncActive";
 
 type DraftConfig = Record<ConfigValueId, string>;
 

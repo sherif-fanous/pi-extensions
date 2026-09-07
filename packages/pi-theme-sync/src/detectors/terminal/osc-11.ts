@@ -9,18 +9,18 @@
  * in `../../color.ts`).
  */
 
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { classifyHexColor } from "../../color.js";
 import type { Appearance } from "../../types.js";
 import { queryWithTerminalListener } from "./query.js";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-const OSC_11_BACKGROUND_QUERY = "\x1b]11;?\x1b\\";
+const osc11BackgroundQuery = "\x1b]11;?\x1b\\";
 
 export async function detectAppearanceViaOsc11Background(
   ctx: ExtensionContext,
 ): Promise<Appearance> {
   return (
-    (await queryWithTerminalListener(ctx, OSC_11_BACKGROUND_QUERY, (data) => {
+    (await queryWithTerminalListener(ctx, osc11BackgroundQuery, (data) => {
       const match = data.match(/\x1b\]11;rgb:([0-9a-fA-F/]+)(?:\x07|\x1b\\)/);
 
       if (!match) {

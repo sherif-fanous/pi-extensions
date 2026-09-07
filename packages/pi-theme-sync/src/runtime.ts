@@ -8,11 +8,6 @@
  * any interactive UI (lives in `command.ts`).
  */
 
-import {
-  type ExtensionContext,
-  VERSION,
-} from "@earendil-works/pi-coding-agent";
-import type { TUI } from "@earendil-works/pi-tui";
 import { DEFAULT_CONFIG, loadConfig } from "./config.js";
 import {
   detectAppearance,
@@ -20,9 +15,9 @@ import {
   probeAvailableSubscriptionDetectors,
 } from "./detectors/index.js";
 import {
-  type ColorSchemeSubscription,
   enableColorSchemeSubscription,
   hasColorSchemeApi,
+  type ColorSchemeSubscription,
 } from "./detectors/pi/color-scheme.js";
 import { getTuiHandle } from "./detectors/pi/tui-handle.js";
 import type {
@@ -32,6 +27,11 @@ import type {
   RuntimeStatus,
   SubscriptionDetector,
 } from "./types.js";
+import {
+  VERSION,
+  type ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
+import type { TUI } from "@earendil-works/pi-tui";
 
 type ScheduleRecurringCycle = (
   cycle: () => void,

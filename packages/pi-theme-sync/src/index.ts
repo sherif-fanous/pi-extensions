@@ -8,9 +8,9 @@
  * `command.ts`).
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { createThemeSyncRuntime } from "./runtime.js";
 import { openThemeSyncOverlay } from "./command.js";
+import { createThemeSyncRuntime } from "./runtime.js";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export default function (pi: ExtensionAPI) {
   const runtime = createThemeSyncRuntime();

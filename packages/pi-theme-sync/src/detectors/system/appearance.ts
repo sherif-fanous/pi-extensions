@@ -10,6 +10,7 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+
 import type { Appearance } from "../../types.js";
 
 const execFileAsync = promisify(execFile);

@@ -6,9 +6,9 @@
  * terminal support probing, or runtime strategy selection.
  */
 
-import type { TUI } from "@earendil-works/pi-tui";
 import type { Appearance } from "../../types.js";
 import { DEFAULT_TERMINAL_QUERY_TIMEOUT_MS } from "../terminal/query.js";
+import type { TUI } from "@earendil-works/pi-tui";
 
 export type ColorSchemeSubscription = {
   removeColorSchemeListener: () => void;
