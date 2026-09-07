@@ -88,7 +88,7 @@ export default defineConfig(
           modifiers: ["const"],
           format: ["camelCase"],
           // Local-only — global handled above.
-          filter: { regex: "^[A-Z0-9_]+$", match: false },
+          filter: { regex: "^[A-Z_]+$", match: false },
         },
         // Functions / methods / parameters: camelCase.
         { selector: "function", format: ["camelCase"] },
