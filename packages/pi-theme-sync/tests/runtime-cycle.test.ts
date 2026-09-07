@@ -1,15 +1,15 @@
-import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { test } from "node:test";
+
+import { createThemeSyncRuntime } from "../src/runtime.js";
+import type { Appearance } from "../src/types.js";
 import type {
   ExtensionContext,
   TerminalInputHandler,
 } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
-import { createThemeSyncRuntime } from "../src/runtime.js";
-import type { Appearance } from "../src/types.js";
+import { assert, test } from "vitest";
 
 type Deferred<T> = {
   promise: Promise<T>;
