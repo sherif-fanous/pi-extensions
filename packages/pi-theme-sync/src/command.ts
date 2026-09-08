@@ -1,741 +1,45 @@
-/** Renders the `/theme-sync` menu, configuration editor, and runtime status. */
+/** Routes `/theme-sync` and orchestrates configuration and status delivery. */
 
-import {
-  getConfigPath,
-  isValidPollIntervalMs,
-  loadConfig,
-  POLL_INTERVAL_MAX_MS,
-  POLL_INTERVAL_MIN_MS,
-  writeConfigChanges,
-} from "./config.js";
+import { getConfigPath, loadConfig, writeConfigChanges } from "./config.js";
 import type { ThemeSyncRuntime } from "./runtime.js";
+import { ConfigOverlayComponent } from "./ui/config-overlay.js";
+import { deliverStatusReport, formatStatusReport } from "./ui/status-report.js";
 import type {
-  ConfigScope,
-  ConfigSource,
-  EditableConfigChanges,
-} from "./types.js";
-import {
-  DynamicBorder,
-  getSelectListTheme,
-  type ExtensionCommandContext,
+  ExtensionAPI,
+  ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-import {
-  Container,
-  Key,
-  matchesKey,
-  SelectList,
-  Spacer,
-  Text,
-  visibleWidth,
-  wrapTextWithAnsi,
-  type Component,
-  type SelectItem,
-} from "@earendil-works/pi-tui";
 
-type ConfigMessageSeverity = "success" | "error" | "warning";
-
-type DraftConfig = Record<keyof EditableConfigChanges, string>;
-
-type HangingTextLine = Readonly<{
-  prefix: string;
-  body: string;
-}>;
-
-type ThemeSyncOverlayMode =
-  | { kind: "menu" }
-  | {
-      kind: "config";
-      message?: string;
-      messageSeverity?: ConfigMessageSeverity;
-    }
-  | { kind: "status" }
-  | { kind: "themeSelect"; fieldId: "themes.light" | "themes.dark" }
-  | { kind: "syncSelect" }
-  | { kind: "pollIntervalEdit"; value: string; error?: string }
-  | { kind: "writeTarget"; paths: Record<ConfigScope, string> };
-
-/** Renders wrapped text with aligned prefixes and continuation lines. */
-class HangingText implements Component {
-  constructor(
-    private readonly lines: readonly HangingTextLine[],
-    private readonly paddingX = 0,
-    private readonly style?: (line: string) => string,
-  ) {}
-
-  invalidate(): void {
-    // Rendering reads immutable inputs, so there is no cache to clear.
-  }
-
-  render(width: number): string[] {
-    const contentWidth = Math.max(1, width - this.paddingX * 2);
-    const leftMargin = " ".repeat(this.paddingX);
-
-    return this.lines.flatMap(({ prefix, body }) => {
-      const prefixWidth = visibleWidth(prefix);
-      const continuationPrefix = " ".repeat(prefixWidth);
-      const wrappedLines = wrapTextWithAnsi(
-        body,
-        Math.max(1, contentWidth - prefixWidth),
-      );
-
-      return wrappedLines.map((line, index) => {
-        const renderedLine = (index === 0 ? prefix : continuationPrefix) + line;
-
-        const lineWithMargin =
-          leftMargin + (this.style?.(renderedLine) ?? renderedLine);
-
-        return lineWithMargin.padEnd(
-          lineWithMargin.length +
-            Math.max(0, width - visibleWidth(lineWithMargin)),
-        );
-      });
-    });
-  }
-}
-
-/** Opens the interactive theme sync overlay for a TUI session. */
+/** Opens the interactive theme sync configuration overlay for a TUI session. */
 export async function openThemeSyncOverlay(
-  runtime: ThemeSyncRuntime,
+  _runtime: ThemeSyncRuntime,
   ctx: ExtensionCommandContext,
 ): Promise<void> {
-  if (!requireUI(ctx, "/theme-sync")) {
-    return;
-  }
+  if (!requireUI(ctx, "/theme-sync")) return;
 
-  const loadedConfig = await loadConfig(ctx);
-  const runtimeConfigSources = loadedConfig.runtimeConfigSources;
-
-  const currentStateDraft: DraftConfig = {
-    "themes.light": loadedConfig.runtimeConfig.themes.light,
-    "themes.dark": loadedConfig.runtimeConfig.themes.dark,
-    "detection.pollIntervalMs": String(
-      loadedConfig.runtimeConfig.detection.pollIntervalMs,
-    ),
-    isSyncActive: loadedConfig.runtimeConfig.isSyncActive
-      ? "active"
-      : "inactive",
-  };
-  const desiredStateDraft: DraftConfig = { ...currentStateDraft };
-
-  const selectTheme = getSelectListTheme();
-  const themeNames = ctx.ui.getAllThemes().map((item) => item.name);
-
-  let activeSelectList: SelectList | undefined;
-  let mode: ThemeSyncOverlayMode = { kind: "menu" };
-  let theme: ExtensionCommandContext["ui"]["theme"];
-
-  let doneFn: () => void;
-  let isBusy = false;
-  let reloadRequested = false;
-  let tui: { requestRender: () => void };
-
-  const rootContainer = new Container();
-
-  function buildMenuSelectList(done: () => void): SelectList {
-    const items: SelectItem[] = [
-      { value: "config", label: "Config" },
-      { value: "status", label: "Status" },
-    ];
-    const list = new SelectList(items, items.length, selectTheme);
-
-    list.onCancel = () => done();
-
-    list.onSelect = (item) => {
-      if (item.value === "config") {
-        setMode({ kind: "config" });
-      } else {
-        setMode({ kind: "status" });
-      }
-    };
-
-    return list;
-  }
-
-  function buildConfigSelectList(): SelectList {
-    const items = [
-      {
-        value: "themes.light",
-        label: "Light Mode Theme",
-        description: `${desiredStateDraft["themes.light"]} [${formatSource(runtimeConfigSources.themes.light)}]`,
-      },
-      {
-        value: "themes.dark",
-        label: "Dark Mode Theme",
-        description: `${desiredStateDraft["themes.dark"]} [${formatSource(runtimeConfigSources.themes.dark)}]`,
-      },
-      {
-        value: "detection.pollIntervalMs",
-        label: "Polling Interval",
-        description: `${desiredStateDraft["detection.pollIntervalMs"]}ms [${formatSource(runtimeConfigSources.detection.pollIntervalMs)}]`,
-      },
-      {
-        value: "isSyncActive",
-        label: "Sync Status",
-        description: `${desiredStateDraft.isSyncActive} [${formatSource(runtimeConfigSources.isSyncActive)}]`,
-      },
-    ];
-    const list = new SelectList(items, items.length, selectTheme);
-
-    list.onCancel = () => setMode({ kind: "menu" });
-
-    list.onSelect = (item) => {
-      switch (item.value) {
-        case "themes.light":
-          setMode({ kind: "themeSelect", fieldId: "themes.light" });
-
-          break;
-        case "themes.dark":
-          setMode({ kind: "themeSelect", fieldId: "themes.dark" });
-
-          break;
-        case "detection.pollIntervalMs":
-          setMode({
-            kind: "pollIntervalEdit",
-            value: desiredStateDraft["detection.pollIntervalMs"],
-          });
-
-          break;
-        case "isSyncActive":
-          setMode({ kind: "syncSelect" });
-
-          break;
-      }
-    };
-
-    return list;
-  }
-
-  function buildThemeSelectList(
-    fieldId: "themes.light" | "themes.dark",
-  ): SelectList {
-    const items: SelectItem[] = themeNames.map((name) => ({
-      value: name,
-      label: name,
-    }));
-    const list = new SelectList(items, Math.min(items.length, 15), selectTheme);
-
-    const currentValue = desiredStateDraft[fieldId];
-    const currentIndex = themeNames.indexOf(currentValue);
-
-    if (currentIndex >= 0) {
-      list.setSelectedIndex(currentIndex);
-    }
-
-    list.onCancel = () => setMode({ kind: "config" });
-
-    list.onSelect = (item) => {
-      desiredStateDraft[fieldId] = item.value;
-
-      setMode({ kind: "config" });
-    };
-
-    return list;
-  }
-
-  function buildSyncSelectList(): SelectList {
-    const items: SelectItem[] = [
-      { value: "active", label: "active" },
-      { value: "inactive", label: "inactive" },
-    ];
-    const list = new SelectList(items, items.length, selectTheme);
-
-    const currentIndex = desiredStateDraft.isSyncActive === "active" ? 0 : 1;
-
-    list.setSelectedIndex(currentIndex);
-
-    list.onCancel = () => setMode({ kind: "config" });
-
-    list.onSelect = (item) => {
-      desiredStateDraft.isSyncActive = item.value;
-
-      setMode({ kind: "config" });
-    };
-
-    return list;
-  }
-
-  function buildWriteTargetSelectList(
-    paths: Record<ConfigScope, string>,
-  ): SelectList {
-    const items: SelectItem[] = [
-      {
-        value: "project",
-        label: `Project (${paths.project})`,
-      },
-      { value: "global", label: `Global (${paths.global})` },
-    ];
-    const list = new SelectList(items, items.length, selectTheme);
-
-    list.onCancel = () => setMode({ kind: "config" });
-
-    list.onSelect = (item) => {
-      const scope = item.value as ConfigScope;
-
-      void save(scope);
-    };
-
-    return list;
-  }
-
-  function handleInput(data: string): void {
-    if (isBusy) {
-      return;
-    }
-
-    if (matchesKey(data, Key.ctrl("c"))) {
-      doneFn();
-
-      return;
-    }
-
-    switch (mode.kind) {
-      case "menu":
-        if (matchesKey(data, Key.escape)) {
-          doneFn();
-
-          return;
-        }
-
-        activeSelectList?.handleInput(data);
-        tui.requestRender();
-
-        return;
-      case "config":
-        if (matchesKey(data, Key.ctrl("s"))) {
-          void openWriteTarget();
-
-          return;
-        }
-
-        if (matchesKey(data, Key.ctrl("r"))) {
-          reloadRequested = true;
-          doneFn();
-
-          return;
-        }
-
-        activeSelectList?.handleInput(data);
-        tui.requestRender();
-
-        return;
-      case "themeSelect":
-      case "syncSelect":
-      case "writeTarget":
-        activeSelectList?.handleInput(data);
-        tui.requestRender();
-
-        return;
-      case "pollIntervalEdit":
-        if (matchesKey(data, Key.enter)) {
-          const parsed = Number(mode.value);
-
-          if (!isValidPollIntervalMs(parsed)) {
-            setMode({
-              kind: "pollIntervalEdit",
-              value: mode.value,
-              error: `Polling interval must be between ${POLL_INTERVAL_MIN_MS} and ${POLL_INTERVAL_MAX_MS} milliseconds.`,
-            });
-
-            return;
-          }
-
-          desiredStateDraft["detection.pollIntervalMs"] = String(
-            Math.floor(parsed),
-          );
-          setMode({ kind: "config" });
-
-          return;
-        }
-
-        if (matchesKey(data, Key.backspace)) {
-          setMode({
-            kind: "pollIntervalEdit",
-            value: mode.value.slice(0, -1),
-            error: undefined,
-          });
-
-          return;
-        }
-
-        if (matchesKey(data, Key.escape)) {
-          setMode({ kind: "config" });
-
-          return;
-        }
-
-        if (data.length === 1 && /[0-9]/.test(data)) {
-          setMode({
-            kind: "pollIntervalEdit",
-            value: mode.value + data,
-            error: undefined,
-          });
-        }
-
-        return;
-      case "status":
-        if (matchesKey(data, Key.escape)) {
-          setMode({ kind: "menu" });
-        }
-
-        tui.requestRender();
-
-        return;
-    }
-  }
-
-  async function openWriteTarget(): Promise<void> {
-    isBusy = true;
-
-    try {
-      const [project, global] = await Promise.all([
-        getConfigPath("project", ctx.cwd),
-        getConfigPath("global", ctx.cwd),
-      ]);
-
-      setMode({ kind: "writeTarget", paths: { project, global } });
-    } catch (error) {
-      setMode({
-        kind: "config",
-        message: `Error resolving config paths: ${(error as Error).message}.`,
-        messageSeverity: "error",
-      });
-    } finally {
-      isBusy = false;
-    }
-  }
-
-  function rebuild(): void {
-    rootContainer.clear();
-    activeSelectList = undefined;
-
-    const borderFn = (text: string) => theme.fg("accent", text);
-
-    function buildListOverlay(
-      title: string,
-      list: SelectList,
-      hint: string,
-      message?: { text: string; severity?: ConfigMessageSeverity },
-    ): void {
-      rootContainer.addChild(new DynamicBorder(borderFn));
-      rootContainer.addChild(new Spacer(1));
-      rootContainer.addChild(
-        new Text(theme.fg("accent", theme.bold(title)), 1, 0),
-      );
-      rootContainer.addChild(new Spacer(1));
-      rootContainer.addChild(list);
-
-      if (message) {
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new HangingText([{ prefix: "", body: message.text }], 1, (line) =>
-            theme.fg(message.severity ?? "warning", line),
-          ),
-        );
-      }
-
-      rootContainer.addChild(new Spacer(1));
-      rootContainer.addChild(new Text(theme.fg("dim", hint), 1, 0));
-      rootContainer.addChild(new DynamicBorder(borderFn));
-    }
-
-    switch (mode.kind) {
-      case "menu": {
-        const list = buildMenuSelectList(doneFn);
-
-        activeSelectList = list;
-
-        buildListOverlay(
-          "Theme Sync",
-          list,
-          "↑/↓ Navigate · Enter Open · Ctrl+C/Esc Quit",
-        );
-
-        break;
-      }
-
-      case "config": {
-        const list = buildConfigSelectList();
-
-        activeSelectList = list;
-
-        buildListOverlay(
-          "Theme Sync Config",
-          list,
-          "↑/↓ Move · Enter Edit · Ctrl+S Save · Ctrl+R Reload · Esc Back · Ctrl+C Quit",
-          mode.message
-            ? { text: mode.message, severity: mode.messageSeverity }
-            : undefined,
-        );
-
-        break;
-      }
-
-      case "themeSelect": {
-        const title =
-          mode.fieldId === "themes.light"
-            ? "Light Mode Theme"
-            : "Dark Mode Theme";
-        const list = buildThemeSelectList(mode.fieldId);
-
-        activeSelectList = list;
-
-        buildListOverlay(
-          title,
-          list,
-          "↑/↓ Navigate · Enter Select · Esc Back · Ctrl+C Quit",
-        );
-
-        break;
-      }
-
-      case "syncSelect": {
-        const list = buildSyncSelectList();
-
-        activeSelectList = list;
-
-        buildListOverlay(
-          "Sync Status",
-          list,
-          "↑/↓ Navigate · Enter Select · Esc Back · Ctrl+C Quit",
-        );
-
-        break;
-      }
-
-      case "pollIntervalEdit": {
-        rootContainer.addChild(new DynamicBorder(borderFn));
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(theme.fg("accent", theme.bold("Polling Interval")), 1, 0),
-        );
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(
-            `Enter milliseconds (${POLL_INTERVAL_MIN_MS} to ${POLL_INTERVAL_MAX_MS}, inclusive).`,
-            1,
-            0,
-          ),
-        );
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(`${theme.fg("accent", "> ")}${mode.value}`, 1, 0),
-        );
-
-        if (mode.error) {
-          rootContainer.addChild(new Spacer(1));
-          rootContainer.addChild(
-            new HangingText([{ prefix: "", body: mode.error }], 1, (line) =>
-              theme.fg("warning", line),
-            ),
-          );
-        }
-
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(
-            theme.fg(
-              "dim",
-              "Type Digits · Enter Confirm · Backspace Delete · Esc Back · Ctrl+C Quit",
-            ),
-            1,
-            0,
-          ),
-        );
-        rootContainer.addChild(new DynamicBorder(borderFn));
-
-        break;
-      }
-
-      case "writeTarget": {
-        const list = buildWriteTargetSelectList(mode.paths);
-
-        activeSelectList = list;
-
-        buildListOverlay(
-          "Write Config To",
-          list,
-          "↑/↓ Navigate · Enter Save · Esc Back · Ctrl+C Quit",
-        );
-
-        break;
-      }
-
-      case "status": {
-        const status = runtime.getStatus(ctx);
-
-        const statusLines: HangingTextLine[] = [
-          { prefix: "Appearance:          ", body: status.currentAppearance },
-          { prefix: "Applied Theme:       ", body: status.appliedTheme },
-          {
-            prefix: "Desired Theme:       ",
-            body: status.desiredTheme ?? "n/a",
-          },
-          {
-            prefix: "Sync Active:         ",
-            body: status.syncStatus === "active" ? "yes" : "no",
-          },
-          {
-            prefix: "Detection Strategy:  ",
-            body: status.detectionStrategy,
-          },
-          {
-            prefix: "Available Detectors: ",
-            body: status.availableDetectors.join(", ") || "none",
-          },
-          {
-            prefix: "Polling Interval:    ",
-            body: `${status.pollIntervalMs}ms`,
-          },
-          {
-            prefix: "Last Update:         ",
-            body: status.lastUpdateAt
-              ? new Date(status.lastUpdateAt).toLocaleString()
-              : "never",
-          },
-          { prefix: "Last Event:          ", body: status.lastEvent },
-        ];
-
-        const warningLines: HangingTextLine[] = [
-          { prefix: "", body: "Warnings:" },
-          ...status.warnings.map((warning) => ({
-            prefix: "  - ",
-            body: warning,
-          })),
-        ];
-
-        rootContainer.addChild(new DynamicBorder(borderFn));
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(theme.fg("accent", theme.bold("Theme Sync Status")), 1, 0),
-        );
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(new HangingText(statusLines, 1));
-
-        if (status.warnings.length > 0) {
-          rootContainer.addChild(new Spacer(1));
-          rootContainer.addChild(
-            new HangingText(warningLines, 1, (line) =>
-              theme.fg("warning", line),
-            ),
-          );
-        }
-
-        rootContainer.addChild(new Spacer(1));
-        rootContainer.addChild(
-          new Text(theme.fg("dim", "Esc Back · Ctrl+C Quit"), 1, 0),
-        );
-        rootContainer.addChild(new DynamicBorder(borderFn));
-
-        break;
-      }
-    }
-  }
-
-  async function save(scope: ConfigScope): Promise<void> {
-    const submittedDraft = { ...desiredStateDraft };
-    const changes: EditableConfigChanges = {};
-
-    if (
-      desiredStateDraft["themes.light"] !== currentStateDraft["themes.light"]
-    ) {
-      changes["themes.light"] = desiredStateDraft["themes.light"];
-    }
-
-    if (desiredStateDraft["themes.dark"] !== currentStateDraft["themes.dark"]) {
-      changes["themes.dark"] = desiredStateDraft["themes.dark"];
-    }
-
-    if (
-      desiredStateDraft["detection.pollIntervalMs"] !==
-      currentStateDraft["detection.pollIntervalMs"]
-    ) {
-      changes["detection.pollIntervalMs"] = Number(
-        desiredStateDraft["detection.pollIntervalMs"],
-      );
-    }
-
-    if (desiredStateDraft.isSyncActive !== currentStateDraft.isSyncActive) {
-      changes.isSyncActive = desiredStateDraft.isSyncActive === "active";
-    }
-
-    const changeCount = Object.keys(changes).length;
-
-    isBusy = true;
-
-    try {
-      setMode({
-        kind: "config",
-        message: "Saving...",
-        messageSeverity: "warning",
-      });
-
-      const result = await writeConfigChanges(scope, ctx.cwd, changes);
-
-      if (!result.ok) {
-        setMode({
-          kind: "config",
-          message: result.reason,
-          messageSeverity: "error",
-        });
-
-        return;
-      }
-
-      Object.assign(currentStateDraft, submittedDraft);
-
-      setMode({
-        kind: "config",
-        message:
-          changeCount === 0
-            ? "No changes to save."
-            : `Saved ${changeCount} changed setting(s) to ${scope === "project" ? "Project" : "Global"}.`,
-        messageSeverity: changeCount === 0 ? "warning" : "success",
-      });
-    } catch (error) {
-      setMode({
-        kind: "config",
-        message: `Error saving config: ${(error as Error).message}`,
-        messageSeverity: "error",
-      });
-    } finally {
-      isBusy = false;
-    }
-  }
-
-  function setMode(nextMode: ThemeSyncOverlayMode): void {
-    mode = nextMode;
-
-    rebuild();
-    tui?.requestRender();
-  }
+  const config = await loadConfig(ctx);
+  let component: ConfigOverlayComponent | undefined;
 
   await ctx.ui.custom<void>(
-    (tuiHandle, themeRef, _kb, done) => {
-      tui = tuiHandle;
-      theme = themeRef;
-      doneFn = done;
+    (tui, theme, _keybindings, done) => {
+      component = new ConfigOverlayComponent({
+        config,
+        done,
+        resolvePaths: async () => {
+          const [project, global] = await Promise.all([
+            getConfigPath("project", ctx.cwd),
+            getConfigPath("global", ctx.cwd),
+          ]);
 
-      rebuild();
-
-      return {
-        dispose(): void {
-          rootContainer.clear();
+          return { project, global };
         },
+        requestRender: () => tui.requestRender(),
+        save: (scope, changes) => writeConfigChanges(scope, ctx.cwd, changes),
+        terminalRows: () => tui.terminal?.rows ?? 24,
+        theme,
+        themeNames: ctx.ui.getAllThemes().map((item) => item.name),
+      });
 
-        handleInput(data: string): void {
-          handleInput(data);
-        },
-
-        invalidate(): void {
-          rootContainer.invalidate();
-
-          rebuild();
-        },
-
-        render(width: number): string[] {
-          return rootContainer.render(width);
-        },
-      };
+      return component;
     },
     {
       overlay: true,
@@ -743,32 +47,43 @@ export async function openThemeSyncOverlay(
         anchor: "center",
         margin: 1,
         maxHeight: "90%",
-        width: 78,
+        width: 80,
       },
     },
   );
 
   // Reload only after the overlay closes so the command observes failures.
-  if (reloadRequested) {
-    await ctx.reload();
-  }
+  if (component?.reloadRequested) await ctx.reload();
 }
 
-function formatSource(source: ConfigSource): string {
-  switch (source) {
-    case "project":
-      return "Project";
-    case "global":
-      return "Global";
-    case "default":
-      return "Default";
+/** Routes the command argument to configuration, status, or a usage warning. */
+export async function runThemeSyncCommand(
+  args: string,
+  runtime: ThemeSyncRuntime,
+  ctx: ExtensionCommandContext,
+  pi: Pick<ExtensionAPI, "appendEntry">,
+): Promise<void> {
+  const argument = args.trim();
+
+  if (argument.length === 0) {
+    await openThemeSyncOverlay(runtime, ctx);
+
+    return;
   }
+
+  if (argument === "status") {
+    deliverStatusReport(ctx, pi, {
+      body: formatStatusReport(runtime.getStatus(ctx)),
+    });
+
+    return;
+  }
+
+  ctx.ui.notify("Usage: /theme-sync or /theme-sync status.", "warning");
 }
 
 function requireUI(ctx: ExtensionCommandContext, commandName: string): boolean {
-  if (ctx.mode === "tui") {
-    return true;
-  }
+  if (ctx.mode === "tui") return true;
 
   ctx.ui.notify(
     `Interactive TUI mode is required for ${commandName}.`,

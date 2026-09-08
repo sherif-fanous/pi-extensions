@@ -41,7 +41,7 @@ test.each(["success", "refusal", "rejection"] as const)(
     const overlay = await startOverlay();
 
     try {
-      await overlay.input("\r", "\r", "\x1b[B", "\r", "\x13", "\r");
+      await overlay.input("\r", "\x1b[B", "\r", "\x13", "\r");
 
       expect(write).toHaveBeenCalledExactlyOnceWith(
         "project",

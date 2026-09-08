@@ -1,22 +1,31 @@
 /** Registers the `/theme-sync` command and session lifecycle handlers. */
 
-import { openThemeSyncOverlay } from "./command.js";
+import { runThemeSyncCommand } from "./command.js";
 import { createThemeSyncRuntime } from "./runtime.js";
+import { registerStatusReportRenderer } from "./ui/status-report.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 /** Registers theme sync with Pi's extension API. */
 export default function (pi: ExtensionAPI) {
   const runtime = createThemeSyncRuntime();
 
+  registerStatusReportRenderer(pi);
   pi.registerCommand("theme-sync", {
-    description: "Open theme sync menu",
+    description: "Configure theme sync or report its status",
+    getArgumentCompletions: (prefix) => {
+      const argument = prefix.trimStart();
 
-    handler: async (_args, ctx) => {
+      return !argument.includes(" ") && "status".startsWith(argument)
+        ? [{ value: "status", label: "status: show theme sync status" }]
+        : null;
+    },
+
+    handler: async (args, ctx) => {
       try {
-        await openThemeSyncOverlay(runtime, ctx);
+        await runThemeSyncCommand(args, runtime, ctx, pi);
       } catch (err) {
         ctx.ui.notify(
-          `pi-theme-sync overlay failed: ${err instanceof Error ? err.message : String(err)}.`,
+          `Theme sync command failed: ${err instanceof Error ? err.message : String(err)}.`,
           "error",
         );
       }

@@ -1,10 +1,4 @@
-# theme-sync-status
-
-## Purpose
-
-Runtime status reporting for inspecting current theme sync state, detection strategy, and warnings.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Theme sync status is a command report
 
@@ -44,6 +38,8 @@ Theme sync SHALL style status reports with an accent heading, muted field labels
 - **WHEN** a status value or warning exceeds the available transcript width
 - **THEN** Pi wraps the complete report content without losing any status information
 
+## MODIFIED Requirements
+
 ### Requirement: Theme sync status overlay explains effective runtime state
 
 Theme sync SHALL report the effective runtime state needed to explain current behavior.
@@ -62,3 +58,29 @@ Theme sync SHALL report the effective runtime state needed to explain current be
 
 - **WHEN** the status report is rendered
 - **THEN** it does not show config-source reporting
+
+## REMOVED Requirements
+
+### Requirement: Theme sync opens status from a top-level menu
+
+**Reason**: Status becomes a dedicated subcommand and the top-level menu is removed.
+
+**Migration**: Run `/theme-sync status`.
+
+### Requirement: Theme sync status uses an overlay window
+
+**Reason**: Read-only status is delivered as a transcript report so it remains visible after the command completes.
+
+**Migration**: Run `/theme-sync status` and read the resulting transcript report.
+
+### Requirement: Theme sync status overlay remains visible until dismissed
+
+**Reason**: Transcript reports persist naturally and require no dismissal interaction.
+
+**Migration**: No dismissal is required; continue using Pi normally after the report appears.
+
+### Requirement: Theme sync status overlay preserves alignment when text wraps
+
+**Reason**: The status report uses Pi's transcript wrapping instead of an overlay-specific hanging layout.
+
+**Migration**: Status content remains available through `/theme-sync status` and wraps within the transcript.

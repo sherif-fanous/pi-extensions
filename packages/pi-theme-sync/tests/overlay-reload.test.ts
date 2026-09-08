@@ -14,7 +14,7 @@ afterEach(() => {
 test("closes the overlay before reloading and waits for reload completion", async () => {
   const pendingReload = createDeferred();
   const reload = vi.fn().mockReturnValue(pendingReload.promise);
-  const ctx = createContext(["\r", "\x12"], reload);
+  const ctx = createContext(["\x12"], reload);
   let completed = false;
   const command = openThemeSyncOverlay(createThemeSyncRuntime(), ctx).then(
     () => {
@@ -35,7 +35,7 @@ test("propagates reload failure to the command caller", async () => {
   const reload = vi
     .fn()
     .mockRejectedValue(new Error("expected reload failure"));
-  const ctx = createContext(["\r", "\x12"], reload);
+  const ctx = createContext(["\x12"], reload);
 
   await expect(
     openThemeSyncOverlay(createThemeSyncRuntime(), ctx),
@@ -45,8 +45,8 @@ test("propagates reload failure to the command caller", async () => {
 });
 
 test.each([
-  { name: "Escape from menu", input: ["\x1b"] },
-  { name: "Ctrl+C from config", input: ["\r", "\x03"] },
+  { name: "Escape from config", input: ["\x1b"] },
+  { name: "Ctrl+C from config", input: ["\x03"] },
 ])("$name closes without reloading", async ({ input }) => {
   const reload = vi.fn();
   const ctx = createContext(input, reload);
