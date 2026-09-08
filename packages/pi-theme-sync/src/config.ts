@@ -8,7 +8,6 @@
  */
 
 import { promises as fs } from "node:fs";
-import { homedir } from "node:os";
 import path from "node:path";
 
 import type {
@@ -19,10 +18,13 @@ import type {
   RuntimeConfig,
   RuntimeConfigSources,
 } from "./types.js";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import {
+  getAgentDir,
+  type ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 
 export const CONFIG_PATHS = {
-  global: path.join(homedir(), ".pi", "agent", "theme-sync.json"),
+  global: path.join(getAgentDir(), "theme-sync.json"),
   project: (cwd: string) => path.join(cwd, ".pi", "theme-sync.json"),
 };
 

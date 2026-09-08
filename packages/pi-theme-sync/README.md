@@ -48,6 +48,9 @@ To go back to Pi's built-in behavior, set `isSyncActive` to `false` in the `/the
 2. **Global config** (`~/.pi/agent/theme-sync.json`) — user preferences
 3. **Built-in defaults** — Pi's `light` and `dark` themes plus active sync enabled
 
+If you set `PI_CODING_AGENT_DIR` before starting Pi, the global file is
+`theme-sync.json` inside that directory instead. The project path is unchanged.
+
 Project config overrides global config, and global config overrides built-in defaults, on a per-key basis.
 
 ### Example
