@@ -73,10 +73,16 @@ export async function probeAvailablePollingDetectors(
   ctx: ExtensionContext,
   tui: TUI | undefined,
   reportFailure?: ReportDetectorFailure,
+  isCancelled: () => boolean = () => false,
 ): Promise<PollingDetector[]> {
   const availablePollingDetectors: PollingDetector[] = [];
 
   for (const detector of POLLING_DETECTORS) {
+    // A pending probe may outlive the session that supplied its terminal context.
+    if (isCancelled()) {
+      break;
+    }
+
     if (
       (await detectAppearance(ctx, detector, tui, reportFailure)) !== "unknown"
     ) {

@@ -176,6 +176,51 @@ test("a detector failing after discovery falls back and reports only one warning
   }
 });
 
+test.each(["reject", "unknown", "light"] as const)(
+  "cleanup during a startup probe prevents further work after %s",
+  async (outcome) => {
+    let finishProbe = () => {};
+    const pendingProbe = new Promise<"unknown" | "light">((resolve, reject) => {
+      finishProbe = () => {
+        if (outcome === "reject") {
+          reject(new Error("late query failure"));
+        } else {
+          resolve(outcome);
+        }
+      };
+    });
+
+    vi.mocked(detectAppearanceViaColorScheme).mockReturnValue(pendingProbe);
+
+    const ctx = createContext();
+    const runtime = createThemeSyncRuntime();
+    const schedule = vi.fn(() => vi.fn());
+    const setTheme = vi.spyOn(ctx.ui, "setTheme");
+    const setup = runtime.setupAppearanceMonitoring(ctx, schedule);
+
+    try {
+      await vi.waitFor(() =>
+        expect(detectAppearanceViaColorScheme).toHaveBeenCalledOnce(),
+      );
+
+      runtime.cleanup();
+      finishProbe();
+      await setup;
+
+      expect(detectAppearanceViaOsc11Background).not.toHaveBeenCalled();
+      expect(detectAppearanceViaSystem).not.toHaveBeenCalled();
+      expect(probeDecMode2031Support).not.toHaveBeenCalled();
+      expect(schedule).not.toHaveBeenCalled();
+      expect(setTheme).not.toHaveBeenCalled();
+      expect(runtime.getStatus(ctx).warnings).toEqual([]);
+    } finally {
+      runtime.cleanup();
+      finishProbe();
+      await setup;
+    }
+  },
+);
+
 test("all failed probes leave startup alive with no recurring timer", async () => {
   vi.mocked(detectAppearanceViaColorScheme).mockRejectedValue(
     new Error("query failed"),

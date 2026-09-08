@@ -228,6 +228,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
       ctx,
       tui,
       reportDetectorFailure,
+      () => isShutDown,
     );
 
     if (isShutDown) {
