@@ -336,7 +336,7 @@ describe("writeConfigChanges", () => {
           await writeConfigChanges(scope, projectDirectory, changes),
         ).toEqual({
           ok: false,
-          reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It contains invalid JSON. Fix the file and try again.`,
+          reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It must contain a valid JSON object. Fix the file and try again.`,
         });
         expect(writeSpy).not.toHaveBeenCalled();
         expect(await readFile(filePath, "utf8")).toBe(malformedContents);
@@ -352,6 +352,64 @@ describe("writeConfigChanges", () => {
           isSyncActive: false,
           keepThis: true,
         });
+      } finally {
+        writeSpy.mockRestore();
+      }
+    },
+  );
+
+  test.each(
+    (["project", "global"] as const).flatMap((scope) =>
+      [
+        "[]",
+        '[{"keepThis":true}]',
+        "null",
+        '"settings"',
+        "123",
+        "true",
+        "false",
+      ].map((content) => ({ scope, content })),
+    ),
+  )(
+    "rejects $scope config root $content without changing it",
+    async ({ scope, content }) => {
+      const filePath = getConfigFilePath(scope);
+
+      await mkdir(path.dirname(filePath), { recursive: true });
+      await writeFile(filePath, content);
+
+      const loaded = await loadConfig(createContext());
+
+      expect(loaded.runtimeConfig).toEqual(DEFAULT_CONFIG);
+      expect(loaded.runtimeConfigSources.isSyncActive).toBe("default");
+      expect(loaded.warnings).toEqual([
+        `Configuration in ${filePath} must be a JSON object. File ignored.`,
+      ]);
+
+      const writeSpy = vi.spyOn(fs, "writeFile");
+
+      try {
+        expect(
+          await writeConfigChanges(scope, projectDirectory, {
+            isSyncActive: false,
+          }),
+        ).toEqual({
+          ok: false,
+          reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It must contain a valid JSON object. Fix the file and try again.`,
+        });
+        expect(writeSpy).not.toHaveBeenCalled();
+        expect(await readFile(filePath, "utf8")).toBe(content);
+
+        await writeFile(filePath, "{}");
+        writeSpy.mockClear();
+
+        expect(
+          await writeConfigChanges(scope, projectDirectory, {
+            isSyncActive: false,
+          }),
+        ).toEqual({ ok: true });
+        expect(writeSpy).toHaveBeenCalledOnce();
+        expect(await readJson(filePath)).toEqual({ isSyncActive: false });
       } finally {
         writeSpy.mockRestore();
       }

@@ -176,7 +176,7 @@ export async function writeConfigChanges(
   if (result.warning) {
     return {
       ok: false,
-      reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It contains invalid JSON. Fix the file and try again.`,
+      reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It must contain a valid JSON object. Fix the file and try again.`,
     };
   }
 
@@ -230,7 +230,17 @@ async function readJsonIfExists(filePath: string): Promise<ReadJsonResult> {
   }
 
   try {
-    const parsed = JSON.parse(content) as LoadedConfig;
+    const parsed: unknown = JSON.parse(content);
+
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      return {
+        warning: `Configuration in ${filePath} must be a JSON object. File ignored.`,
+      };
+    }
 
     return { config: parsed };
   } catch {
