@@ -74,7 +74,6 @@ test.each([
   "shows resolved $name paths using the global override",
   async ({ files, project, global }) => {
     await withOverlay(new Set(files), async (overlay) => {
-      overlay.handleInput?.("\r");
       overlay.handleInput?.("\x13");
       await vi.waitFor(() => {
         const rendered = overlay.render(240).join("\n");
@@ -90,7 +89,7 @@ test("refreshes paths when reopening after migration and retains pending edits",
   const files = new Set([projectLegacy, globalLegacy]);
 
   await withOverlay(files, async (overlay) => {
-    for (const event of ["\r", "\r", "\x1b[B", "\r", "\x13"]) {
+    for (const event of ["\r", "\x1b[B", "\r", "\x13"]) {
       overlay.handleInput?.(event);
     }
 
@@ -126,7 +125,7 @@ test("refreshes paths when reopening after migration and retains pending edits",
 
 test("reports path resolution errors and permits retry without losing edits", async () => {
   await withOverlay(new Set(), async (overlay) => {
-    for (const event of ["\r", "\r", "\x1b[B", "\r"]) {
+    for (const event of ["\r", "\x1b[B", "\r"]) {
       overlay.handleInput?.(event);
     }
 

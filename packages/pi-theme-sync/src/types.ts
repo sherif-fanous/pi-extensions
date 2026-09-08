@@ -69,7 +69,7 @@ export type RuntimeConfigSources = {
   };
 };
 
-/** Runtime state displayed by the status overlay. */
+/** Runtime state displayed by the status report. */
 export type RuntimeStatus = {
   currentAppearance: Appearance;
   desiredTheme?: string;
