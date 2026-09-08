@@ -42,7 +42,7 @@ test.each(["success", "refusal", "rejection"] as const)(
 
     try {
       // Open Config, change the light theme to dark, then save to Project.
-      overlay.input("\r", "\r", "\x1b[B", "\r", "\x13", "\r");
+      await overlay.input("\r", "\r", "\x1b[B", "\r", "\x13", "\r");
 
       expect(write).toHaveBeenCalledExactlyOnceWith(
         "project",
@@ -51,7 +51,16 @@ test.each(["success", "refusal", "rejection"] as const)(
       );
 
       // Try editing the theme, saving again, reloading, and closing mid-write.
-      overlay.input("\r", "\x1b[A", "\r", "\x13", "\r", "\x12", "\x03", "\x1b");
+      await overlay.input(
+        "\r",
+        "\x1b[A",
+        "\r",
+        "\x13",
+        "\r",
+        "\x12",
+        "\x03",
+        "\x1b",
+      );
 
       expect(write).toHaveBeenCalledOnce();
       expect(overlay.reload).not.toHaveBeenCalled();
@@ -59,7 +68,7 @@ test.each(["success", "refusal", "rejection"] as const)(
 
       finishSave();
       await new Promise<void>((resolve) => setImmediate(resolve));
-      overlay.input("\x13", "\r");
+      await overlay.input("\x13", "\r");
 
       expect(write).toHaveBeenCalledTimes(2);
       expect(write).toHaveBeenLastCalledWith(
@@ -69,7 +78,7 @@ test.each(["success", "refusal", "rejection"] as const)(
       );
 
       await new Promise<void>((resolve) => setImmediate(resolve));
-      overlay.input("\x03");
+      await overlay.input("\x03");
       await overlay.closed;
 
       expect(overlay.done).toHaveBeenCalledOnce();
@@ -77,7 +86,7 @@ test.each(["success", "refusal", "rejection"] as const)(
     } finally {
       finishSave();
       await new Promise<void>((resolve) => setImmediate(resolve));
-      overlay.input("\x03");
+      await overlay.input("\x03");
       await overlay.closed;
     }
   },
@@ -133,9 +142,10 @@ async function startOverlay() {
   return {
     closed,
     done,
-    input: (...events: string[]) => {
+    input: async (...events: string[]) => {
       for (const data of events) {
         acceptInput(data);
+        await new Promise<void>((resolve) => setImmediate(resolve));
       }
     },
     reload,

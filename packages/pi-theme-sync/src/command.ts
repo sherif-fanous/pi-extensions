@@ -10,7 +10,7 @@
  */
 
 import {
-  CONFIG_PATHS,
+  getConfigPath,
   isValidPollIntervalMs,
   loadConfig,
   POLL_INTERVAL_MAX_MS,
@@ -61,7 +61,7 @@ type ThemeSyncOverlayMode =
   | { kind: "themeSelect"; fieldId: "themes.light" | "themes.dark" }
   | { kind: "syncSelect" }
   | { kind: "pollIntervalEdit"; value: string; error?: string }
-  | { kind: "writeTarget" };
+  | { kind: "writeTarget"; paths: Record<ConfigScope, string> };
 
 /**
  * Renders prefixed lines with hanging indentation. Owns width-aware wrapping
@@ -137,7 +137,7 @@ export async function openThemeSyncOverlay(
   let theme: ExtensionCommandContext["ui"]["theme"];
 
   let doneFn: () => void;
-  let isSaving = false;
+  let isBusy = false;
   let reloadRequested = false;
   let tui: { requestRender: () => void };
 
@@ -266,13 +266,15 @@ export async function openThemeSyncOverlay(
     return list;
   }
 
-  function buildWriteTargetSelectList(): SelectList {
+  function buildWriteTargetSelectList(
+    paths: Record<ConfigScope, string>,
+  ): SelectList {
     const items: SelectItem[] = [
       {
         value: "project",
-        label: `Project (${CONFIG_PATHS.project(ctx.cwd)})`,
+        label: `Project (${paths.project})`,
       },
-      { value: "global", label: `Global (${CONFIG_PATHS.global})` },
+      { value: "global", label: `Global (${paths.global})` },
     ];
     const list = new SelectList(items, items.length, selectTheme);
 
@@ -288,7 +290,7 @@ export async function openThemeSyncOverlay(
   }
 
   function handleInput(data: string): void {
-    if (isSaving) {
+    if (isBusy) {
       return;
     }
 
@@ -312,7 +314,7 @@ export async function openThemeSyncOverlay(
         return;
       case "config":
         if (matchesKey(data, Key.ctrl("s"))) {
-          setMode({ kind: "writeTarget" });
+          void openWriteTarget();
 
           return;
         }
@@ -390,6 +392,27 @@ export async function openThemeSyncOverlay(
         tui.requestRender();
 
         return;
+    }
+  }
+
+  async function openWriteTarget(): Promise<void> {
+    isBusy = true;
+
+    try {
+      const [project, global] = await Promise.all([
+        getConfigPath("project", ctx.cwd),
+        getConfigPath("global", ctx.cwd),
+      ]);
+
+      setMode({ kind: "writeTarget", paths: { project, global } });
+    } catch (error) {
+      setMode({
+        kind: "config",
+        message: `Error resolving config paths: ${(error as Error).message}.`,
+        messageSeverity: "error",
+      });
+    } finally {
+      isBusy = false;
     }
   }
 
@@ -536,7 +559,7 @@ export async function openThemeSyncOverlay(
       }
 
       case "writeTarget": {
-        const list = buildWriteTargetSelectList();
+        const list = buildWriteTargetSelectList(mode.paths);
 
         activeSelectList = list;
 
@@ -649,7 +672,7 @@ export async function openThemeSyncOverlay(
 
     const changeCount = Object.keys(changes).length;
 
-    isSaving = true;
+    isBusy = true;
 
     try {
       setMode({
@@ -687,7 +710,7 @@ export async function openThemeSyncOverlay(
         messageSeverity: "error",
       });
     } finally {
-      isSaving = false;
+      isBusy = false;
     }
   }
 

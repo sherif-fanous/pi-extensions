@@ -24,8 +24,9 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 export const CONFIG_PATHS = {
-  global: path.join(getAgentDir(), "theme-sync.json"),
-  project: (cwd: string) => path.join(cwd, ".pi", "theme-sync.json"),
+  global: path.join(getAgentDir(), "theme-sync", "settings.json"),
+  project: (cwd: string) =>
+    path.join(cwd, ".pi", "theme-sync", "settings.json"),
 };
 
 export const DEFAULT_CONFIG: RuntimeConfig = {
@@ -45,11 +46,19 @@ export const POLL_INTERVAL_MAX_MS = 60_000;
 export const POLL_INTERVAL_MIN_MS = 1000;
 
 type ReadJsonResult = {
+  missing?: true;
   config?: LoadedConfig;
   warning?: string;
 };
 
 type SaveResult = { ok: true } | { ok: false; reason: string };
+
+export async function getConfigPath(
+  scope: ConfigScope,
+  cwd: string,
+): Promise<string> {
+  return (await readScopedConfig(scope, cwd)).filePath;
+}
 
 export function isValidPollIntervalMs(value: number): boolean {
   return (
@@ -64,8 +73,8 @@ export async function loadConfig(
 ): Promise<LoadedRuntimeConfig> {
   const warnings: string[] = [];
 
-  const globalResult = await readJsonIfExists(CONFIG_PATHS.global);
-  const projectResult = await readJsonIfExists(CONFIG_PATHS.project(ctx.cwd));
+  const globalResult = await readScopedConfig("global", ctx.cwd);
+  const projectResult = await readScopedConfig("project", ctx.cwd);
 
   if (globalResult.warning) {
     warnings.push(globalResult.warning);
@@ -169,8 +178,8 @@ export async function writeConfigChanges(
     return { ok: true };
   }
 
-  const filePath = getConfigPath(scope, cwd);
-  const result = await readJsonIfExists(filePath);
+  const result = await readScopedConfig(scope, cwd);
+  const { filePath } = result;
 
   // A load fallback is safe for reading, but would discard the original on save.
   if (result.warning) {
@@ -212,10 +221,6 @@ export async function writeConfigChanges(
   return { ok: true };
 }
 
-function getConfigPath(scope: ConfigScope, cwd: string): string {
-  return scope === "project" ? CONFIG_PATHS.project(cwd) : CONFIG_PATHS.global;
-}
-
 async function readJsonIfExists(filePath: string): Promise<ReadJsonResult> {
   let content: string;
 
@@ -223,7 +228,7 @@ async function readJsonIfExists(filePath: string): Promise<ReadJsonResult> {
     content = await fs.readFile(filePath, "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return {};
+      return { missing: true };
     }
 
     throw error;
@@ -248,6 +253,29 @@ async function readJsonIfExists(filePath: string): Promise<ReadJsonResult> {
       warning: `Invalid JSON in ${filePath} — file ignored`,
     };
   }
+}
+
+async function readScopedConfig(
+  scope: ConfigScope,
+  cwd: string,
+): Promise<ReadJsonResult & { filePath: string }> {
+  const preferredPath =
+    scope === "project" ? CONFIG_PATHS.project(cwd) : CONFIG_PATHS.global;
+  const preferred = await readJsonIfExists(preferredPath);
+
+  if (!preferred.missing) {
+    return { ...preferred, filePath: preferredPath };
+  }
+
+  const legacyPath = path.join(
+    path.dirname(path.dirname(preferredPath)),
+    "theme-sync.json",
+  );
+  const legacy = await readJsonIfExists(legacyPath);
+
+  return legacy.missing
+    ? { ...preferred, filePath: preferredPath }
+    : { ...legacy, filePath: legacyPath };
 }
 
 function resolveSource<T>(

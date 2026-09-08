@@ -42,16 +42,19 @@ To go back to Pi's built-in behavior, set `isSyncActive` to `false` in the `/the
 
 ## Configuration
 
-`pi-theme-sync` looks for configuration in this order:
+`pi-theme-sync` selects one file for each scope:
 
-1. **Project config** (`.pi/theme-sync.json`) — project-specific settings
-2. **Global config** (`~/.pi/agent/theme-sync.json`) — user preferences
-3. **Built-in defaults** — Pi's `light` and `dark` themes plus active sync enabled
+| Scope   | Preferred path                         | Legacy fallback               |
+| ------- | -------------------------------------- | ----------------------------- |
+| Project | `.pi/theme-sync/settings.json`         | `.pi/theme-sync.json`         |
+| Global  | `~/.pi/agent/theme-sync/settings.json` | `~/.pi/agent/theme-sync.json` |
 
-If you set `PI_CODING_AGENT_DIR` before starting Pi, the global file is
-`theme-sync.json` inside that directory instead. The project path is unchanged.
+`PI_CODING_AGENT_DIR` replaces `~/.pi/agent` for global settings. Project
+settings override global settings per key.
 
-Project config overrides global config, and global config overrides built-in defaults, on a per-key basis.
+Legacy paths are deprecated but still supported for reads and saves when the
+preferred file is missing. To migrate, move `theme-sync.json` to
+`theme-sync/settings.json` without overwriting an existing file, then run `/reload`.
 
 ### Example
 
