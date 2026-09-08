@@ -154,10 +154,6 @@ export async function loadConfig(
   };
 
   return {
-    loadedConfig: {
-      project: projectLoadedConfig,
-      global: globalLoadedConfig,
-    },
     runtimeConfig,
     runtimeConfigSources,
     warnings,

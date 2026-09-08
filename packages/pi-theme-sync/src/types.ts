@@ -35,10 +35,6 @@ export type LoadedConfig = {
 };
 
 export type LoadedRuntimeConfig = {
-  loadedConfig: {
-    global?: LoadedConfig;
-    project?: LoadedConfig;
-  };
   runtimeConfig: RuntimeConfig;
   runtimeConfigSources: RuntimeConfigSources;
   warnings: string[];
