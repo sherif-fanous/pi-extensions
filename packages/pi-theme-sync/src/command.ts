@@ -137,6 +137,7 @@ export async function openThemeSyncOverlay(
   let theme: ExtensionCommandContext["ui"]["theme"];
 
   let doneFn: () => void;
+  let isSaving = false;
   let reloadRequested = false;
   let tui: { requestRender: () => void };
 
@@ -287,6 +288,10 @@ export async function openThemeSyncOverlay(
   }
 
   function handleInput(data: string): void {
+    if (isSaving) {
+      return;
+    }
+
     if (matchesKey(data, Key.ctrl("c"))) {
       doneFn();
 
@@ -616,6 +621,7 @@ export async function openThemeSyncOverlay(
   }
 
   async function save(scope: ConfigScope): Promise<void> {
+    const submittedDraft = { ...desiredStateDraft };
     const changes: EditableConfigChanges = {};
 
     if (
@@ -643,13 +649,15 @@ export async function openThemeSyncOverlay(
 
     const changeCount = Object.keys(changes).length;
 
-    setMode({
-      kind: "config",
-      message: "Saving...",
-      messageSeverity: "warning",
-    });
+    isSaving = true;
 
     try {
+      setMode({
+        kind: "config",
+        message: "Saving...",
+        messageSeverity: "warning",
+      });
+
       const result = await writeConfigChanges(scope, ctx.cwd, changes);
 
       if (!result.ok) {
@@ -662,11 +670,7 @@ export async function openThemeSyncOverlay(
         return;
       }
 
-      currentStateDraft["themes.light"] = desiredStateDraft["themes.light"];
-      currentStateDraft["themes.dark"] = desiredStateDraft["themes.dark"];
-      currentStateDraft["detection.pollIntervalMs"] =
-        desiredStateDraft["detection.pollIntervalMs"];
-      currentStateDraft.isSyncActive = desiredStateDraft.isSyncActive;
+      Object.assign(currentStateDraft, submittedDraft);
 
       setMode({
         kind: "config",
@@ -682,6 +686,8 @@ export async function openThemeSyncOverlay(
         message: `Error saving config: ${(error as Error).message}`,
         messageSeverity: "error",
       });
+    } finally {
+      isSaving = false;
     }
   }
 
