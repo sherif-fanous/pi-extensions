@@ -447,7 +447,7 @@ export async function openThemeSyncOverlay(
         buildListOverlay(
           "Theme Sync",
           list,
-          "↑↓ navigate • Enter open • Ctrl+C / Esc quit",
+          "↑/↓ Navigate · Enter Open · Ctrl+C/Esc Quit",
         );
 
         break;
@@ -461,7 +461,7 @@ export async function openThemeSyncOverlay(
         buildListOverlay(
           "Theme Sync Config",
           list,
-          "↑↓ move • Enter edit • Ctrl+S save • Ctrl+R reload • Esc back • Ctrl+C quit",
+          "↑/↓ Move · Enter Edit · Ctrl+S Save · Ctrl+R Reload · Esc Back · Ctrl+C Quit",
           mode.message
             ? { text: mode.message, severity: mode.messageSeverity }
             : undefined,
@@ -482,7 +482,7 @@ export async function openThemeSyncOverlay(
         buildListOverlay(
           title,
           list,
-          "↑↓ navigate • Enter select • Esc back • Ctrl+C quit",
+          "↑/↓ Navigate · Enter Select · Esc Back · Ctrl+C Quit",
         );
 
         break;
@@ -496,7 +496,7 @@ export async function openThemeSyncOverlay(
         buildListOverlay(
           "Sync Status",
           list,
-          "↑↓ navigate • Enter select • Esc back • Ctrl+C quit",
+          "↑/↓ Navigate · Enter Select · Esc Back · Ctrl+C Quit",
         );
 
         break;
@@ -535,7 +535,7 @@ export async function openThemeSyncOverlay(
           new Text(
             theme.fg(
               "dim",
-              "Type digits • Enter confirm • Backspace delete • Esc back • Ctrl+C quit",
+              "Type Digits · Enter Confirm · Backspace Delete · Esc Back · Ctrl+C Quit",
             ),
             1,
             0,
@@ -554,7 +554,7 @@ export async function openThemeSyncOverlay(
         buildListOverlay(
           "Write Config To",
           list,
-          "↑↓ navigate • Enter save • Esc back • Ctrl+C quit",
+          "↑/↓ Navigate · Enter Save · Esc Back · Ctrl+C Quit",
         );
 
         break;
@@ -622,7 +622,7 @@ export async function openThemeSyncOverlay(
 
         rootContainer.addChild(new Spacer(1));
         rootContainer.addChild(
-          new Text(theme.fg("dim", "Esc back • Ctrl+C quit"), 1, 0),
+          new Text(theme.fg("dim", "Esc Back · Ctrl+C Quit"), 1, 0),
         );
         rootContainer.addChild(new DynamicBorder(borderFn));
 

@@ -97,7 +97,9 @@ labels do not carry one. Key/value labels in dialogs and status rows use Title
 Case with a trailing colon, as in `Appearance:`, `Applied Theme:`, `Sync
 Active:`, `Detection Strategy:`, and `Available Detectors:`. Editor form rows
 and standalone titles use the same Title Case text without the colon. Button
-and footer action labels use Title Case.
+and footer action labels use Title Case. Footer hint items are joined with
+` · `. Group related keys with `/` and no surrounding spaces, as in `↑/↓
+Navigate · Enter Open`.
 
 Detector strategy labels live in `DETECTOR_LABELS` in `src/runtime.ts`. Read
 the label from there instead of repeating the text at a call site.
