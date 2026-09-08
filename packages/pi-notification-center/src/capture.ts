@@ -1,21 +1,12 @@
 /**
- * Notification interception and per-session runtime lifecycle.
+ * Intercepts `ctx.ui.notify`, records each notification as a session
+ * entry, and hands it to the toast manager.
  *
- * Owns the wrapper installed over the shared extension `ctx.ui.notify`
- * function, the persistence of each captured notification as a session
- * entry, the hand-off to the toast manager, and identity-safe teardown.
- * It does NOT own configuration loading, rendering, or the history
- * command.
- *
- * Interception is best-effort by design. Pi exposes no notification event
- * or middleware hook, so the only available seam is the shared mutable
- * `ExtensionUIContext`. Consequently this wrapper cannot see Pi core
- * status, warning, or error rendering, notifications emitted before this
- * extension activates, project-trust prompts, or notifications sent
- * through a separately created UI context. Custom transcript messages
- * sent with `pi.sendMessage` are also out of scope: they are conversation
- * entries with their own renderer, not notifications. The README states
- * the same boundary for users.
+ * Pi exposes no notification event or middleware hook, so the wrapper
+ * over the shared mutable `ExtensionUIContext` is the only seam. It sees
+ * a notification only when the emitter holds that same context, which
+ * excludes Pi core rendering, anything emitted before this extension
+ * activates, project-trust prompts, and separately created UI contexts.
  */
 
 import { createNotificationEntry } from "./history.js";
@@ -63,9 +54,8 @@ export class CaptureRuntime {
   /**
    * Install interception when Pi is running its interactive TUI.
    *
-   * Returns `undefined` in every other mode, which leaves Pi's existing
-   * notification behavior — transcript rows, RPC requests, printed output
-   * — completely untouched.
+   * Returns `undefined` in every other mode, leaving Pi's own
+   * notification behavior untouched.
    */
   static install(
     ctx: CaptureContext,
@@ -77,8 +67,8 @@ export class CaptureRuntime {
     const runtime = new CaptureRuntime(ctx, pi);
 
     runtime.manager = new ToastManager(ctx.ui, config);
-    // Stored by reference, not bound: restoration must put back the
-    // exact same function object the context had before installation.
+    // Stored by reference, not bound, so restoration puts back the exact
+    // same function object the context had before installation.
     runtime.original = ctx.ui.notify;
 
     runtime.installed = (message, type) => {
@@ -93,10 +83,9 @@ export class CaptureRuntime {
   /**
    * Revert interception and release every resource.
    *
-   * The wrapper is only removed when the shared context still points at
-   * *this* runtime's function. Another extension may have replaced
-   * `notify` afterwards, and clobbering its wrapper during our shutdown
-   * would silently break it.
+   * The wrapper is removed only when the shared context still points at
+   * this runtime's function, so an extension that wrapped `notify`
+   * afterwards keeps its own wrapper.
    */
   dispose(): void {
     if (this.disposed) return;
@@ -112,36 +101,32 @@ export class CaptureRuntime {
   }
 
   /**
-   * Report a notification-center problem through the normal capture path.
+   * Report a notification-center problem as a captured notification.
    *
-   * Called only after installation completes, so the message takes the
-   * same route as any other captured notification: exactly one history
-   * entry and one toast, with no recursion back into the wrapper.
+   * Valid only after installation completes. The message gets one history
+   * entry and one toast, and does not re-enter the wrapper.
    */
   warn(message: string): void {
     this.capture(message, "warning");
   }
 
   /**
-   * Handle one intercepted notification.
+   * Record one intercepted notification and show it as a toast.
    *
-   * Synchronous from the emitting extension's point of view: the entry is
-   * appended and the toast enqueued without awaiting anything. The
-   * original `notify` is deliberately not called, which is what keeps the
-   * message out of the chat transcript.
+   * Runs to completion synchronously, awaiting nothing. The original
+   * `notify` is not called, which is what keeps the message out of the
+   * chat transcript.
    */
   private capture(message: string, type?: NotificationSeverity): void {
     if (this.disposed) return;
 
-    // Pi treats a missing type as informational, and so do we.
+    // Pi treats a missing type as informational.
     const entry = createNotificationEntry(message, type ?? "info");
 
     try {
       this.pi.appendEntry(CUSTOM_ENTRY_TYPE, entry);
     } catch {
-      // Persistence failure must not swallow the notification: the user
-      // still gets the toast, and an ephemeral session simply has no
-      // history to rebuild.
+      // A session that cannot store history still shows the toast.
     }
 
     this.manager?.show(entry);

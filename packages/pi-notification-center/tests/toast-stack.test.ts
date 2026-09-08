@@ -205,8 +205,8 @@ describe("renderToastStack", () => {
 
   // The surface is granted the terminal less its right margin, never the
   // whole terminal, so that is what the viewport carries here. A card
-  // fills the region it was granted: reserving the margin a second time
-  // is what used to leave a gap between the card and its own edge.
+  // fills the region it was granted, and reserving the margin a second
+  // time would leave a gap between the card and its own edge.
   it("shrinks to a terminal narrower than the configured width", () => {
     const lines = renderToastStack(
       [createNotificationEntry("x".repeat(500), "info", 1)],

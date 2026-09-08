@@ -1,13 +1,10 @@
 /**
- * Pure formatting for the notification-history browser.
+ * Formatting for the history browser: the one-line list row, the detail
+ * body, its scroll markers, and the empty state.
  *
- * Owns entry ordering, the one-line list row, the detail body, its scroll
- * indicators, and the empty state. It does NOT own scrolling itself,
- * selection, keyboard handling, framing, session access, or the severity
- * colors and labels it draws.
- *
- * Kept free of TUI state so tests can pin a locale, time zone, width, and
- * a colorless theme and assert on exact output.
+ * Every function is pure and free of TUI state, so tests can pin a
+ * locale, time zone, width, and colorless theme and assert on exact
+ * output.
  */
 
 import type { NotificationEntry } from "../types.js";
@@ -24,20 +21,20 @@ import {
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 
-/** Locale and time-zone inputs, injectable so tests stay deterministic. */
+/** Locale and time zone, injected so tests stay deterministic. */
 export interface HistoryTimeOptions {
   locale?: Intl.LocalesArgument;
   timeZone?: string;
 }
 
-/** Minimal theme surface used by the formatter, so tests can pass a fake. */
+/** Theme surface used by the formatter, so tests can pass a fake. */
 export type HistoryTheme = Pick<Theme, "bg" | "bold" | "fg">;
 
 /** Shown when the active session branch holds no notifications. */
 export const HISTORY_EMPTY_MESSAGE =
   "No notifications have been captured in this session yet.";
 
-/** Name of the detail pane, with or without a scroll position. */
+/** Name of the detail pane. */
 const DETAIL_TITLE = "Detail";
 
 /** Drawn at the right edge of the first row when content sits above it. */
@@ -52,9 +49,8 @@ const DETAIL_BOTH_MARKER = "↕";
 /**
  * Title for the detail pane, carrying its scroll position.
  *
- * A message that fits says nothing, so the position appears only when it
- * is actionable. When it does not fit, the range answers both "is there
- * more" and "am I at the end", which the footer hint alone cannot.
+ * A message that fits its pane gets the bare title, since there is no
+ * position to report.
  */
 export function formatDetailTitle(
   offset: number,
@@ -72,11 +68,10 @@ export function formatDetailTitle(
 /**
  * Format the detail pane for one entry.
  *
- * Shows the full local date and time, the severity, and the complete
- * message wrapped to the pane width. The message's own line breaks are
- * preserved, blank lines the author wrote still occupy a row, and styling
- * that spans a line break continues onto the rows below it. Messages are
- * never truncated here: the caller scrolls, so nothing is lost.
+ * Shows the full local date and time, the severity, and the whole message
+ * wrapped to the pane width. The message keeps its own line breaks and
+ * blank rows, and styling that spans a break continues onto the rows
+ * below. Nothing is truncated, because the caller scrolls.
  */
 export function formatHistoryDetail(
   entry: NotificationEntry,
@@ -100,8 +95,9 @@ export function formatHistoryDetail(
 /**
  * Format one list row: time, severity, and a single-line message preview.
  *
- * The row is padded to `width` before any selection background is applied
- * so the highlight spans the whole pane rather than stopping at the text.
+ * The row is padded to `width` before the selection background is
+ * applied, so the highlight spans the pane rather than stopping at the
+ * text.
  */
 export function formatHistoryRow(
   entry: NotificationEntry,
@@ -116,9 +112,9 @@ export function formatHistoryRow(
     ROW_SEVERITY_LABELS[entry.severity],
     SEVERITY_LABEL_WIDTH,
   );
-  // Reserve the time, label, and two single-space gaps. The time is
-  // measured in columns rather than characters: the caller chooses the
-  // locale, and some numbering systems format the hour in wide digits.
+  // Reserve the time, the label, and two single-space gaps. The time is
+  // measured in columns because some numbering systems format the hour in
+  // wide digits.
   const previewWidth = Math.max(
     1,
     rowWidth - visibleWidth(time) - SEVERITY_LABEL_WIDTH - 2,
@@ -136,7 +132,7 @@ export function formatHistoryRow(
   if (!options.selected) return row;
 
   // `truncateToWidth` emits a full SGR reset around its ellipsis, which
-  // would clear the background mid-row. Re-open the background after every
+  // clears the background mid-row. Re-open the background after every
   // reset so the highlight covers the whole pane.
   return theme.bg(
     "selectedBg",
@@ -147,12 +143,9 @@ export function formatHistoryRow(
 /**
  * Mark the visible detail rows that have more content beyond them.
  *
- * The pane otherwise cuts at a row boundary with no sign of it, so a
- * message that happens to break after a sentence reads as complete, and
- * a scrolled pane gives no hint that its start is off screen. Markers sit
- * at the right edge, where they read as a scroll column rather than as
- * part of the message. Both edges are marked, because after one page down
- * the content above is exactly as hidden as the content below was.
+ * A marker sits at the right edge of the first row when content is
+ * scrolled above it and of the last row when content follows, where it
+ * reads as a scroll column rather than as part of the message.
  */
 export function markDetailScroll(
   lines: readonly string[],
@@ -169,8 +162,8 @@ export function markDetailScroll(
   const mark = (row: string, marker: string): string =>
     `${padToWidth(row, width - 1)}${theme.fg("dim", marker)}`;
 
-  // A single row carries both directions at once, since it is the first
-  // and last visible row.
+  // A lone row is both the first and the last visible row, so it carries
+  // both directions at once.
   if (rows.length === 1) {
     return [
       mark(

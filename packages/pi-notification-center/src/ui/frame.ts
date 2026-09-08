@@ -1,37 +1,18 @@
 /**
- * Width-safe terminal framing primitives shared by custom surfaces.
+ * Border, padding, truncation, and side-by-side pane composition for the
+ * toast cards and the history browser, all measured in visual columns.
  *
- * Owns border, padding, truncation, and side-by-side pane composition,
- * all operating on visual columns. It does NOT own any specific surface's
- * content, theme choices, or layout decisions.
+ * Widths come from `visibleWidth`, never `String.length`, because ANSI
+ * escapes and wide characters would push a right border out of
+ * alignment. A tab counts as three columns and is never expanded here,
+ * matching Pi, which rewrites each tab to three spaces as it writes a
+ * composited line out.
  *
- * Every helper measures with `visibleWidth` instead of `String.length`
- * because ANSI escape sequences and wide characters would otherwise push
- * a right border out of alignment.
- *
- * A tab is measured as three columns, and nothing here expands one. Pi
- * rewrites every tab to three spaces as it writes each composited line
- * to the terminal, so the terminal never advances to its own tab stop
- * and a message containing a tab keeps its border aligned. Measuring a
- * tab as anything else, or expanding tabs here, would break that
- * agreement.
- *
- * Every border helper requires a width of at least two columns, which is
- * what the two end characters occupy on their own. Each surface already
- * guarantees far more through its own minimum before it decides to draw
- * at all, so a narrower width is a programmer error rather than a narrow
- * terminal, and `frameSegment` throws on one. Deciding that a terminal is
- * too small belongs to the surface, which omits itself; a helper that
- * quietly returned a shortened border would hand back chrome the caller
- * never asked for.
- *
- * The split frame takes the total width it may occupy and derives the
- * pane widths from it. The reverse, deriving the total from the panes,
- * forces every caller to reconstruct the chrome this module already
- * knows, and leaves the caller unable to promise it fits the space it
- * was given. `splitPaneWidths` answers "too narrow" with `undefined`
- * rather than by raising the width to a minimum, because raising it is
- * how a frame comes to be drawn wider than its viewport.
+ * Every border helper requires a width of at least two, the columns the
+ * two end characters occupy. Each surface guarantees far more through its
+ * own minimum before it draws, so a narrower width is a programmer error
+ * and `frameSegment` throws on it. Judging a terminal too small belongs
+ * to the surface, which omits itself.
  */
 
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
@@ -47,8 +28,8 @@ export interface FramePane {
 /**
  * Pane widths for one split frame, and the total width they belong to.
  *
- * Only {@link splitPaneWidths} produces this, so a caller cannot pair
- * pane widths with a total that disagrees with them.
+ * Only {@link splitPaneWidths} produces this, so pane widths cannot be
+ * paired with a total that disagrees with them.
  */
 export interface SplitPanes {
   left: number;
@@ -58,28 +39,21 @@ export interface SplitPanes {
 }
 
 /**
- * Columns a single-pane frame's chrome occupies.
- *
- * The two border columns and the single space of padding on each side.
- * Shared because a toast card and the browser's empty state are the same
- * shape, and a body width that disagrees with the border pushes the
- * right border out of line.
+ * Columns a single-pane frame's chrome occupies: two borders and one
+ * space of padding on each side.
  */
 export const FRAME_BODY_CHROME_COLUMNS = 4;
 
 /**
- * Columns the split frame's own chrome occupies.
- *
- * Two outer borders, one space of padding on each side of each pane, and
- * the divider between them.
+ * Columns the split frame's chrome occupies: two outer borders, one space
+ * of padding on each side of each pane, and the divider between them.
  */
 export const SPLIT_FRAME_CHROME_COLUMNS = 7;
 
 /**
- * Rows the split frame adds around its content.
- *
- * Top border, pane titles, the rule below them, the rule above the
- * footer, the footer, and the bottom border.
+ * Rows the split frame adds around its content: the top border, the pane
+ * titles, the rule below them, the rule above the footer, the footer, and
+ * the bottom border.
  */
 export const SPLIT_FRAME_CHROME_ROWS = 6;
 
@@ -107,9 +81,8 @@ export function frameSegment(
 
 /** Pad or truncate `text` so it occupies exactly `width` visual columns. */
 export function padToWidth(text: string, width: number, fill = " "): string {
-  // The single-character ellipsis is deliberate. The library defaults to
-  // three dots, which would cost two more columns than the callers here
-  // budget for.
+  // The library defaults to three dots, which cost two more columns than
+  // the callers here budget for.
   const truncated = truncateToWidth(text, width, "…");
   const paddingWidth = Math.max(0, width - visibleWidth(truncated));
 
@@ -119,13 +92,10 @@ export function padToWidth(text: string, width: number, fill = " "): string {
 /**
  * Compose two panes side by side inside one border.
  *
- * Every line is drawn to `panes.width`, which is the width the caller was
- * given, so the result can never be wider than the space it belongs in.
- * Both panes are drawn to `rows` content rows so the divider stays
- * straight regardless of how much content each side holds. Panes carry
- * pre-styled text, so this helper only measures and pads.
- *
- * The output is always `rows` plus {@link SPLIT_FRAME_CHROME_ROWS} lines.
+ * Every line is drawn to `panes.width`, and both panes to `rows` content
+ * rows, so the divider stays straight whatever each side holds. Panes
+ * carry pre-styled text, so this only measures and pads. The output is
+ * always `rows` plus {@link SPLIT_FRAME_CHROME_ROWS} lines.
  */
 export function renderSplitFrame(options: {
   footer: string;
@@ -166,8 +136,8 @@ export function renderSplitFrame(options: {
  *
  * Returns `undefined` when `width` cannot hold two panes of at least
  * `minPaneWidth`, which is the caller's signal to omit the frame. The
- * width is never raised to make it fit: a frame drawn wider than the
- * space it was given is the defect this guards against.
+ * width is never raised to make it fit, since that draws a frame wider
+ * than the space it was given.
  */
 export function splitPaneWidths(
   width: number,
@@ -178,7 +148,7 @@ export function splitPaneWidths(
 
   if (contentWidth < minPaneWidth * 2) return undefined;
 
-  // Clamped from both sides, so an extreme fraction cannot starve either
+  // Clamped from both sides so an extreme fraction cannot starve either
   // pane below the minimum the caller asked for.
   const left = Math.min(
     Math.max(Math.floor(contentWidth * leftFraction), minPaneWidth),

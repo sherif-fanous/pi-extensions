@@ -1,15 +1,6 @@
 /**
- * Detection of Pi's interactive TUI mode.
- *
- * Owns the single predicate that decides whether this package may install
- * its notification wrapper and render overlays. It does NOT own any
- * behavior that depends on that answer.
- *
- * `ctx.hasUI` is deliberately not used: Pi reports it as `true` in RPC
- * mode as well, where dialogs work over a JSON sub-protocol but every
- * TUI-backed method is degraded or a no-op. `ctx.mode` is the run mode
- * Pi documents for guarding terminal-only UI, so it is the check used
- * here.
+ * Decides whether Pi is running its interactive terminal UI, which is the
+ * condition for installing the notification wrapper and drawing overlays.
  */
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -18,7 +9,9 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
  * Whether Pi is running its interactive terminal UI.
  *
  * Returns `false` for `print`, `json`, and `rpc`, none of which can host
- * a terminal overlay.
+ * a terminal overlay. `ctx.mode` is the run mode Pi documents for
+ * guarding terminal-only UI; `ctx.hasUI` is also `true` under RPC, where
+ * every TUI-backed method is degraded or a no-op.
  */
 export function isInteractiveTui(ctx: Pick<ExtensionContext, "mode">): boolean {
   return ctx.mode === "tui";

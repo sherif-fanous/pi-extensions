@@ -1,14 +1,10 @@
 /**
- * Global toast configuration loading and validation.
+ * Reads `<agent-dir>/notification-center/config.json`, validates each
+ * supported field against its range, and reports rejected values as
+ * warning strings.
  *
- * Owns reading `<agent-dir>/notification-center/config.json`, validating
- * each supported field against its documented range, and reporting
- * rejected values as warning strings. It does NOT own the defaults or
- * ranges themselves (see `types.ts`), notification delivery, or the
- * decision about how a warning reaches the user.
- *
- * The file is re-read on every session start rather than cached, so a
- * user edit followed by `/reload` takes effect without restarting Pi.
+ * The file is re-read on every session start rather than cached, so an
+ * edit followed by `/reload` takes effect without restarting Pi.
  */
 
 import { readFileSync } from "node:fs";
@@ -23,17 +19,17 @@ import {
 } from "./types.js";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
-/** Minimal file-reading seam so tests do not need a real agent directory. */
+/** File-reading seam so tests do not need a real agent directory. */
 export interface ConfigFs {
   readFileSync(path: string): string;
 }
 
-/** Outcome of a configuration load: always usable, plus any complaints. */
+/** An always-usable configuration, plus anything rejected along the way. */
 export interface LoadConfigResult {
   config: NotificationConfig;
   /**
-   * Human-readable descriptions of rejected input. Empty when the file is
-   * absent or fully valid. Callers surface these as a single warning.
+   * Descriptions of rejected input, empty when the file is absent or
+   * fully valid.
    */
   warnings: string[];
 }
@@ -41,14 +37,10 @@ export interface LoadConfigResult {
 /**
  * Load and validate the optional configuration file.
  *
- * Behavior matrix:
- * - file absent -> all defaults, no warnings (a missing file is the
- *   expected case and must stay silent)
- * - unreadable or unparsable -> all defaults, one warning
- * - not a JSON object -> all defaults, one warning
- * - field missing -> that field's default, no warning
- * - field present but invalid -> that field's default, one warning
- * - unknown key -> ignored silently, for forward compatibility
+ * A missing file yields the defaults with no warnings. An unreadable,
+ * unparsable, or non-object file yields the defaults with one warning. A
+ * missing field takes its default silently; a present but invalid field
+ * takes its default and adds a warning. Unknown keys are ignored.
  */
 export function loadConfig(
   agentDir: string = getAgentDir(),
@@ -61,8 +53,6 @@ export function loadConfig(
   try {
     contents = fs.readFileSync(configFilePath);
   } catch (err) {
-    // A missing file is the documented default state, so only a genuine
-    // read failure is worth reporting.
     if (isMissingFileError(err)) {
       return { config: defaults(), warnings: [] };
     }
@@ -111,8 +101,8 @@ export function loadConfig(
   const toastRecord = isPlainObject(nested) ? nested : {};
 
   for (const path of CONFIG_PATHS) {
-    // `undefined` marks the one top-level setting; every other path names a
-    // field of the nested toast object.
+    // `undefined` marks the one top-level setting; every other path names
+    // a field of the nested toast object.
     const leaf =
       path === "maxToastsVisible"
         ? undefined
@@ -124,8 +114,8 @@ export function loadConfig(
     const range = CONFIG_RANGES[path];
 
     if (!isValidFieldValue(raw, range)) {
-      // Reported from DEFAULT_CONFIG rather than from `config`, so the text
-      // cannot change if an earlier iteration writes to the same field.
+      // Read from DEFAULT_CONFIG rather than `config`, which an earlier
+      // iteration may already have written to.
       const fallback =
         leaf === undefined
           ? DEFAULT_CONFIG.maxToastsVisible
@@ -149,11 +139,10 @@ export function loadConfig(
 }
 
 /**
- * Supported configuration paths. Any other key is ignored on read.
+ * Supported configuration paths, in the order warnings report them.
  *
  * Derived from the ranges rather than listed again, so a setting added
- * there cannot be silently skipped here. Key order is insertion order,
- * which is the order warnings are reported in.
+ * there cannot be skipped here.
  */
 const CONFIG_PATHS = Object.keys(CONFIG_RANGES) as readonly ConfigPath[];
 
@@ -162,10 +151,10 @@ const DEFAULT_CONFIG_FS: ConfigFs = {
 };
 
 /**
- * A fresh, fully-defaulted configuration.
+ * Build a fresh, fully defaulted configuration.
  *
  * The nested `toast` object is copied too, so a caller mutating the
- * result can never write through to {@link DEFAULT_CONFIG}.
+ * result cannot write through to {@link DEFAULT_CONFIG}.
  */
 function defaults(): NotificationConfig {
   return {

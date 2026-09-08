@@ -1,21 +1,17 @@
 /**
- * Passive toast-stack presentation.
+ * Visual shape of the toast stack: card framing, message wrapping across
+ * a bounded number of body rows, and the size guards that decide how much
+ * of the stack fits. Callers supply the already-bounded list of visible
+ * notifications.
  *
- * Owns the visual shape of the toast stack: card framing, message
- * wrapping across a bounded number of body rows, visual-width
- * truncation, and the size guards that decide how much of the stack can
- * be shown. It does NOT own timers, eviction, the render surface,
- * history, or the severity colors and labels it draws — callers supply
- * the already-bounded list of visible notifications.
+ * `toast.width` is a maximum, not a fixed size. Cards are sized to the
+ * widest message on show, so a short notification stays small instead of
+ * drawing a mostly empty box over the transcript, and the whole stack
+ * shares one width so right-anchored cards keep a straight edge.
  *
- * `toast.width` is a maximum rather than a fixed size. Cards are sized to
- * the widest message on show, so a short notification stays small instead
- * of drawing a mostly empty box over the transcript, and one width is
- * used for the whole stack so right-anchored cards keep a straight edge.
- *
- * Rendering is split into a pure `renderToastStack` function and a thin
- * component wrapper so tests can assert on exact lines and widths
- * without constructing a TUI.
+ * Rendering splits into the pure `renderToastStack` function and a thin
+ * component wrapper, so tests can assert on exact lines and widths
+ * without building a TUI.
  */
 
 import type { NotificationConfig, NotificationEntry } from "../types.js";
@@ -34,15 +30,14 @@ import {
   type Component,
 } from "@earendil-works/pi-tui";
 
-/** Minimal theme surface used by the stack, so tests can pass a fake. */
+/** Theme surface used by the stack, so tests can pass a fake. */
 export type ToastTheme = Pick<Theme, "bold" | "fg">;
 
 /**
- * Component that renders the current visible toasts.
+ * Component that draws the currently visible toasts.
  *
- * The visible list is owned by the manager and mutated in place through
- * {@link setToasts}; the component itself holds no lifecycle state, which
- * keeps expiration logic in exactly one place.
+ * The manager owns the visible list and replaces it through
+ * {@link setToasts}. The component holds no lifecycle state of its own.
  */
 export class ToastStackComponent implements Component {
   private toasts: readonly NotificationEntry[] = [];
@@ -57,7 +52,8 @@ export class ToastStackComponent implements Component {
   ) {}
 
   invalidate(): void {
-    // No cached layout: every render recomputes from the current list.
+    // Every render recomputes from the current list, so nothing is
+    // cached.
   }
 
   render(width: number): string[] {
@@ -70,7 +66,7 @@ export class ToastStackComponent implements Component {
     });
   }
 
-  /** Replace the visible list. The caller requests a render afterwards. */
+  /** Replace the visible list. The caller requests the render. */
   setToasts(toasts: readonly NotificationEntry[]): void {
     this.toasts = toasts;
   }
@@ -85,13 +81,13 @@ const MIN_TERMINAL_HEIGHT = TOAST_FRAME_ROWS + 2;
 /**
  * Whether a toast surface fits the current terminal.
  *
- * Used both as the overlay's `visible` predicate and as a pre-render
- * guard, so an undersized terminal silently omits presentation instead of
- * drawing a broken frame. History is unaffected either way.
+ * Serves as both the overlay's `visible` predicate and a pre-render
+ * guard, so an undersized terminal shows nothing rather than a broken
+ * frame. History is recorded either way.
  *
  * The bound is the narrowest legible card, not the configured width,
- * because cards shrink to the terminal. A wide `toast.width` on a narrow
- * terminal yields narrow cards rather than no cards at all.
+ * since cards shrink to the terminal. A wide `toast.width` on a narrow
+ * terminal yields narrow cards rather than no cards.
  */
 export function canRenderToasts(
   terminalWidth: number,
@@ -106,15 +102,14 @@ export function canRenderToasts(
 /**
  * Render the visible stack, newest card at the bottom.
  *
- * Cards appear in arrival order so the stack grows downward from the
- * top-right anchor. Cards are variable height, so when the stack would be
- * taller than the terminal the newest cards win: a toast that just
- * arrived is the one the user is most likely waiting to read. Returns an
- * empty array when there is nothing to show or when the terminal cannot
- * safely host the surface.
+ * Cards appear in arrival order, so the stack grows downward from the
+ * top-right anchor. Cards vary in height, and when the stack would be
+ * taller than the terminal allows the newest cards are kept. Returns an
+ * empty array when there is nothing to show or the terminal cannot host
+ * the surface.
  *
- * Every returned line spans the full granted viewport width, with the
- * card flush against its right edge and blank columns to its left.
+ * Every returned line spans the full viewport width, with the card flush
+ * against its right edge and blank columns to its left.
  */
 export function renderToastStack(
   toasts: readonly NotificationEntry[],
@@ -133,15 +128,11 @@ export function renderToastStack(
   }
 
   const candidates = toasts.slice(-config.maxToastsVisible);
-  // Never exceed the configured maximum or the width the surface granted
-  // us, and never fall below the width where framing stops being
-  // legible. Between those bounds the widest message decides.
-  //
-  // The terminal is not bounded again here. Pi re-resolves the surface's
-  // width against the current terminal on every render, so the width we
-  // were granted already accounts for the margin and for any resize.
-  // Subtracting the margin a second time left the card one column short
-  // of its own region on terminals narrow enough for that to bind.
+  // Between the narrowest legible card and the smaller of the configured
+  // maximum and the granted width, the widest message decides. The
+  // terminal itself is not bounded again: Pi re-resolves the surface
+  // width against the current terminal on every render, so the granted
+  // width already accounts for the margin and for any resize.
   const cardWidth = Math.max(
     MIN_TOAST_WIDTH,
     Math.min(
@@ -150,8 +141,8 @@ export function renderToastStack(
       naturalCardWidth(candidates),
     ),
   );
-  // The overlay floats over the transcript, so bound the stack to half
-  // the terminal height rather than covering the conversation.
+  // The overlay floats over the transcript, so hold the stack to half the
+  // terminal height rather than covering the conversation.
   const rowBudget = Math.max(
     TOAST_FRAME_ROWS + 1,
     Math.floor(viewport.terminalHeight / 2),
@@ -161,7 +152,7 @@ export function renderToastStack(
   let usedRows = 0;
 
   // Walk newest first so the cards that survive a height shortfall are
-  // the most recent ones, then restore arrival order for display.
+  // the most recent, then restore arrival order for display.
   for (const toast of [...candidates].reverse()) {
     const card = renderCard(toast, theme, config, cardWidth);
 
@@ -171,11 +162,11 @@ export function renderToastStack(
     cards.unshift(card);
   }
 
-  // The surface is anchored by the width it was created with, not by the
+  // The surface is anchored by the width it was created with, not the
   // width actually drawn, so a card narrower than the surface would float
-  // mid-screen instead of sitting at the right edge. Pad on the left to
-  // put the card's right edge where the anchor is. The blank columns cost
-  // nothing: the surface already clears its full width on every render.
+  // mid-screen. Pad on the left to put the card's right edge on the
+  // anchor. The blank columns are free, since the surface clears its full
+  // width on every render.
   const gutter = " ".repeat(Math.max(0, viewport.viewportWidth - cardWidth));
 
   return cards
@@ -186,12 +177,10 @@ export function renderToastStack(
 /**
  * Wrap a message into at most `maxLines` display rows.
  *
- * The message's own line breaks are preserved, so a summary line followed
- * by bullets keeps its shape instead of being flattened into one run of
- * text, and a blank line the author wrote still occupies a row. Styling
- * that spans a line break continues onto the rows below it. When the
- * message needs more rows than allowed, the final kept row is marked with
- * an ellipsis; `/notifications` remains the complete record.
+ * The message keeps its own line breaks and blank rows, so a summary line
+ * followed by bullets holds its shape, and styling that spans a break
+ * continues onto the rows below. A message needing more rows than allowed
+ * ends with an ellipsis on the last kept row.
  */
 export function toBodyLines(
   message: string,
@@ -214,8 +203,8 @@ export function toBodyLines(
 /**
  * Columns reserved so a card never touches the terminal's right edge.
  *
- * Stated once and handed to Pi as the surface's right margin, so the
- * width guard here and the region Pi anchors cannot disagree.
+ * Also handed to Pi as the surface's right margin, so the width guard
+ * here and the region Pi anchors cannot disagree.
  */
 export const TOAST_HORIZONTAL_MARGIN = 1;
 
@@ -225,8 +214,8 @@ const MIN_TOAST_WIDTH = 20;
 /**
  * Width the widest message would need to avoid wrapping.
  *
- * Measured per line so a multiline message is sized by its longest line,
- * and in visual columns because a message may already carry styling.
+ * Measured per line, so a multiline message is sized by its longest line,
+ * and in visual columns, because a message may already carry styling.
  */
 function naturalCardWidth(toasts: readonly NotificationEntry[]): number {
   let widest = 0;
@@ -250,8 +239,8 @@ function renderCard(
   const label = CARD_SEVERITY_LABELS[toast.severity];
   const bodyWidth = Math.max(1, width - FRAME_BODY_CHROME_COLUMNS);
   const body = toBodyLines(toast.message, bodyWidth, config.toast.maxLines);
-  // The label is drawn into the top border, so its plain-text width is
-  // measured before styling to keep the fill count correct.
+  // The label is drawn into the top border, so measure its plain text
+  // before styling to keep the fill count correct.
   const labelText = ` ${label} `;
   const fillWidth = Math.max(0, width - 2 - visibleWidth(labelText));
   const top =

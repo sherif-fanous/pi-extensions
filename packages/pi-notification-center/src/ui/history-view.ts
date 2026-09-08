@@ -1,24 +1,13 @@
 /**
- * Focused two-pane notification-history browser.
- *
- * Owns the selection index, detail scroll offset, keyboard handling, and
- * the footer hint. It does NOT own formatting (see `history-format.ts`),
- * frame geometry (see `frame.ts`), session access, or command
- * registration.
+ * Two-pane notification history browser. The left pane lists
+ * notifications newest first, and the right pane shows the selected entry
+ * in full.
  *
  * Layout is a pure function of the entries, the browser's state, and the
- * viewport. The component holds state and routes keys; it computes no
- * widths of its own. Tests assert on the function.
- *
- * The left pane lists notifications newest first; the right pane shows the
- * selected entry in full. Movement keys come from Pi's injected
- * `KeybindingsManager` rather than hardcoded escape sequences, so the
- * browser follows the user's own keybinding configuration.
- *
- * A terminal too narrow for two legible panes gets no browser at all,
- * rather than a frame with its right border cut off. `/notifications`
- * answers with a plain notification instead, so a typed command is never
- * met with silence.
+ * viewport; the component holds state and routes keys but computes no
+ * widths of its own. Movement keys come from Pi's injected
+ * `KeybindingsManager`, so the browser follows the user's keybinding
+ * configuration.
  */
 
 import type { NotificationEntry } from "../types.js";
@@ -46,7 +35,7 @@ import {
   type KeybindingsManager,
 } from "@earendil-works/pi-tui";
 
-/** One placed frame, with the state the caller must carry forward. */
+/** One placed frame, with the state the caller carries forward. */
 export interface HistoryLayout {
   /** Detail offset actually used, with pending pages applied and clamped. */
   detailOffset: number;
@@ -70,9 +59,8 @@ export interface HistoryLayoutOptions {
   /**
    * Page-scroll requests not yet applied, positive for down.
    *
-   * Carried as pages rather than rows because only the layout knows how
-   * tall a page is, and a key can arrive before the first layout ever
-   * runs.
+   * Counted in pages rather than rows because only the layout knows how
+   * tall a page is, and a key can arrive before the first layout runs.
    */
   pendingPages: number;
   selected: number;
@@ -101,7 +89,7 @@ export interface HistoryViewOptions {
  * Scrollable list of captured notifications with a detail pane.
  *
  * The layout is recomputed for the current viewport on every render, so a
- * terminal resize is handled without any resize listener.
+ * terminal resize needs no listener.
  */
 export class HistoryViewComponent implements Component, Focusable {
   focused = false;
@@ -137,10 +125,9 @@ export class HistoryViewComponent implements Component, Focusable {
       return;
     }
 
-    // Page keys scroll the detail pane, because a long message is the only
-    // thing here that can exceed the viewport. The request is recorded in
-    // pages, not rows, so it is measured against the layout that will
-    // actually be drawn rather than whichever one happened to run last.
+    // Page keys scroll the detail pane, the one thing here that can
+    // exceed the viewport. Recorded in pages so the distance is measured
+    // against the layout about to be drawn, not the last one.
     if (keybindings.matches(data, "tui.select.pageUp")) {
       this.pendingPages -= 1;
 
@@ -153,7 +140,7 @@ export class HistoryViewComponent implements Component, Focusable {
   }
 
   invalidate(): void {
-    // Content is re-derived on every render; nothing is cached.
+    // Every render re-derives its content, so there is nothing to drop.
   }
 
   render(width: number): string[] {
@@ -169,8 +156,8 @@ export class HistoryViewComponent implements Component, Focusable {
       width,
     });
 
-    // Consumed either way. A page key pressed while the terminal is too
-    // narrow to draw anything is discarded rather than banked.
+    // A page key pressed while the terminal is too narrow to draw
+    // anything is discarded rather than banked.
     this.pendingPages = 0;
 
     if (!layout) return [];
@@ -235,7 +222,7 @@ export function layoutHistory(
     ? formatHistoryDetail(entry, theme, panes.right, time)
     : [];
 
-  // Sized after the detail is formatted, because the taller pane decides
+  // Sized after the detail is formatted, since the taller pane decides
   // how many rows the browser needs.
   const rows = contentRows(
     options.terminalHeight,
@@ -288,11 +275,11 @@ export function layoutHistory(
 }
 
 /**
- * Content rows to draw.
+ * Decide how many content rows to draw.
  *
- * Enough for whichever pane is taller, so a single long notification uses
- * the terminal instead of forcing a scroll, and always small enough that
- * the frame's own rows keep the footer on screen.
+ * Enough for whichever pane is taller, so a long notification uses the
+ * terminal rather than forcing a scroll, and always few enough that the
+ * frame's own rows keep the footer on screen.
  */
 function contentRows(terminalHeight: number, neededRows: number): number {
   const available =
@@ -307,12 +294,8 @@ function contentRows(terminalHeight: number, neededRows: number): number {
 }
 
 /**
- * Bound every line to the width the browser was given.
- *
- * `renderSplitFrame` already draws to exactly that width, so this changes
- * nothing today. It is here so that a future change to the frame's chrome
- * cannot reach the terminal as a row that overruns its viewport, which is
- * the defect this browser used to have.
+ * Bound every line to the width the browser was given, so no row can
+ * overrun its viewport.
  */
 function fitToWidth(lines: readonly string[], width: number): string[] {
   return lines.map((line) => truncateToWidth(line, width, ""));

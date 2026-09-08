@@ -1,28 +1,22 @@
 /**
- * Bridge from the extension UI context to the live TUI.
- *
- * Owns the single place where this package obtains a render surface for
- * the toast stack. It does NOT own the surface's contents, lifetime, or
- * timers.
+ * Obtains the render surface the toast stack draws into, bridging from
+ * the extension UI context to the live TUI.
  *
  * The surface is a `nonCapturing` overlay anchored top-right, created
  * through the factory form of `ctx.ui.setWidget` purely to reach the TUI
- * instance. Two properties make this safe, and both are load-bearing:
+ * instance. Two properties keep it out of other extensions' way, and
+ * both are load-bearing:
  *
  * 1. `setWidget` never moves keyboard focus, unlike `ctx.ui.custom`,
  *    whose non-overlay branch defocuses the active component and hands
  *    focus to the core editor when it completes.
- * 2. The overlay is created once, eagerly, at session start — before any
- *    transient overlay exists. Pi's `hideOverlay()` pops the
- *    last-pushed stack entry without skipping `nonCapturing` overlays,
- *    so a surface pushed *after* another extension's overlay would
- *    consume that overlay's next close and leave it visible but
- *    unclosable. Creating ours first keeps it permanently at the bottom
- *    of the stack, where every later overlay closes above it.
- *
- * Creating this surface lazily on the first toast would reintroduce
- * exactly that bug, because the first toast can easily arrive while
- * another extension's overlay is open.
+ * 2. The overlay is created once, eagerly, at session start, before any
+ *    transient overlay exists. Pi's `hideOverlay()` pops the last-pushed
+ *    stack entry without skipping `nonCapturing` overlays, so a surface
+ *    pushed after another extension's overlay consumes that overlay's
+ *    next close and leaves it visible but unclosable. Creating this one
+ *    first keeps it at the bottom of the stack, where every later
+ *    overlay closes above it.
  */
 
 import type { Theme } from "@earendil-works/pi-coding-agent";
@@ -44,7 +38,7 @@ export interface ToastSurface<TComponent extends Component = Component> {
 }
 
 /**
- * Minimal UI surface required to open the bridge.
+ * UI surface required to open the bridge.
  *
  * Only the factory form of `setWidget` is declared, because the string
  * form cannot deliver the TUI instance.
@@ -73,11 +67,11 @@ export type ToastComponentFactory<TComponent extends Component> = (
  *
  * Call once per runtime, during session start. Returns `undefined` when
  * no TUI is reachable or overlay creation fails, which the caller treats
- * as "record history, show nothing". Never changes which component holds
+ * as record history and show nothing. Never changes which component holds
  * keyboard focus.
  *
- * The overlay starts hidden: an idle session shows nothing, and the
- * manager reveals it when the first toast arrives.
+ * The overlay starts hidden. The manager reveals it when the first toast
+ * arrives.
  */
 export function createToastSurface<TComponent extends Component>(
   ui: BridgeUi,
@@ -88,8 +82,8 @@ export function createToastSurface<TComponent extends Component>(
 
   try {
     ui.setWidget(TOAST_WIDGET_KEY, (tui, theme) => {
-      // Guard against a host that invokes the factory more than once:
-      // a second overlay would double every toast.
+      // A host that invokes the factory more than once would otherwise
+      // get a second overlay, doubling every toast.
       if (!surface) {
         const component = createComponent(theme, () => ({
           height: tui.terminal.rows,
@@ -97,8 +91,8 @@ export function createToastSurface<TComponent extends Component>(
         }));
         const handle: OverlayHandle = tui.showOverlay(component, {
           ...overlayOptions,
-          // Non-capturing is the whole point: a toast must never take
-          // focus from the editor or an active component.
+          // A toast must never take focus from the editor or an active
+          // component.
           nonCapturing: true,
         });
 
@@ -123,13 +117,13 @@ export function createToastSurface<TComponent extends Component>(
   } catch {
     return undefined;
   } finally {
-    // The widget exists only to hand us the TUI instance. Removing it
-    // leaves the overlay untouched, since the overlay has its own handle.
+    // The widget exists only to hand over the TUI instance. Removing it
+    // leaves the overlay alone, since the overlay has its own handle.
     try {
       ui.setWidget(TOAST_WIDGET_KEY, undefined);
     } catch {
-      // A host that cannot clear the widget still gave us a usable
-      // surface; a zero-height widget is harmless either way.
+      // A host that cannot clear the widget still gave back a usable
+      // surface, and a zero-height widget draws nothing.
     }
   }
 
@@ -142,13 +136,12 @@ const TOAST_WIDGET_KEY = "notification-center:bridge";
 /**
  * Zero-height widget returned by the bridge factory.
  *
- * `setWidget` requires a component, but this one is registered only to
- * obtain the TUI instance and is removed immediately, so it renders
- * nothing.
+ * `setWidget` requires a component, but this one exists only to obtain
+ * the TUI instance and is removed immediately, so it renders nothing.
  */
 const EMPTY_WIDGET: Component = {
   invalidate: () => {
-    // Nothing to invalidate.
+    // Nothing is cached.
   },
   render: () => [],
 };

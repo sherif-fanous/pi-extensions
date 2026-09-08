@@ -1,14 +1,9 @@
 /**
- * Durable notification history backed by Pi session entries.
+ * Builds the versioned entry payload for one notification and extracts
+ * validated entries back out of a session branch.
  *
- * Owns building the versioned entry payload and extracting validated
- * notification entries from an active session branch. It does NOT own
- * formatting, presentation, or the decision of when to persist — callers
- * pass the branch in and receive plain data back.
- *
- * Pi session entries are the single source of truth: the branch is
- * re-read on every request so resumed sessions, reloads, and branch
- * navigation are reflected without any cache-invalidation logic.
+ * Pi session entries are the only store. Callers pass a branch in and
+ * receive plain data back, so nothing here is cached.
  */
 
 import {
@@ -20,10 +15,10 @@ import {
 } from "./types.js";
 
 /**
- * Structural shape of the session entries this module inspects.
+ * Shape of the session entries this module inspects.
  *
- * Declared locally rather than imported so tests can build tiny fakes and
- * so a Pi entry-union change cannot break compilation of the read path.
+ * Declared locally rather than imported from Pi so tests can build small
+ * fakes and a change to Pi's entry union cannot break the read path.
  */
 export interface BranchEntry {
   customType?: string;
@@ -43,10 +38,9 @@ export function createNotificationEntry(
 /**
  * Extract every valid notification entry from a session branch.
  *
- * Results are returned in branch (oldest-first) order; presentation code
- * decides display order. Entries written by another extension, entries
- * with an unrecognized `version`, and structurally invalid payloads are
- * skipped rather than rendered as partial records.
+ * Results keep branch order, which is oldest first. Entries from another
+ * extension, entries with an unrecognized `version`, and malformed
+ * payloads are skipped rather than returned as partial records.
  */
 export function readNotificationHistory(
   branch: readonly BranchEntry[],

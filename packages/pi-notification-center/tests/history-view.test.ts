@@ -28,9 +28,9 @@ describe("HistoryViewComponent", () => {
     }
   });
 
-  // Drawing a frame wider than the viewport is what Pi then slices, so
-  // the user sees a border that stops short. Nothing at all is the
-  // documented answer, and `/notifications` says so in words instead.
+  // Pi slices a frame drawn wider than the viewport, leaving a border
+  // that stops short. Drawing nothing is the documented answer, and
+  // `/notifications` says so in words instead.
   it("draws nothing rather than overflow a narrow terminal", () => {
     expect(build(entries(3)).render(20)).toEqual([]);
     expect(build([]).render(20)).toEqual([]);
@@ -66,9 +66,8 @@ describe("HistoryViewComponent", () => {
     expect(layout.right.join(" ")).not.toContain("oldest");
   });
 
-  // The old assertions recovered a pane by splitting each rendered line
-  // on the divider character, so a message containing that character
-  // shifted every field one pane to the right.
+  // A pane recovered by splitting a rendered line on the divider
+  // character would shift every field one pane to the right here.
   it("reads a message that contains the divider character", () => {
     const layout = layout2([
       createNotificationEntry("a │ b │ c", "info", FIRST),
@@ -172,8 +171,8 @@ describe("HistoryViewComponent", () => {
 
     expect(view.render(100)).toEqual(top);
 
-    // Scroll away, move selection, and come back: the pane starts at the
-    // top rather than keeping a stale offset.
+    // Scrolling away, moving the selection, and coming back starts the
+    // pane at the top rather than at a stale offset.
     view.handleInput("PGDN");
     view.handleInput("DOWN");
     view.handleInput("UP");

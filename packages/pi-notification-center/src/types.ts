@@ -1,19 +1,15 @@
 /**
- * Shared type definitions and documented constants for pi-notification-center.
- *
- * Owns the notification severity set, the versioned session-entry payload
- * shape, the toast configuration shape, and the single source of truth for
- * configuration defaults and valid ranges. It does NOT own configuration
- * loading, session access, rendering, or interception — those live in
- * their dedicated modules.
+ * Types and constants shared across the extension: the severity set, the
+ * persisted entry payload, the configuration shape, and the defaults and
+ * ranges every setting is validated against.
  */
 
 /**
  * Resolved notification-center configuration.
  *
- * Every field is always present: the loader substitutes the documented
- * default for a missing, malformed, or out-of-range value, so downstream
- * code never has to re-apply fallbacks.
+ * Every field is always present. The loader substitutes the default for a
+ * missing, malformed, or out-of-range value, so callers never re-apply
+ * fallbacks.
  */
 export interface NotificationConfig {
   /** Maximum number of simultaneously visible toast cards. */
@@ -23,12 +19,11 @@ export interface NotificationConfig {
 }
 
 /**
- * Durable payload persisted as a Pi custom session entry.
+ * Payload persisted as a Pi custom session entry.
  *
- * `version` is written by this package and validated on read so a future
- * payload change can be rejected instead of misinterpreted. The message is
- * stored complete and unmodified; the bounded card height used when
- * displaying a toast is a presentation concern only.
+ * `version` is validated on read, so a payload written under a different
+ * shape is rejected instead of misread. The message is stored whole; the
+ * bounded height of a toast card is presentation only.
  */
 export interface NotificationEntry {
   message: string;
@@ -56,9 +51,9 @@ export type ConfigPath =
 export type NotificationSeverity = "error" | "info" | "warning";
 
 /**
- * Inclusive validation bounds for every supported numeric setting.
+ * Inclusive bounds for every supported numeric setting.
  *
- * Keys are the dotted configuration paths so a warning can name the field
+ * Keys are the dotted configuration paths, so a warning can name a field
  * exactly as the user wrote it.
  */
 export const CONFIG_RANGES: {
@@ -74,14 +69,12 @@ export const CONFIG_RANGES: {
 } as const;
 
 /**
- * Custom session-entry type used for notification history.
- *
- * Namespaced so entries written by this package cannot collide with
- * another extension's session state.
+ * Custom session-entry type used for notification history, namespaced so
+ * it cannot collide with another extension's session state.
  */
 export const CUSTOM_ENTRY_TYPE = "notification-center:entry";
 
-/** Documented configuration defaults, used whenever a value is unusable. */
+/** Configuration defaults, used whenever a value is unusable. */
 export const DEFAULT_CONFIG = {
   maxToastsVisible: 5,
   toast: {

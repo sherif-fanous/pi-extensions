@@ -26,9 +26,9 @@ describe("createToastSurface", () => {
   });
 
   it("never changes which component holds focus", () => {
-    // Regression: ctx.ui.custom's non-overlay branch defocuses the active
-    // component and then restores focus to the core editor, which wedges
-    // any open interactive component. setWidget never touches focus.
+    // ctx.ui.custom's non-overlay branch defocuses the active component
+    // and hands focus to the core editor, which wedges any open
+    // interactive component. setWidget never touches focus.
     const fake = createFakeTui();
 
     createToastSurface(bridgeUi(fake.tui), stub, {});
@@ -54,11 +54,10 @@ describe("createToastSurface", () => {
   });
 
   it("toggles visibility without leaving the overlay stack", () => {
-    // Regression: Pi's hideOverlay() pops the last-pushed stack entry
-    // without skipping nonCapturing overlays, so this surface must keep
-    // its position at the bottom of the stack for the whole session
-    // rather than being removed and re-pushed above someone else's
-    // overlay.
+    // Pi's hideOverlay() pops the last-pushed stack entry without
+    // skipping nonCapturing overlays, so this surface keeps its position
+    // at the bottom of the stack for the whole session rather than being
+    // removed and re-pushed above another extension's overlay.
     const fake = createFakeTui();
     const surface = createToastSurface(bridgeUi(fake.tui), stub, {});
 

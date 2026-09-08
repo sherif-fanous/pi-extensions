@@ -1,11 +1,7 @@
 /**
- * pi-notification-center extension entry point.
- *
- * Owns lifecycle wiring with the Pi host: command registration,
- * per-session installation of the capture runtime, configuration
- * loading, and shutdown cleanup. It does NOT own interception mechanics,
- * rendering, configuration validation, or history access — those live in
- * their dedicated modules.
+ * Extension entry point. Registers the `/notifications` command, loads
+ * configuration and installs the capture runtime at each session start,
+ * and tears the runtime down at shutdown.
  */
 
 import { CaptureRuntime } from "./capture.js";
@@ -16,16 +12,10 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 /**
  * Register the notification center with the Pi host.
  *
- * Pi invokes this factory with the extension API alone, so `configLoader`
- * defaults to the real loader in production.
- *
- * It is the only seam at this layer. Configuration is loaded with no
- * arguments, which leaves the loader's own agent-directory and
- * file-reading parameters unreachable from here, so substituting the
- * whole loader is the one way to exercise a warning or a failed load
- * through the host lifecycle. Without it a test would read the
- * developer's own agent directory and change behavior as soon as a real
- * configuration file appeared there.
+ * Pi calls this with the extension API alone, so `configLoader` is the
+ * real loader in production. It exists as a seam because configuration is
+ * loaded with no arguments here, putting the loader's own agent-directory
+ * and file-reading parameters out of reach of a test.
  */
 export default function notificationCenter(
   pi: ExtensionAPI,
@@ -37,9 +27,8 @@ export default function notificationCenter(
     description:
       "Browse notifications captured in this session, newest first, with their local date, time, and severity.",
     handler: async (_args, ctx) => {
-      // Defense in depth: a command handler that throws would surface as
-      // an extension error row, which is exactly the transcript noise
-      // this package exists to avoid.
+      // A command handler that throws surfaces as an extension error row,
+      // which is the transcript noise this package exists to avoid.
       try {
         await runNotificationsCommand(ctx);
       } catch (err) {
@@ -52,8 +41,8 @@ export default function notificationCenter(
   });
 
   pi.on("session_start", (_event, ctx) => {
-    // A reload fires `session_start` again; drop the previous runtime
-    // before installing a new wrapper so timers and overlays cannot leak.
+    // A reload fires `session_start` again, so drop the previous runtime
+    // before installing a new wrapper or its timers and overlay leak.
     runtime?.dispose();
     runtime = undefined;
 
@@ -62,13 +51,10 @@ export default function notificationCenter(
 
       runtime = CaptureRuntime.install(ctx, pi, config);
 
-      // Warnings are reported only after installation completes, so the
-      // configuration complaint travels the same capture path as any
-      // other notification instead of reaching the transcript.
-      //
-      // Capture is absent outside the TUI, where the untouched notify is
-      // the only way to reach the user. That cannot change part way
-      // through, so the channel is chosen once for the whole batch.
+      // Warnings go out after installation so they travel the capture
+      // path rather than the transcript. Outside the TUI there is no
+      // runtime, and the untouched notify is the only way to reach the
+      // user.
       const capture = runtime;
       const warn = capture
         ? (message: string) => {
@@ -96,11 +82,10 @@ export default function notificationCenter(
 }
 
 /**
- * Describe an error as a sentence closing with one full stop.
+ * Describe an error as a sentence closing with exactly one full stop.
  *
- * A thrown message may already end in punctuation, so callers embed this
- * without adding their own terminator. Appending one unconditionally
- * renders a message as "Disk on fire.." to the user.
+ * Callers embed the result without adding a terminator of their own,
+ * since a thrown message may already end in punctuation.
  */
 function describe(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);

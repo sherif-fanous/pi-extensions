@@ -1,15 +1,12 @@
 /**
- * Lifecycle owner for the visible toast stack.
+ * Lifecycle of the visible toast stack: the bounded visible list, one
+ * expiration timer per toast, oldest-first eviction, and the render
+ * surface the cards are drawn into.
  *
- * Owns the bounded visible list, one independent expiration timer per
- * toast, oldest-first eviction, stack compaction, render requests, and
- * the single render surface. It does NOT own rendering (see
- * `toast-stack.ts`), history persistence, or notification interception.
- *
- * All timers live here so `dispose` can cancel every one of them, and
- * every callback re-checks `disposed` before touching the TUI: a reload
+ * Every timer lives here so `dispose` can cancel all of them, and every
+ * callback re-checks `disposed` before touching the TUI. A reload
  * replaces the runtime while timers are still pending, and a stale
- * runtime must never mutate the new runtime's UI.
+ * runtime must not mutate the new runtime's UI.
  */
 
 import type { NotificationConfig, NotificationEntry } from "../types.js";
@@ -27,13 +24,11 @@ import {
 type TimerHandle = ReturnType<typeof globalThis.setTimeout>;
 
 /**
- * Manages the passive toast surface and the cards currently inside it.
+ * Manages the passive toast surface and the cards inside it.
  *
- * The surface is created once, at construction, and toggled hidden when
- * the stack empties. It is never removed and re-pushed, because a
- * surface that joins the overlay stack late consumes the close of
- * whatever was already open. See `tui-bridge.ts` for why that ordering
- * is load-bearing.
+ * The surface is created once and hidden when the stack empties. It is
+ * never removed and re-pushed, because a surface that joins the overlay
+ * stack late consumes the close of whatever was already open.
  */
 export class ToastManager {
   private disposed = false;
@@ -42,11 +37,10 @@ export class ToastManager {
   private visible: NotificationEntry[] = [];
 
   /**
-   * Create the manager and, with it, its render surface.
+   * Create the manager and its render surface.
    *
-   * The surface is created here rather than on the first toast because
-   * the overlay must enter the stack before any transient overlay does.
-   * See `tui-bridge.ts` for why that ordering is load-bearing. It starts
+   * The surface is created here rather than on the first toast so the
+   * overlay enters the stack before any transient overlay does. It starts
    * hidden, so an idle session shows nothing.
    */
   constructor(
@@ -85,20 +79,18 @@ export class ToastManager {
   /**
    * Show one notification as a toast.
    *
-   * Fully synchronous, so an emitting extension never awaits UI work and
-   * the expiration timer starts at the moment of arrival.
-   *
-   * Each call must pass its own entry. Timers are keyed by entry, so the
-   * same object shown twice would strand its first timer and dismiss
-   * only one of the two cards.
+   * Synchronous, so an emitting extension never awaits UI work and the
+   * expiration timer starts on arrival. Each call must pass its own
+   * entry: timers are keyed by entry, so the same object shown twice
+   * strands its first timer and dismisses only one of the two cards.
    */
   show(entry: NotificationEntry): void {
     if (this.disposed) return;
 
     this.visible.push(entry);
 
-    // Eviction happens before the timer is armed so the evicted toast's
-    // own timer is cancelled in the same step.
+    // Evict before arming the timer, so the evicted toast's own timer is
+    // cancelled in the same step.
     while (this.visible.length > this.config.maxToastsVisible) {
       const [oldest] = this.visible.splice(0, 1);
 
@@ -131,8 +123,6 @@ export class ToastManager {
 
     const index = this.visible.indexOf(entry);
 
-    // Removing by identity compacts the stack: the remaining cards move
-    // up on the next render without any per-card bookkeeping.
     if (index >= 0) this.visible.splice(index, 1);
 
     this.sync();
@@ -141,9 +131,8 @@ export class ToastManager {
   /**
    * Push the current list to the component and match surface visibility.
    *
-   * The surface is hidden rather than removed when the stack empties, so
-   * it keeps its place at the bottom of the overlay stack for the rest of
-   * the session.
+   * An empty stack hides the surface rather than removing it, so it keeps
+   * its place at the bottom of the overlay stack for the whole session.
    */
   private sync(): void {
     if (this.disposed || !this.surface) return;

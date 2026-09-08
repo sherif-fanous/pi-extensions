@@ -1,11 +1,8 @@
 /**
- * Shared test doubles.
+ * Test doubles shared across suites: a colorless theme, a fake TUI, and a
+ * fake keybindings manager.
  *
- * Owns the minimal fakes used across suites: a colorless theme, a fake
- * TUI, and a fake keybindings manager. It does NOT own assertions or any
- * production behavior.
- *
- * The theme returns text unchanged so tests can assert on exact,
+ * The theme returns text unchanged, so tests can assert on exact,
  * escape-free line content and widths.
  */
 
