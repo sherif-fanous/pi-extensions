@@ -137,6 +137,7 @@ export async function openThemeSyncOverlay(
   let theme: ExtensionCommandContext["ui"]["theme"];
 
   let doneFn: () => void;
+  let reloadRequested = false;
   let tui: { requestRender: () => void };
 
   const rootContainer = new Container();
@@ -312,8 +313,8 @@ export async function openThemeSyncOverlay(
         }
 
         if (matchesKey(data, Key.ctrl("r"))) {
+          reloadRequested = true;
           doneFn();
-          void ctx.reload();
 
           return;
         }
@@ -729,6 +730,11 @@ export async function openThemeSyncOverlay(
       },
     },
   );
+
+  // Reload only after the overlay closes so the command observes failures.
+  if (reloadRequested) {
+    await ctx.reload();
+  }
 }
 
 function formatSource(source: ConfigSource): string {
