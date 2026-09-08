@@ -205,12 +205,13 @@ describe("writeConfigChanges", () => {
       const writeSpy = vi.spyOn(fs, "writeFile");
 
       try {
-        await writeConfigChanges(scope, projectDirectory, {
+        const result = await writeConfigChanges(scope, projectDirectory, {
           "detection.pollIntervalMs": 4500,
           "themes.light": "project-light",
           isSyncActive: false,
         });
 
+        expect(result).toEqual({ ok: true });
         expect(readSpy).toHaveBeenCalledTimes(1);
         expect(writeSpy).toHaveBeenCalledTimes(1);
         expect(await readJson(filePath)).toEqual({
@@ -260,7 +261,9 @@ describe("writeConfigChanges", () => {
     const writeSpy = vi.spyOn(fs, "writeFile");
 
     try {
-      await writeConfigChanges("project", projectDirectory, {});
+      expect(await writeConfigChanges("project", projectDirectory, {})).toEqual(
+        { ok: true },
+      );
 
       expect(readSpy).not.toHaveBeenCalled();
       expect(writeSpy).not.toHaveBeenCalled();
@@ -269,6 +272,60 @@ describe("writeConfigChanges", () => {
       writeSpy.mockRestore();
     }
   });
+
+  test.each(["project", "global"] as const)(
+    "preserves invalid JSON in %s and permits retry after repair",
+    async (scope) => {
+      const filePath = getConfigFilePath(scope);
+      const malformedContents = '{ "keepThis": true,\n';
+      const changes = { isSyncActive: false };
+
+      await mkdir(path.dirname(filePath), { recursive: true });
+      await writeFile(filePath, malformedContents);
+
+      const writeSpy = vi.spyOn(fs, "writeFile");
+
+      try {
+        expect(
+          await writeConfigChanges(scope, projectDirectory, changes),
+        ).toEqual({
+          ok: false,
+          reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It contains invalid JSON. Fix the file and try again.`,
+        });
+        expect(writeSpy).not.toHaveBeenCalled();
+        expect(await readFile(filePath, "utf8")).toBe(malformedContents);
+
+        await writeFile(filePath, '{ "keepThis": true }');
+        writeSpy.mockClear();
+
+        expect(
+          await writeConfigChanges(scope, projectDirectory, changes),
+        ).toEqual({ ok: true });
+        expect(writeSpy).toHaveBeenCalledTimes(1);
+        expect(await readJson(filePath)).toEqual({
+          isSyncActive: false,
+          keepThis: true,
+        });
+      } finally {
+        writeSpy.mockRestore();
+      }
+    },
+  );
+
+  test.each(["project", "global"] as const)(
+    "creates a missing %s config file",
+    async (scope) => {
+      expect(
+        await writeConfigChanges(scope, projectDirectory, {
+          isSyncActive: false,
+        }),
+      ).toEqual({ ok: true });
+
+      expect(await readJson(getConfigFilePath(scope))).toEqual({
+        isSyncActive: false,
+      });
+    },
+  );
 
   test("reports a write failure after one attempted batch write", async () => {
     const filePath = CONFIG_PATHS.project(projectDirectory);

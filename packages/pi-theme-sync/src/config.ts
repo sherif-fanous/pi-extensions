@@ -46,6 +46,8 @@ type ReadJsonResult = {
   warning?: string;
 };
 
+type SaveResult = { ok: true } | { ok: false; reason: string };
+
 export function isValidPollIntervalMs(value: number): boolean {
   return Number.isFinite(value) && value >= POLL_INTERVAL_MIN_MS;
 }
@@ -159,13 +161,22 @@ export async function writeConfigChanges(
   scope: ConfigScope,
   cwd: string,
   changes: EditableConfigChanges,
-): Promise<void> {
+): Promise<SaveResult> {
   if (Object.keys(changes).length === 0) {
-    return;
+    return { ok: true };
   }
 
   const filePath = getConfigPath(scope, cwd);
   const result = await readJsonIfExists(filePath);
+
+  // A load fallback is safe for reading, but would discard the original on save.
+  if (result.warning) {
+    return {
+      ok: false,
+      reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It contains invalid JSON. Fix the file and try again.`,
+    };
+  }
+
   const nextConfig: LoadedConfig = structuredClone(result.config ?? {});
 
   if (changes["themes.light"] !== undefined) {
@@ -194,6 +205,8 @@ export async function writeConfigChanges(
   }
 
   await writeJson(filePath, nextConfig);
+
+  return { ok: true };
 }
 
 function getConfigPath(scope: ConfigScope, cwd: string): string {

@@ -644,7 +644,17 @@ export async function openThemeSyncOverlay(
     });
 
     try {
-      await writeConfigChanges(scope, ctx.cwd, changes);
+      const result = await writeConfigChanges(scope, ctx.cwd, changes);
+
+      if (!result.ok) {
+        setMode({
+          kind: "config",
+          message: result.reason,
+          messageSeverity: "error",
+        });
+
+        return;
+      }
 
       currentStateDraft["themes.light"] = desiredStateDraft["themes.light"];
       currentStateDraft["themes.dark"] = desiredStateDraft["themes.dark"];
