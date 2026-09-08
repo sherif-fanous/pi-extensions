@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   CONFIG_PATHS,
   DEFAULT_CONFIG,
+  isValidPollIntervalMs,
   loadConfig,
   writeConfigChanges,
 } from "../src/config.js";
@@ -28,7 +29,52 @@ afterEach(async () => {
   await rm(testRoot, { force: true, recursive: true });
 });
 
+describe("isValidPollIntervalMs", () => {
+  test.each([1000, 2000, 60_000])("accepts %s milliseconds", (value) => {
+    expect(isValidPollIntervalMs(value)).toBe(true);
+  });
+
+  test.each([999, 60_001, 2_147_483_648, Number.NaN, Infinity, -Infinity])(
+    "rejects %s milliseconds",
+    (value) => {
+      expect(isValidPollIntervalMs(value)).toBe(false);
+    },
+  );
+});
+
 describe("loadConfig", () => {
+  test.each(["project", "global"] as const)(
+    "uses default value and source for an oversized %s interval",
+    async (scope) => {
+      await writeConfigFile(getConfigFilePath(scope), {
+        detection: { pollIntervalMs: 60_001 },
+      });
+
+      const result = await loadConfig(createContext());
+
+      expect(result.runtimeConfig.detection.pollIntervalMs).toBe(2000);
+      expect(result.runtimeConfigSources.detection.pollIntervalMs).toBe(
+        "default",
+      );
+
+      expect(result.warnings).toEqual([
+        `${scope === "project" ? "Project" : "Global"} config: pollIntervalMs "60001" must be a number between 1000 and 60000 milliseconds. Using default (2000ms).`,
+      ]);
+    },
+  );
+
+  test("retains the maximum interval and its configured source", async () => {
+    await writeConfigs(undefined, { detection: { pollIntervalMs: 60_000 } });
+
+    const result = await loadConfig(createContext());
+
+    expect(result.runtimeConfig.detection.pollIntervalMs).toBe(60_000);
+    expect(result.runtimeConfigSources.detection.pollIntervalMs).toBe(
+      "project",
+    );
+    expect(result.warnings).toEqual([]);
+  });
+
   test("uses valid project overrides and reports their source", async () => {
     await writeConfigs(
       {

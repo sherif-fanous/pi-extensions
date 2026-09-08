@@ -77,12 +77,12 @@ The extension SHALL validate `Polling Interval` inside the overlay before saving
 
 #### Scenario: Accept valid polling interval
 
-- **WHEN** the user enters a numeric polling interval greater than or equal to `1000`
+- **WHEN** the user enters a numeric polling interval between `1000` and `60000`, inclusive
 - **THEN** the overlay accepts that value for saving
 
 #### Scenario: Reject invalid polling interval in place
 
-- **WHEN** the user enters a non-numeric polling interval or a numeric value less than `1000`
+- **WHEN** the user enters a non-numeric polling interval or a numeric value outside `1000` to `60000`, inclusive
 - **THEN** the overlay keeps the user in the config window and shows an inline validation error
 
 ### Requirement: Theme sync config overlay edits sync status

@@ -70,7 +70,7 @@ Project config overrides global config, and global config overrides built-in def
 | `isSyncActive`             | `true`    | Whether the extension actively applies mapped themes in the current runtime |
 | `themes.light`             | `"light"` | Pi theme to use when light appearance is detected                           |
 | `themes.dark`              | `"dark"`  | Pi theme to use when dark appearance is detected                            |
-| `detection.pollIntervalMs` | `2000`    | Polling interval in milliseconds (must be >= 1000)                          |
+| `detection.pollIntervalMs` | `2000`    | Polling interval in milliseconds (1000 to 60000, inclusive)                 |
 
 If a configured theme name does not exist in Pi, `pi-theme-sync` falls back to the corresponding built-in theme (`light` or `dark`).
 

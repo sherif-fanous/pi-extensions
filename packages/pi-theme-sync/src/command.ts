@@ -13,6 +13,7 @@ import {
   CONFIG_PATHS,
   isValidPollIntervalMs,
   loadConfig,
+  POLL_INTERVAL_MAX_MS,
   POLL_INTERVAL_MIN_MS,
   writeConfigChanges,
 } from "./config.js";
@@ -336,7 +337,7 @@ export async function openThemeSyncOverlay(
             setMode({
               kind: "pollIntervalEdit",
               value: mode.value,
-              error: `Polling interval must be a number >= ${POLL_INTERVAL_MIN_MS}.`,
+              error: `Polling interval must be between ${POLL_INTERVAL_MIN_MS} and ${POLL_INTERVAL_MAX_MS} milliseconds.`,
             });
 
             return;
@@ -492,7 +493,11 @@ export async function openThemeSyncOverlay(
         );
         rootContainer.addChild(new Spacer(1));
         rootContainer.addChild(
-          new Text(`Enter milliseconds (>= ${POLL_INTERVAL_MIN_MS})`, 1, 0),
+          new Text(
+            `Enter milliseconds (${POLL_INTERVAL_MIN_MS} to ${POLL_INTERVAL_MAX_MS}, inclusive).`,
+            1,
+            0,
+          ),
         );
         rootContainer.addChild(new Spacer(1));
         rootContainer.addChild(

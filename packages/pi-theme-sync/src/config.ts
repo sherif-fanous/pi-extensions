@@ -39,6 +39,7 @@ export const DEFAULT_CONFIG: RuntimeConfig = {
   },
 };
 
+export const POLL_INTERVAL_MAX_MS = 60_000;
 export const POLL_INTERVAL_MIN_MS = 1000;
 
 type ReadJsonResult = {
@@ -49,7 +50,11 @@ type ReadJsonResult = {
 type SaveResult = { ok: true } | { ok: false; reason: string };
 
 export function isValidPollIntervalMs(value: number): boolean {
-  return Number.isFinite(value) && value >= POLL_INTERVAL_MIN_MS;
+  return (
+    Number.isFinite(value) &&
+    value >= POLL_INTERVAL_MIN_MS &&
+    value <= POLL_INTERVAL_MAX_MS
+  );
 }
 
 export async function loadConfig(
@@ -288,7 +293,7 @@ function validatePollingIntervalMs(
     const scope = source === "project" ? "Project config" : "Global config";
 
     warnings.push(
-      `${scope}: pollIntervalMs "${String(value)}" is not a number >= ${POLL_INTERVAL_MIN_MS} — using default (${DEFAULT_CONFIG.detection.pollIntervalMs}ms)`,
+      `${scope}: pollIntervalMs "${String(value)}" must be a number between ${POLL_INTERVAL_MIN_MS} and ${POLL_INTERVAL_MAX_MS} milliseconds. Using default (${DEFAULT_CONFIG.detection.pollIntervalMs}ms).`,
     );
 
     return {
