@@ -21,7 +21,10 @@ export async function detectAppearanceViaOsc11Background(
 ): Promise<Appearance> {
   return (
     (await queryWithTerminalListener(ctx, osc11BackgroundQuery, (data) => {
-      const match = data.match(/\x1b\]11;rgb:([0-9a-fA-F/]+)(?:\x07|\x1b\\)/);
+      // Each X11 RGB channel contains one to four hex digits, independently.
+      const match = data.match(
+        /\x1b\]11;rgb:((?:[0-9a-fA-F]{1,4}\/){2}[0-9a-fA-F]{1,4})(?:\x07|\x1b\\)/,
+      );
 
       if (!match) {
         return undefined;
@@ -33,17 +36,16 @@ export async function detectAppearanceViaOsc11Background(
         return undefined;
       }
 
-      const colorParts = rawColor
+      const hexColor = rawColor
         .split("/")
-        .map((part) => part.slice(0, 2).padStart(2, "0"));
+        .map((part) =>
+          Math.round((parseInt(part, 16) / (16 ** part.length - 1)) * 255)
+            .toString(16)
+            .padStart(2, "0"),
+        )
+        .join("");
 
-      if (colorParts.length < 3) {
-        return undefined;
-      }
-
-      const detectedAppearance = classifyHexColor(
-        `${colorParts[0]}${colorParts[1]}${colorParts[2]}`,
-      );
+      const detectedAppearance = classifyHexColor(hexColor);
 
       return detectedAppearance === "unknown" ? undefined : detectedAppearance;
     })) ?? "unknown"
