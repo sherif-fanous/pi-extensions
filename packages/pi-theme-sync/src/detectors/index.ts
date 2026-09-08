@@ -34,6 +34,10 @@ const SUBSCRIPTION_DETECTORS = [
   "color-scheme-subscription",
 ] as const satisfies readonly SubscriptionDetector[];
 
+type ReportDetectorFailure = (
+  detector: PollingDetector | SubscriptionDetector,
+) => void;
+
 /**
  * Each arm consumes exactly one source: `color-scheme` reads Pi's API through
  * the TUI handle, `osc-11` writes a raw query through `ctx`, and `system`
@@ -44,27 +48,38 @@ export async function detectAppearance(
   ctx: ExtensionContext,
   pollingDetector: PollingDetector,
   tui: TUI | undefined,
+  reportFailure?: ReportDetectorFailure,
 ): Promise<Appearance> {
-  switch (pollingDetector) {
-    case "color-scheme":
-      return detectAppearanceViaColorScheme(tui);
+  try {
+    switch (pollingDetector) {
+      case "color-scheme":
+        return await detectAppearanceViaColorScheme(tui);
 
-    case "osc-11":
-      return detectAppearanceViaOsc11Background(ctx);
+      case "osc-11":
+        return await detectAppearanceViaOsc11Background(ctx);
 
-    case "system":
-      return detectAppearanceViaSystem();
+      case "system":
+        return await detectAppearanceViaSystem();
+    }
+  } catch {
+    // A failed source must not prevent callers from trying the next detector.
+    reportFailure?.(pollingDetector);
+
+    return "unknown";
   }
 }
 
 export async function probeAvailablePollingDetectors(
   ctx: ExtensionContext,
   tui: TUI | undefined,
+  reportFailure?: ReportDetectorFailure,
 ): Promise<PollingDetector[]> {
   const availablePollingDetectors: PollingDetector[] = [];
 
   for (const detector of POLLING_DETECTORS) {
-    if ((await detectAppearance(ctx, detector, tui)) !== "unknown") {
+    if (
+      (await detectAppearance(ctx, detector, tui, reportFailure)) !== "unknown"
+    ) {
       availablePollingDetectors.push(detector);
     }
   }
@@ -75,16 +90,22 @@ export async function probeAvailablePollingDetectors(
 export async function probeAvailableSubscriptionDetectors(
   ctx: ExtensionContext,
   tui: TUI | undefined,
+  reportFailure?: ReportDetectorFailure,
 ): Promise<SubscriptionDetector[]> {
   const availableSubscriptionDetectors: SubscriptionDetector[] = [];
 
   for (const detector of SUBSCRIPTION_DETECTORS) {
-    if (
-      detector === "color-scheme-subscription" &&
-      hasColorSchemeApi(tui) &&
-      (await probeDecMode2031Support(ctx)) === "supported"
-    ) {
-      availableSubscriptionDetectors.push(detector);
+    try {
+      if (
+        detector === "color-scheme-subscription" &&
+        hasColorSchemeApi(tui) &&
+        (await probeDecMode2031Support(ctx)) === "supported"
+      ) {
+        availableSubscriptionDetectors.push(detector);
+      }
+    } catch {
+      // Subscription probing is optional; polling can still serve this session.
+      reportFailure?.(detector);
     }
   }
 

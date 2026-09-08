@@ -177,7 +177,7 @@ for (const mode of ["polling", "subscription"] as const) {
       slowFailure.reject(new Error("expected recurring failure"));
       await flushPromises();
       assert.deepEqual(runtime.getStatus(harness.ctx).warnings, [
-        "A recurring appearance update failed; theme sync will retry.",
+        "Terminal Color Scheme query failed. Other available detectors will be used.",
       ]);
 
       runCycle();
@@ -190,9 +190,12 @@ for (const mode of ["polling", "subscription"] as const) {
       );
 
       assert.equal(
-        runtime.getStatus(harness.ctx).warnings.length,
+        runtime
+          .getStatus(harness.ctx)
+          .warnings.filter((warning) => warning.includes("query failed"))
+          .length,
         1,
-        "repeated failures must keep warnings bounded",
+        "repeated detector failures must keep warnings bounded",
       );
 
       runCycle();
@@ -223,6 +226,52 @@ for (const mode of ["polling", "subscription"] as const) {
     }
   });
 }
+
+void test("recurring non-detector failures still release the cycle guard", async () => {
+  const harness = await createRuntimeHarness("subscription", [
+    "light",
+    "light",
+    "light",
+    "light",
+  ]);
+  const runtime = createThemeSyncRuntime();
+  const originalTheme = harness.ctx.ui.theme;
+  let runCycle = () => {};
+
+  try {
+    await runtime.setupAppearanceMonitoring(harness.ctx, (cycle) => {
+      runCycle = cycle;
+
+      return () => {};
+    });
+
+    Object.defineProperty(harness.ctx.ui, "theme", {
+      configurable: true,
+      get: () => {
+        throw new Error("expected theme access failure");
+      },
+    });
+    runCycle();
+    await flushPromises();
+    Object.defineProperty(harness.ctx.ui, "theme", {
+      configurable: true,
+      value: originalTheme,
+      writable: true,
+    });
+
+    assert.deepEqual(runtime.getStatus(harness.ctx).warnings, [
+      "A recurring appearance update failed; theme sync will retry.",
+    ]);
+
+    runCycle();
+    await flushPromises();
+    assert.equal(harness.getColorSchemeQueryCount(), 4);
+    assert.equal(runtime.getStatus(harness.ctx).currentAppearance, "light");
+  } finally {
+    runtime.cleanup();
+    await harness.cleanup();
+  }
+});
 
 void test("subscription reports retain grace recovery and one-way demotion", async () => {
   const harness = await createRuntimeHarness("subscription", [

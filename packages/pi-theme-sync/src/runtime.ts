@@ -118,6 +118,16 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
       ? DETECTOR_LABELS[lastResolvedPollingDetector]
       : "Polling";
 
+  const reportDetectorFailure = (
+    detector: PollingDetector | SubscriptionDetector,
+  ) => {
+    const warning = `${DETECTOR_LABELS[detector]} query failed. Other available detectors will be used.`;
+
+    if (!isShutDown && !warnings.includes(warning)) {
+      warnings.push(warning);
+    }
+  };
+
   const resolvePollingAppearance = async (
     ctx: ExtensionContext,
     tui: TUI | undefined,
@@ -128,7 +138,12 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
         return "unknown";
       }
 
-      const detectedAppearance = await detectAppearance(ctx, detector, tui);
+      const detectedAppearance = await detectAppearance(
+        ctx,
+        detector,
+        tui,
+        reportDetectorFailure,
+      );
 
       if (detectedAppearance !== "unknown") {
         lastResolvedPollingDetector = detector;
@@ -212,6 +227,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     const availablePollingDetectors = await probeAvailablePollingDetectors(
       ctx,
       tui,
+      reportDetectorFailure,
     );
 
     if (isShutDown) {
@@ -219,7 +235,11 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     }
 
     const availableSubscriptionDetectors =
-      await probeAvailableSubscriptionDetectors(ctx, tui);
+      await probeAvailableSubscriptionDetectors(
+        ctx,
+        tui,
+        reportDetectorFailure,
+      );
 
     if (isShutDown) {
       return;
