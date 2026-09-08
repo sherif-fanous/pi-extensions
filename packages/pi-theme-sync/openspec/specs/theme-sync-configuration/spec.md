@@ -26,8 +26,13 @@ The extension SHALL accept configuration for light and dark theme mappings, poll
 
 #### Scenario: Read configured polling interval
 
-- **WHEN** the user configures a polling interval
+- **WHEN** the user configures a finite numeric polling interval between `1000` and `60000` milliseconds, inclusive
 - **THEN** the extension uses that interval for polling-based detection
+
+#### Scenario: Reject an out-of-range configured polling interval
+
+- **WHEN** the selected polling interval is outside `1000` to `60000` milliseconds, inclusive
+- **THEN** the extension uses the default `2000` milliseconds, reports Default provenance, and emits a validation warning
 
 #### Scenario: Read configured sync activation state
 

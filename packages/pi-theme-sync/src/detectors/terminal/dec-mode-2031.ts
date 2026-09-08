@@ -6,10 +6,10 @@
  * parsing, or runtime strategy selection.
  */
 
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { queryWithTerminalListener } from "./query.js";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-const DEC_MODE_2031_DECRQM = "\x1b[?2031$p";
+const decMode2031Decrqm = "\x1b[?2031$p";
 
 type DecMode2031Support = "supported" | "unsupported" | "unknown";
 
@@ -17,7 +17,7 @@ export async function probeDecMode2031Support(
   ctx: ExtensionContext,
 ): Promise<DecMode2031Support> {
   return (
-    (await queryWithTerminalListener(ctx, DEC_MODE_2031_DECRQM, (data) => {
+    (await queryWithTerminalListener(ctx, decMode2031Decrqm, (data) => {
       const support = parseDecMode2031Decrqm(data);
 
       return support === "unknown" ? undefined : support;

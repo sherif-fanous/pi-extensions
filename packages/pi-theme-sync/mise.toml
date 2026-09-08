@@ -3,7 +3,7 @@ _.file = ".env"
 _.path = ["{{config_root}}/node_modules/.bin"]
 
 [tasks.check]
-depends = ["format-check", "type-check", "lint"]
+depends = ["format-check", "type-check", "lint", "test"]
 
 [tasks.fallow]
 depends = ["fallow-dead-code", "fallow-dupes"]
@@ -15,10 +15,10 @@ run = "fallow dead-code"
 run = "fallow dupes"
 
 [tasks.format]
-run = "prettier --write eslint.config.mjs package.json src/. tsconfig.json"
+run = "prettier --write eslint.config.mjs package.json src/. tests/. tsconfig.json vitest.config.ts"
 
 [tasks.format-check]
-run = "prettier --check eslint.config.mjs package.json src/. tsconfig.json"
+run = "prettier --check eslint.config.mjs package.json src/. tests/. tsconfig.json vitest.config.ts"
 
 [tasks.install-deps]
 run = "pnpm add --save-prod"
@@ -27,10 +27,10 @@ run = "pnpm add --save-prod"
 run = "pnpm add --save-dev"
 
 [tasks.lint]
-run = "biome lint src/. && eslint src/."
+run = "biome lint src/. tests/. && eslint src/. tests/."
 
 [tasks.lint-fix]
-run = "biome lint src/. --fix && eslint src/. --fix"
+run = "biome lint src/. tests/. --fix && eslint src/. tests/. --fix"
 
 [tasks.login]
 run = "pnpm login"
@@ -45,6 +45,12 @@ run = "pnpm publish --access public"
 
 [tasks.sort-package-json]
 run = "sort-package-json"
+
+[tasks.test]
+run = "vitest --run"
+
+[tasks.test-watch]
+run = "vitest"
 
 [tasks.type-check]
 run = "tsc --noEmit"

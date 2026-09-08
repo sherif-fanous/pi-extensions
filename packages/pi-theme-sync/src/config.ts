@@ -2,27 +2,29 @@
  * Configuration load / persist / validation.
  *
  * Owns the global and project JSON file paths, the `loadConfig` and
- * `writeConfigValue` APIs, and the per-key validation helpers that emit
+ * `writeConfigChanges` APIs, and the per-key validation helpers that emit
  * warnings rather than throwing. Does NOT own runtime application of
  * config (lives in `runtime.ts`) or the editing UI (lives in `command.ts`).
  */
 
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { promises as fs } from "node:fs";
-import { homedir } from "node:os";
 import path from "node:path";
+
 import type {
   ConfigScope,
-  EditableConfigKey,
-  EditableConfigValue,
+  EditableConfigChanges,
   LoadedConfig,
   LoadedRuntimeConfig,
   RuntimeConfig,
   RuntimeConfigSources,
 } from "./types.js";
+import {
+  getAgentDir,
+  type ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 
 export const CONFIG_PATHS = {
-  global: path.join(homedir(), ".pi", "agent", "theme-sync.json"),
+  global: path.join(getAgentDir(), "theme-sync.json"),
   project: (cwd: string) => path.join(cwd, ".pi", "theme-sync.json"),
 };
 
@@ -39,6 +41,7 @@ export const DEFAULT_CONFIG: RuntimeConfig = {
   },
 };
 
+export const POLL_INTERVAL_MAX_MS = 60_000;
 export const POLL_INTERVAL_MIN_MS = 1000;
 
 type ReadJsonResult = {
@@ -46,8 +49,14 @@ type ReadJsonResult = {
   warning?: string;
 };
 
+type SaveResult = { ok: true } | { ok: false; reason: string };
+
 export function isValidPollIntervalMs(value: number): boolean {
-  return Number.isFinite(value) && value >= POLL_INTERVAL_MIN_MS;
+  return (
+    Number.isFinite(value) &&
+    value >= POLL_INTERVAL_MIN_MS &&
+    value <= POLL_INTERVAL_MAX_MS
+  );
 }
 
 export async function loadConfig(
@@ -84,33 +93,49 @@ export async function loadConfig(
     warnings,
   );
 
-  const rawPollIntervalMs =
+  const lightThemeSource = resolveSource(
+    projectLoadedConfig?.themes?.light,
+    globalLoadedConfig?.themes?.light,
+  );
+  const lightTheme = validateTheme(
+    projectLoadedConfig?.themes?.light ?? globalLoadedConfig?.themes?.light,
+    "light",
+    lightThemeSource,
+    availableThemes,
+    warnings,
+  );
+  const darkThemeSource = resolveSource(
+    projectLoadedConfig?.themes?.dark,
+    globalLoadedConfig?.themes?.dark,
+  );
+  const darkTheme = validateTheme(
+    projectLoadedConfig?.themes?.dark ?? globalLoadedConfig?.themes?.dark,
+    "dark",
+    darkThemeSource,
+    availableThemes,
+    warnings,
+  );
+  const pollIntervalMsSource = resolveSource(
+    projectLoadedConfig?.detection?.pollIntervalMs,
+    globalLoadedConfig?.detection?.pollIntervalMs,
+  );
+  const pollIntervalMs = validatePollingIntervalMs(
     projectLoadedConfig?.detection?.pollIntervalMs ??
-    globalLoadedConfig?.detection?.pollIntervalMs;
-  const pollIntervalMsScope =
-    projectLoadedConfig?.detection?.pollIntervalMs !== undefined
-      ? "Project config"
-      : "Global config";
+      globalLoadedConfig?.detection?.pollIntervalMs,
+    pollIntervalMsSource,
+    warnings,
+  );
 
   const runtimeConfigSources: RuntimeConfigSources = {
     isSyncActive: resolveSource(projectIsSyncActive, globalIsSyncActive),
 
     themes: {
-      light: resolveSource(
-        projectLoadedConfig?.themes?.light,
-        globalLoadedConfig?.themes?.light,
-      ),
-      dark: resolveSource(
-        projectLoadedConfig?.themes?.dark,
-        globalLoadedConfig?.themes?.dark,
-      ),
+      light: lightTheme.source,
+      dark: darkTheme.source,
     },
 
     detection: {
-      pollIntervalMs: resolveSource(
-        projectLoadedConfig?.detection?.pollIntervalMs,
-        globalLoadedConfig?.detection?.pollIntervalMs,
-      ),
+      pollIntervalMs: pollIntervalMs.source,
     },
   };
 
@@ -119,83 +144,72 @@ export async function loadConfig(
       projectIsSyncActive ?? globalIsSyncActive ?? DEFAULT_CONFIG.isSyncActive,
 
     themes: {
-      light: validateTheme(
-        projectLoadedConfig?.themes?.light ?? globalLoadedConfig?.themes?.light,
-        "light",
-        availableThemes,
-        warnings,
-      ),
-      dark: validateTheme(
-        projectLoadedConfig?.themes?.dark ?? globalLoadedConfig?.themes?.dark,
-        "dark",
-        availableThemes,
-        warnings,
-      ),
+      light: lightTheme.value,
+      dark: darkTheme.value,
     },
 
     detection: {
-      pollIntervalMs: validatePollingIntervalMs(
-        rawPollIntervalMs,
-        pollIntervalMsScope,
-        warnings,
-      ),
+      pollIntervalMs: pollIntervalMs.value,
     },
   };
 
   return {
-    loadedConfig: {
-      project: projectLoadedConfig,
-      global: globalLoadedConfig,
-    },
     runtimeConfig,
     runtimeConfigSources,
     warnings,
   };
 }
 
-export async function writeConfigValue(
+export async function writeConfigChanges(
   scope: ConfigScope,
   cwd: string,
-  key: EditableConfigKey,
-  value: EditableConfigValue,
-): Promise<void> {
+  changes: EditableConfigChanges,
+): Promise<SaveResult> {
+  if (Object.keys(changes).length === 0) {
+    return { ok: true };
+  }
+
   const filePath = getConfigPath(scope, cwd);
   const result = await readJsonIfExists(filePath);
-  const existingConfig = result.config ?? {};
-  const nextConfig: LoadedConfig = structuredClone(existingConfig);
 
-  switch (key) {
-    case "themes.light":
-      nextConfig.themes = {
-        ...(nextConfig.themes ?? {}),
-        light: String(value),
-      };
+  // A load fallback is safe for reading, but would discard the original on save.
+  if (result.warning) {
+    return {
+      ok: false,
+      reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It must contain a valid JSON object. Fix the file and try again.`,
+    };
+  }
 
-      break;
+  const nextConfig: LoadedConfig = structuredClone(result.config ?? {});
 
-    case "themes.dark":
-      nextConfig.themes = {
-        ...(nextConfig.themes ?? {}),
-        dark: String(value),
-      };
+  if (changes["themes.light"] !== undefined) {
+    nextConfig.themes = {
+      ...(nextConfig.themes ?? {}),
+      light: changes["themes.light"],
+    };
+  }
 
-      break;
+  if (changes["themes.dark"] !== undefined) {
+    nextConfig.themes = {
+      ...(nextConfig.themes ?? {}),
+      dark: changes["themes.dark"],
+    };
+  }
 
-    case "detection.pollIntervalMs":
-      nextConfig.detection = {
-        ...(nextConfig.detection ?? {}),
-        pollIntervalMs: Number(value),
-      };
+  if (changes["detection.pollIntervalMs"] !== undefined) {
+    nextConfig.detection = {
+      ...(nextConfig.detection ?? {}),
+      pollIntervalMs: changes["detection.pollIntervalMs"],
+    };
+  }
 
-      break;
-
-    case "isSyncActive":
-      nextConfig.isSyncActive = Boolean(value);
-
-      break;
+  if (changes.isSyncActive !== undefined) {
+    nextConfig.isSyncActive = changes.isSyncActive;
   }
 
   await writeJson(filePath, nextConfig);
+
+  return { ok: true };
 }
 
 function getConfigPath(scope: ConfigScope, cwd: string): string {
@@ -216,7 +230,17 @@ async function readJsonIfExists(filePath: string): Promise<ReadJsonResult> {
   }
 
   try {
-    const parsed = JSON.parse(content) as LoadedConfig;
+    const parsed: unknown = JSON.parse(content);
+
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      return {
+        warning: `Configuration in ${filePath} must be a JSON object. File ignored.`,
+      };
+    }
 
     return { config: parsed };
   } catch {
@@ -227,14 +251,14 @@ async function readJsonIfExists(filePath: string): Promise<ReadJsonResult> {
 }
 
 function resolveSource<T>(
-  projectValue: T | undefined,
-  globalValue: T | undefined,
+  projectValue: T | null | undefined,
+  globalValue: T | null | undefined,
 ): ConfigScope | "default" {
-  if (projectValue !== undefined) {
+  if (projectValue != null) {
     return "project";
   }
 
-  if (globalValue !== undefined) {
+  if (globalValue != null) {
     return "global";
   }
 
@@ -263,32 +287,41 @@ function validateIsSyncActive(
 
 function validatePollingIntervalMs(
   value: number | undefined,
-  scope: string,
+  source: ConfigScope | "default",
   warnings: string[],
-): number {
+): { source: ConfigScope | "default"; value: number } {
   if (value === undefined) {
-    return DEFAULT_CONFIG.detection.pollIntervalMs;
+    return {
+      source: "default",
+      value: DEFAULT_CONFIG.detection.pollIntervalMs,
+    };
   }
 
   if (typeof value !== "number" || !isValidPollIntervalMs(value)) {
+    const scope = source === "project" ? "Project config" : "Global config";
+
     warnings.push(
-      `${scope}: pollIntervalMs "${String(value)}" is not a number >= ${POLL_INTERVAL_MIN_MS} — using default (${DEFAULT_CONFIG.detection.pollIntervalMs}ms)`,
+      `${scope}: pollIntervalMs "${String(value)}" must be a number between ${POLL_INTERVAL_MIN_MS} and ${POLL_INTERVAL_MAX_MS} milliseconds. Using default (${DEFAULT_CONFIG.detection.pollIntervalMs}ms).`,
     );
 
-    return DEFAULT_CONFIG.detection.pollIntervalMs;
+    return {
+      source: "default",
+      value: DEFAULT_CONFIG.detection.pollIntervalMs,
+    };
   }
 
-  return value;
+  return { source, value };
 }
 
 function validateTheme(
   themeName: string | undefined,
   fallback: "light" | "dark",
+  source: ConfigScope | "default",
   availableThemes: Set<string>,
   warnings: string[],
-): string {
+): { source: ConfigScope | "default"; value: string } {
   if (!themeName) {
-    return DEFAULT_CONFIG.themes[fallback];
+    return { source: "default", value: DEFAULT_CONFIG.themes[fallback] };
   }
 
   if (!availableThemes.has(themeName)) {
@@ -296,10 +329,10 @@ function validateTheme(
       `Theme "${themeName}" not found in Pi — using default "${DEFAULT_CONFIG.themes[fallback]}"`,
     );
 
-    return DEFAULT_CONFIG.themes[fallback];
+    return { source: "default", value: DEFAULT_CONFIG.themes[fallback] };
   }
 
-  return themeName;
+  return { source, value: themeName };
 }
 
 async function writeJson(

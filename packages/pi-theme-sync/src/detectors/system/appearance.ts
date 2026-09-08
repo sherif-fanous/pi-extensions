@@ -1,43 +1,64 @@
 /**
- * macOS system-level appearance detection via AppleScript.
+ * System appearance detection through platform commands.
  *
- * Owns `detectAppearanceViaSystem`, which spawns `osascript` to read
- * `tell application "System Events" to tell appearance preferences to
- * return dark mode` and classifies the boolean result. Does NOT own any
- * non-macOS platform handling (returns `"unknown"` outside macOS) or
- * terminal-based detection (lives in `../terminal/`).
+ * Owns bounded OS command execution and classification of system appearance
+ * preferences. Does NOT own terminal detection or runtime detector selection.
  */
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+
 import type { Appearance } from "../../types.js";
 
 const execFileAsync = promisify(execFile);
+const systemQueryTimeoutMs = 1000;
 
-export async function detectAppearanceViaSystem(): Promise<Appearance> {
+type RunSystemCommand = (
+  command: string,
+  args: string[],
+  options: { timeout: number },
+) => Promise<{ stdout: string }>;
+
+export async function detectAppearanceViaSystem(
+  runCommand: RunSystemCommand = execFileAsync,
+): Promise<Appearance> {
   try {
     if (process.platform === "darwin") {
       try {
-        const { stdout } = await execFileAsync("defaults", [
-          "read",
-          "-g",
-          "AppleInterfaceStyle",
-        ]);
+        const { stdout } = await runCommand(
+          "defaults",
+          ["read", "-g", "AppleInterfaceStyle"],
+          { timeout: systemQueryTimeoutMs },
+        );
 
         return stdout.trim().toLowerCase() === "dark" ? "dark" : "light";
-      } catch {
-        // Key does not exist when light mode is active
-        return "light";
+      } catch (error) {
+        // Only an absent preference means light; execution failures do not.
+        const failure = error as {
+          code?: number | string;
+          killed?: boolean;
+          signal?: string | null;
+          stderr?: string;
+        };
+
+        return failure.code === 1 &&
+          !failure.killed &&
+          !failure.signal &&
+          /The domain\/default pair of \(kCFPreferencesAnyApplication, AppleInterfaceStyle\) does not exist/.test(
+            failure.stderr ?? "",
+          )
+          ? "light"
+          : "unknown";
       }
     }
 
     if (process.platform === "linux") {
       try {
-        const { stdout } = await execFileAsync("gsettings", [
-          "get",
-          "org.gnome.desktop.interface",
-          "color-scheme",
-        ]);
+        const { stdout } = await runCommand(
+          "gsettings",
+          ["get", "org.gnome.desktop.interface", "color-scheme"],
+          { timeout: systemQueryTimeoutMs },
+        );
 
         const text = stdout.trim().toLowerCase();
 
@@ -56,12 +77,16 @@ export async function detectAppearanceViaSystem(): Promise<Appearance> {
     }
 
     if (process.platform === "win32") {
-      const { stdout } = await execFileAsync("reg", [
-        "query",
-        "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-        "/v",
-        "AppsUseLightTheme",
-      ]);
+      const { stdout } = await runCommand(
+        "reg",
+        [
+          "query",
+          "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "/v",
+          "AppsUseLightTheme",
+        ],
+        { timeout: systemQueryTimeoutMs },
+      );
 
       if (/0x0\b/.test(stdout)) {
         return "dark";

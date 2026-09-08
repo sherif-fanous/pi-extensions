@@ -12,9 +12,9 @@ import type { TUI } from "@earendil-works/pi-tui";
 const TUI_HANDLE_WIDGET_KEY = "pi-theme-sync-tui-handle";
 
 export function getTuiHandle(
-  ctx: Pick<ExtensionContext, "hasUI" | "ui">,
+  ctx: Pick<ExtensionContext, "mode" | "ui">,
 ): TUI | undefined {
-  if (!ctx.hasUI) {
+  if (ctx.mode !== "tui") {
     return undefined;
   }
 
