@@ -30,11 +30,11 @@ pi remove npm:@sherif-fanous/pi-theme-sync
 
 No configuration is needed. Once installed, `pi-theme-sync` detects your current appearance and switches Pi between its built-in `light` and `dark` themes automatically.
 
-Run `/theme-sync` to open an interactive overlay menu with `Config` and `Status` options.
+Run `/theme-sync` to open the configuration overlay. Run `/theme-sync status` to add the current runtime status to the transcript.
 
 ### Relationship to Pi's built-in `auto` theme
 
-Pi has its own automatic theme setting of the form `auto:<light-theme>,<dark-theme>`. `pi-theme-sync` does the same job with per-project configuration, custom theme mapping, and a status overlay, so the two are alternatives rather than complements.
+Pi has its own automatic theme setting of the form `auto:<light-theme>,<dark-theme>`. `pi-theme-sync` does the same job with per-project configuration, custom theme mapping, and a status report, so the two are alternatives rather than complements.
 
 Use one or the other. When `pi-theme-sync` applies a theme it calls Pi's `setTheme`, which persists a concrete theme name into your Pi settings. If your Pi `theme` setting was `auto:...`, that value is replaced by the applied theme name and Pi's built-in auto-switching stops on its own.
 
@@ -102,7 +102,7 @@ OSC 11                 ← reads terminal background color, classifies as light/
 System Appearance      ← reads system appearance (macOS, Linux/GNOME, Windows)
 ```
 
-These names appear in the Status overlay's `Detection Strategy:` and `Available Detectors:` rows.
+These names appear in the `/theme-sync status` report's `Detection Strategy:` and `Available Detectors:` rows.
 
 ### Ongoing updates
 
