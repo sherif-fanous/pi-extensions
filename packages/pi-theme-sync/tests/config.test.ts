@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   CONFIG_PATHS,
   DEFAULT_CONFIG,
+  getConfigPath,
   isValidPollIntervalMs,
   loadConfig,
   writeConfigChanges,
@@ -22,10 +23,17 @@ let projectDirectory: string;
 beforeEach(async () => {
   testRoot = await mkdtemp(path.join(tmpdir(), "pi-theme-sync-config-test-"));
   projectDirectory = path.join(testRoot, "project");
-  CONFIG_PATHS.global = path.join(testRoot, "home", ".pi", "theme-sync.json");
+  CONFIG_PATHS.global = path.join(
+    testRoot,
+    "home",
+    ".pi",
+    "theme-sync",
+    "settings.json",
+  );
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await rm(testRoot, { force: true, recursive: true });
 });
 
@@ -458,6 +466,281 @@ describe("writeConfigChanges", () => {
   });
 });
 
+describe.each(["project", "global"] as const)("%s file selection", (scope) => {
+  function paths() {
+    const preferred = getConfigFilePath(scope);
+    const legacy = path.join(
+      path.dirname(path.dirname(preferred)),
+      "theme-sync.json",
+    );
+
+    return { preferred, legacy };
+  }
+
+  test.each(["neither", "legacy", "preferred", "both"] as const)(
+    "resolves and saves with %s files present",
+    async (layout) => {
+      const { preferred, legacy } = paths();
+      const original = {
+        isSyncActive: false,
+        extra: "preserved",
+        themes: { light: "project-light", other: "kept" },
+      };
+
+      if (layout === "legacy" || layout === "both") {
+        await writeConfigFile(legacy, original);
+      }
+
+      if (layout === "preferred" || layout === "both") {
+        await writeConfigFile(preferred, original);
+      }
+
+      const selected = layout === "legacy" ? legacy : preferred;
+
+      expect(await getConfigPath(scope, projectDirectory)).toBe(selected);
+
+      const loaded = await loadConfig(createContext());
+
+      expect(loaded.runtimeConfig.isSyncActive).toBe(layout === "neither");
+      expect(loaded.warnings).toEqual([]);
+      expect(
+        await writeConfigChanges(scope, projectDirectory, {
+          isSyncActive: true,
+          "themes.dark": "global-dark",
+        }),
+      ).toEqual({ ok: true });
+
+      expect(await readJson(selected)).toEqual(
+        layout === "neither"
+          ? { isSyncActive: true, themes: { dark: "global-dark" } }
+          : {
+              ...original,
+              isSyncActive: true,
+              themes: { ...original.themes, dark: "global-dark" },
+            },
+      );
+
+      if (layout === "both") {
+        expect(await readJson(legacy)).toEqual(original);
+      } else {
+        await expect(
+          readFile(selected === legacy ? preferred : legacy),
+        ).rejects.toMatchObject({ code: "ENOENT" });
+      }
+    },
+  );
+
+  test.each([{}, { themes: { dark: "global-dark" } }])(
+    "does not merge legacy values into preferred %j",
+    async (preferredConfig) => {
+      const { preferred, legacy } = paths();
+
+      await writeConfigFile(legacy, {
+        isSyncActive: false,
+        themes: { light: "project-light" },
+      });
+      await writeConfigFile(preferred, preferredConfig);
+
+      const loaded = await loadConfig(createContext());
+
+      expect(loaded.runtimeConfig.isSyncActive).toBe(true);
+      expect(loaded.runtimeConfig.themes.light).toBe("light");
+    },
+  );
+
+  test.each(["{", "[]", "null", '"text"', "42", "true"])(
+    "warns and refuses invalid preferred %s without legacy fallback",
+    async (content) => {
+      const { preferred, legacy } = paths();
+
+      await writeConfigFile(legacy, { isSyncActive: false });
+      await mkdir(path.dirname(preferred), { recursive: true });
+      await writeFile(preferred, content);
+      expect(await getConfigPath(scope, projectDirectory)).toBe(preferred);
+
+      const loaded = await loadConfig(createContext());
+
+      expect(loaded.runtimeConfig).toEqual(DEFAULT_CONFIG);
+      expect(loaded.warnings).toHaveLength(1);
+      expect(loaded.warnings[0]).toContain(preferred);
+
+      const saved = await writeConfigChanges(scope, projectDirectory, {
+        isSyncActive: false,
+      });
+
+      expect(saved.ok).toBe(false);
+
+      if (!saved.ok) {
+        expect(saved.reason).toContain(preferred);
+      }
+
+      expect(await readFile(preferred, "utf8")).toBe(content);
+      expect(await readJson(legacy)).toEqual({ isSyncActive: false });
+    },
+  );
+
+  test.each(["{", "[]", "null"])(
+    "protects invalid selected legacy %s",
+    async (content) => {
+      const { preferred, legacy } = paths();
+
+      await mkdir(path.dirname(legacy), { recursive: true });
+      await writeFile(legacy, content);
+      expect(await getConfigPath(scope, projectDirectory)).toBe(legacy);
+      expect(
+        await writeConfigChanges(scope, projectDirectory, {
+          isSyncActive: false,
+        }),
+      ).toMatchObject({ ok: false });
+      expect(await readFile(legacy, "utf8")).toBe(content);
+      await expect(readFile(preferred)).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+    },
+  );
+
+  test("refreshes selection after preferred creation and removal", async () => {
+    const { preferred, legacy } = paths();
+
+    await writeConfigFile(legacy, { isSyncActive: false });
+    expect((await loadConfig(createContext())).runtimeConfig.isSyncActive).toBe(
+      false,
+    );
+
+    await writeConfigFile(preferred, {
+      isSyncActive: true,
+      externalKey: "keep",
+    });
+
+    expect(
+      await writeConfigChanges(scope, projectDirectory, {
+        "themes.dark": "global-dark",
+      }),
+    ).toEqual({ ok: true });
+
+    expect(await readJson(preferred)).toEqual({
+      isSyncActive: true,
+      externalKey: "keep",
+      themes: { dark: "global-dark" },
+    });
+    expect(await readJson(legacy)).toEqual({ isSyncActive: false });
+    expect((await loadConfig(createContext())).runtimeConfig.isSyncActive).toBe(
+      true,
+    );
+    await rm(preferred);
+    expect((await loadConfig(createContext())).runtimeConfig.isSyncActive).toBe(
+      false,
+    );
+
+    await writeConfigChanges(scope, projectDirectory, {
+      "themes.dark": "global-dark",
+    });
+
+    expect(await readJson(legacy)).toEqual({
+      isSyncActive: false,
+      themes: { dark: "global-dark" },
+    });
+    await rm(legacy);
+    expect((await loadConfig(createContext())).runtimeConfig).toEqual(
+      DEFAULT_CONFIG,
+    );
+  });
+
+  test.each(["EACCES", "EISDIR", "ENOTDIR"])(
+    "does not fall back on read error %s",
+    async (code) => {
+      const { preferred, legacy } = paths();
+
+      await writeConfigFile(legacy, { isSyncActive: false });
+
+      const readSpy = vi
+        .spyOn(fs, "readFile")
+        .mockImplementation(async (filePath, options) => {
+          if (filePath === preferred) {
+            throw Object.assign(new Error("expected read failure"), { code });
+          }
+
+          return readFile(filePath, options);
+        });
+
+      await expect(
+        getConfigPath(scope, projectDirectory),
+      ).rejects.toMatchObject({ code });
+      await expect(loadConfig(createContext())).rejects.toMatchObject({ code });
+      await expect(
+        writeConfigChanges(scope, projectDirectory, { isSyncActive: true }),
+      ).rejects.toMatchObject({ code });
+
+      expect(readSpy.mock.calls.some(([filePath]) => filePath === legacy)).toBe(
+        false,
+      );
+      expect(await readJson(legacy)).toEqual({ isSyncActive: false });
+    },
+  );
+
+  test("does not try legacy after a preferred write failure", async () => {
+    const { preferred, legacy } = paths();
+
+    await writeConfigFile(preferred, { isSyncActive: true });
+    await writeConfigFile(legacy, { isSyncActive: false });
+
+    const writeSpy = vi
+      .spyOn(fs, "writeFile")
+      .mockRejectedValue(
+        Object.assign(new Error("expected write failure"), { code: "EACCES" }),
+      );
+
+    await expect(
+      writeConfigChanges(scope, projectDirectory, { isSyncActive: false }),
+    ).rejects.toMatchObject({ code: "EACCES" });
+    expect(writeSpy).toHaveBeenCalledOnce();
+    expect(writeSpy.mock.calls[0]?.[0]).toBe(preferred);
+    expect(await readJson(preferred)).toEqual({ isSyncActive: true });
+    expect(await readJson(legacy)).toEqual({ isSyncActive: false });
+  });
+});
+
+test.each(["project", "global"] as const)(
+  "preserves per-key precedence with legacy %s and preferred other scope",
+  async (legacyScope) => {
+    const globalPreferred = CONFIG_PATHS.global;
+    const projectPreferred = CONFIG_PATHS.project(projectDirectory);
+    const legacyPath = path.join(
+      path.dirname(path.dirname(getConfigFilePath(legacyScope))),
+      "theme-sync.json",
+    );
+
+    await writeConfigFile(
+      legacyScope === "global" ? legacyPath : globalPreferred,
+      {
+        isSyncActive: false,
+        themes: { dark: "global-dark", light: "light" },
+      },
+    );
+
+    await writeConfigFile(
+      legacyScope === "project" ? legacyPath : projectPreferred,
+      {
+        themes: { light: "project-light" },
+      },
+    );
+
+    const loaded = await loadConfig(createContext());
+
+    expect(loaded.runtimeConfig).toEqual({
+      ...DEFAULT_CONFIG,
+      isSyncActive: false,
+      themes: { light: "project-light", dark: "global-dark" },
+    });
+
+    expect(loaded.runtimeConfigSources.themes).toEqual({
+      light: "project",
+      dark: "global",
+    });
+    expect(loaded.warnings).toEqual([]);
+  },
+);
+
 function createContext(): ExtensionContext {
   return {
     cwd: projectDirectory,
@@ -479,7 +762,7 @@ async function readJson(filePath: string): Promise<unknown> {
 
 async function writeConfigFile(
   filePath: string,
-  config: LoadedConfig,
+  config: LoadedConfig & Record<string, unknown>,
 ): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, JSON.stringify(config));
