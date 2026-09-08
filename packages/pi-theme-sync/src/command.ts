@@ -1,13 +1,4 @@
-/**
- * The `/theme-sync` interactive overlay.
- *
- * Owns the overlay mode state machine (`menu` / `config` / `themeSelect` /
- * `syncSelect` / `pollIntervalEdit` / `writeTarget` / `status`), the
- * `rebuild()` rendering pipeline including the shared `buildListOverlay`
- * helper, and the in-flight config-edit drafts. Does NOT own runtime
- * detection (delegates to the `ThemeSyncRuntime` passed in) or config
- * persistence (delegates to `writeConfigChanges` in `config.ts`).
- */
+/** Renders the `/theme-sync` menu, configuration editor, and runtime status. */
 
 import {
   getConfigPath,
@@ -63,11 +54,7 @@ type ThemeSyncOverlayMode =
   | { kind: "pollIntervalEdit"; value: string; error?: string }
   | { kind: "writeTarget"; paths: Record<ConfigScope, string> };
 
-/**
- * Renders prefixed lines with hanging indentation. Owns width-aware wrapping
- * and continuation indentation; it does not own background fills, caching, or
- * padding beyond a uniform horizontal margin.
- */
+/** Renders wrapped text with aligned prefixes and continuation lines. */
 class HangingText implements Component {
   constructor(
     private readonly lines: readonly HangingTextLine[],
@@ -76,7 +63,7 @@ class HangingText implements Component {
   ) {}
 
   invalidate(): void {
-    // The component has no cached rendering state.
+    // Rendering reads immutable inputs, so there is no cache to clear.
   }
 
   render(width: number): string[] {
@@ -106,6 +93,7 @@ class HangingText implements Component {
   }
 }
 
+/** Opens the interactive theme sync overlay for a TUI session. */
 export async function openThemeSyncOverlay(
   runtime: ThemeSyncRuntime,
   ctx: ExtensionCommandContext,

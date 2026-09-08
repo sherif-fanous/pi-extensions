@@ -1,9 +1,4 @@
-/**
- * System appearance detection through platform commands.
- *
- * Owns bounded OS command execution and classification of system appearance
- * preferences. Does NOT own terminal detection or runtime detector selection.
- */
+/** Detects system appearance through platform preference commands. */
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -19,6 +14,7 @@ type RunSystemCommand = (
   options: { timeout: number },
 ) => Promise<{ stdout: string }>;
 
+/** Reads the current macOS, Linux, or Windows appearance preference. */
 export async function detectAppearanceViaSystem(
   runCommand: RunSystemCommand = execFileAsync,
 ): Promise<Appearance> {

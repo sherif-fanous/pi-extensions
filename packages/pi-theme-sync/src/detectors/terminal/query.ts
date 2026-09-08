@@ -1,27 +1,21 @@
-/**
- * Terminal-query primitive used by every terminal-based detector.
- *
- * Owns `queryWithTerminalListener<T>`, the shared "write a control
- * sequence, subscribe via `ctx.ui.onTerminalInput`, race the reply against
- * a timeout, always clean up the listener and the timeout" helper. Does
- * NOT own any per-protocol parsing or classification — each detector
- * passes its own `parse` function and owns the meaning of the reply.
- */
+/** Sends terminal queries and waits for matching replies. */
 
 import type {
   ExtensionContext,
   TerminalInputHandler,
 } from "@earendil-works/pi-coding-agent";
 
+/** Default time to wait for a terminal query response. */
 export const DEFAULT_TERMINAL_QUERY_TIMEOUT_MS = 300;
 
+/** Sends a terminal sequence and resolves with the first parsed response. */
 export async function queryWithTerminalListener<T>(
   ctx: ExtensionContext,
   sequence: string,
   parse: (data: string) => T | undefined,
   timeoutMs = DEFAULT_TERMINAL_QUERY_TIMEOUT_MS,
 ): Promise<T | undefined> {
-  // RPC also has UI support, but stdout carries its JSON protocol.
+  // Writing control sequences to stdout would corrupt RPC output.
   if (ctx.mode !== "tui") {
     return undefined;
   }

@@ -1,19 +1,8 @@
-/**
- * Hex-to-appearance classifier.
- *
- * Owns the single `classifyHexColor` function that turns a `"RRGGBB"`
- * string into `"light"` / `"dark"` / `"unknown"` via a relative-luminance
- * heuristic. Does NOT own the terminal query that produces hex colors
- * (lives in `detectors/terminal/osc-11.ts`).
- */
+/** Classifies RGB background colors as light or dark. */
 
 import type { Appearance } from "./types.js";
 
-/**
- * Classify a background color as light or dark using a relative luminance
- * heuristic based on Rec. 709 / sRGB luma coefficients:
- *   Y' = 0.2126R + 0.7152G + 0.0722B
- */
+/** Classifies a six-digit RGB hex color using Rec. 709 luminance. */
 export function classifyHexColor(hexColor: string): Appearance {
   if (hexColor.length !== 6) {
     return "unknown";

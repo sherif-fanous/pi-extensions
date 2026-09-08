@@ -1,19 +1,15 @@
-/**
- * Shared cross-module type definitions.
- *
- * Owns the canonical `Appearance`, `ConfigScope`, `ConfigSource`,
- * `PollingDetector`, `SubscriptionDetector`, `RuntimeConfig`,
- * `RuntimeStatus`, `LoadedConfig`, and related types consumed across the
- * runtime, configuration, command, and detector layers. Does NOT contain
- * any runtime code, validation logic, or implementation.
- */
+/** Defines configuration, detector, and runtime state shared across the extension. */
 
+/** Appearance reported by a detector. */
 export type Appearance = "light" | "dark" | "unknown";
 
+/** Configuration file scope. */
 export type ConfigScope = "project" | "global";
 
+/** Origin of an effective configuration value. */
 export type ConfigSource = ConfigScope | "default";
 
+/** Configuration values that the overlay can save. */
 export type EditableConfigChanges = Partial<{
   "themes.light": string;
   "themes.dark": string;
@@ -21,6 +17,7 @@ export type EditableConfigChanges = Partial<{
   isSyncActive: boolean;
 }>;
 
+/** Supported fields in a configuration file before defaults are applied. */
 export type LoadedConfig = {
   isSyncActive?: boolean;
 
@@ -34,14 +31,17 @@ export type LoadedConfig = {
   };
 };
 
+/** Effective runtime configuration, value sources, and load warnings. */
 export type LoadedRuntimeConfig = {
   runtimeConfig: RuntimeConfig;
   runtimeConfigSources: RuntimeConfigSources;
   warnings: string[];
 };
 
+/** Detector strategies that read appearance on demand. */
 export type PollingDetector = "color-scheme" | "osc-11" | "system";
 
+/** Effective configuration used by the runtime. */
 export type RuntimeConfig = {
   isSyncActive: boolean;
 
@@ -55,6 +55,7 @@ export type RuntimeConfig = {
   };
 };
 
+/** Source of each effective runtime configuration value. */
 export type RuntimeConfigSources = {
   isSyncActive: ConfigSource;
 
@@ -68,6 +69,7 @@ export type RuntimeConfigSources = {
   };
 };
 
+/** Runtime state displayed by the status overlay. */
 export type RuntimeStatus = {
   currentAppearance: Appearance;
   desiredTheme?: string;
@@ -85,4 +87,5 @@ export type RuntimeStatus = {
   lastEvent: string;
 };
 
+/** Detector strategies that receive appearance change reports. */
 export type SubscriptionDetector = "color-scheme-subscription";

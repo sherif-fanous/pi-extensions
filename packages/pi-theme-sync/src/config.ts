@@ -1,11 +1,4 @@
-/**
- * Configuration load / persist / validation.
- *
- * Owns the global and project JSON file paths, the `loadConfig` and
- * `writeConfigChanges` APIs, and the per-key validation helpers that emit
- * warnings rather than throwing. Does NOT own runtime application of
- * config (lives in `runtime.ts`) or the editing UI (lives in `command.ts`).
- */
+/** Loads, validates, and saves global and project configuration. */
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -23,12 +16,14 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 
+/** Paths used for the current global and project configuration files. */
 export const CONFIG_PATHS = {
   global: path.join(getAgentDir(), "theme-sync", "settings.json"),
   project: (cwd: string) =>
     path.join(cwd, ".pi", "theme-sync", "settings.json"),
 };
 
+/** Runtime values used when configuration does not provide a valid value. */
 export const DEFAULT_CONFIG: RuntimeConfig = {
   isSyncActive: true,
 
@@ -42,7 +37,9 @@ export const DEFAULT_CONFIG: RuntimeConfig = {
   },
 };
 
+/** Longest supported appearance polling interval. */
 export const POLL_INTERVAL_MAX_MS = 60_000;
+/** Shortest supported appearance polling interval. */
 export const POLL_INTERVAL_MIN_MS = 1000;
 
 type ReadJsonResult = {
@@ -53,6 +50,7 @@ type ReadJsonResult = {
 
 type SaveResult = { ok: true } | { ok: false; reason: string };
 
+/** Resolves the configuration file that a scope currently uses. */
 export async function getConfigPath(
   scope: ConfigScope,
   cwd: string,
@@ -60,6 +58,7 @@ export async function getConfigPath(
   return (await readScopedConfig(scope, cwd)).filePath;
 }
 
+/** Checks whether a polling interval is finite and within the supported range. */
 export function isValidPollIntervalMs(value: number): boolean {
   return (
     Number.isFinite(value) &&
@@ -68,6 +67,7 @@ export function isValidPollIntervalMs(value: number): boolean {
   );
 }
 
+/** Loads and validates the effective configuration for a session. */
 export async function loadConfig(
   ctx: ExtensionContext,
 ): Promise<LoadedRuntimeConfig> {
@@ -169,6 +169,7 @@ export async function loadConfig(
   };
 }
 
+/** Merges editable values into one configuration file. */
 export async function writeConfigChanges(
   scope: ConfigScope,
   cwd: string,
@@ -181,7 +182,7 @@ export async function writeConfigChanges(
   const result = await readScopedConfig(scope, cwd);
   const { filePath } = result;
 
-  // A load fallback is safe for reading, but would discard the original on save.
+  // Refuse to overwrite malformed configuration with a partial edit.
   if (result.warning) {
     return {
       ok: false,

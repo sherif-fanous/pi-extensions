@@ -41,7 +41,6 @@ test.each(["success", "refusal", "rejection"] as const)(
     const overlay = await startOverlay();
 
     try {
-      // Open Config, change the light theme to dark, then save to Project.
       await overlay.input("\r", "\r", "\x1b[B", "\r", "\x13", "\r");
 
       expect(write).toHaveBeenCalledExactlyOnceWith(
@@ -50,7 +49,6 @@ test.each(["success", "refusal", "rejection"] as const)(
         { "themes.light": "dark" },
       );
 
-      // Try editing the theme, saving again, reloading, and closing mid-write.
       await overlay.input(
         "\r",
         "\x1b[A",

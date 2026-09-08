@@ -1,14 +1,4 @@
-/**
- * Detector registry and dispatcher.
- *
- * Owns the `POLLING_DETECTORS` and `SUBSCRIPTION_DETECTORS` `as const`
- * arrays that act as the single source of truth for which detection
- * strategies exist, the `detectAppearance` switch that dispatches to
- * detector implementations, and the `probeAvailable*Detectors` helpers that
- * filter the registry to currently supported detectors at startup. Does NOT
- * own color-scheme, terminal, or system detection logic, or the runtime
- * detection loop (lives in `runtime.ts`).
- */
+/** Registers appearance detectors, dispatches polling, and probes availability. */
 
 import type {
   Appearance,
@@ -38,12 +28,7 @@ type ReportDetectorFailure = (
   detector: PollingDetector | SubscriptionDetector,
 ) => void;
 
-/**
- * Each arm consumes exactly one source: `color-scheme` reads Pi's API through
- * the TUI handle, `osc-11` writes a raw query through `ctx`, and `system`
- * needs neither. Both parameters are threaded through so callers do not have
- * to know which detector needs which.
- */
+/** Runs one polling detector and reports failures as an unknown appearance. */
 export async function detectAppearance(
   ctx: ExtensionContext,
   pollingDetector: PollingDetector,
@@ -62,13 +47,13 @@ export async function detectAppearance(
         return await detectAppearanceViaSystem();
     }
   } catch {
-    // A failed source must not prevent callers from trying the next detector.
     reportFailure?.(pollingDetector);
 
     return "unknown";
   }
 }
 
+/** Returns polling detectors that can report an appearance in this session. */
 export async function probeAvailablePollingDetectors(
   ctx: ExtensionContext,
   tui: TUI | undefined,
@@ -78,7 +63,7 @@ export async function probeAvailablePollingDetectors(
   const availablePollingDetectors: PollingDetector[] = [];
 
   for (const detector of POLLING_DETECTORS) {
-    // A pending probe may outlive the session that supplied its terminal context.
+    // A pending terminal probe can outlive the session that started it.
     if (isCancelled()) {
       break;
     }
@@ -93,6 +78,7 @@ export async function probeAvailablePollingDetectors(
   return availablePollingDetectors;
 }
 
+/** Returns subscription detectors supported by Pi and the terminal. */
 export async function probeAvailableSubscriptionDetectors(
   ctx: ExtensionContext,
   tui: TUI | undefined,
@@ -110,7 +96,6 @@ export async function probeAvailableSubscriptionDetectors(
         availableSubscriptionDetectors.push(detector);
       }
     } catch {
-      // Subscription probing is optional; polling can still serve this session.
       reportFailure?.(detector);
     }
   }

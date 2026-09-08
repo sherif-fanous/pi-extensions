@@ -1,13 +1,4 @@
-/**
- * OSC 11 background-color appearance probe.
- *
- * Owns the OSC 11 query sequence and `detectAppearanceViaOsc11Background`,
- * which queries the terminal for its background color and converts the
- * hex reply to an `Appearance` via the shared `classifyHexColor`
- * luminance heuristic. Does NOT own the terminal-query primitive
- * (delegates to `./query.ts`) or the hex-to-appearance classifier (lives
- * in `../../color.ts`).
- */
+/** Detects terminal appearance from an OSC 11 background color response. */
 
 import { classifyHexColor } from "../../color.js";
 import type { Appearance } from "../../types.js";
@@ -16,6 +7,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const osc11BackgroundQuery = "\x1b]11;?\x1b\\";
 
+/** Queries the terminal background color and classifies its appearance. */
 export async function detectAppearanceViaOsc11Background(
   ctx: ExtensionContext,
 ): Promise<Appearance> {

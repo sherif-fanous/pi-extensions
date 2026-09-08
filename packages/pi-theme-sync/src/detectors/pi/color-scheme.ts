@@ -1,19 +1,15 @@
-/**
- * Pi color-scheme polling and subscription detectors.
- *
- * Owns conversion of Pi's terminal color-scheme API into `Appearance` values
- * and the subscription cleanup contract. Does NOT own TUI-handle acquisition,
- * terminal support probing, or runtime strategy selection.
- */
+/** Reads and subscribes to terminal appearance through Pi's TUI API. */
 
 import type { Appearance } from "../../types.js";
 import { DEFAULT_TERMINAL_QUERY_TIMEOUT_MS } from "../terminal/query.js";
 import type { TUI } from "@earendil-works/pi-tui";
 
+/** Cleanup handle for a terminal color scheme subscription. */
 export type ColorSchemeSubscription = {
   removeColorSchemeListener: () => void;
 };
 
+/** Queries Pi for the terminal's current color scheme. */
 export async function detectAppearanceViaColorScheme(
   tui: TUI | undefined,
 ): Promise<Appearance> {
@@ -28,6 +24,7 @@ export async function detectAppearanceViaColorScheme(
   );
 }
 
+/** Enables terminal color scheme reports and subscribes to them. */
 export function enableColorSchemeSubscription(
   tui: TUI | undefined,
   onAppearanceDetected: (detectedAppearance: Appearance) => void,
@@ -44,6 +41,7 @@ export function enableColorSchemeSubscription(
   return { removeColorSchemeListener };
 }
 
+/** Checks whether a TUI handle provides Pi's color scheme API. */
 export function hasColorSchemeApi(tui: TUI | undefined): tui is TUI {
   return (
     typeof tui?.queryTerminalColorScheme === "function" &&

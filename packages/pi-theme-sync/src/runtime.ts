@@ -1,12 +1,4 @@
-/**
- * Long-running theme-detection runtime.
- *
- * Owns detection orchestration (subscription vs polling preference), the
- * active poller and drift-poller intervals, the cached current-appearance
- * state, and the read-only `RuntimeStatus` surface read by the Status
- * overlay. Does NOT own configuration persistence (lives in `config.ts`) or
- * any interactive UI (lives in `command.ts`).
- */
+/** Detects appearance changes, applies mapped themes, and reports runtime status. */
 
 import { DEFAULT_CONFIG, loadConfig } from "./config.js";
 import {
@@ -53,6 +45,7 @@ const scheduleRecurringCycle: ScheduleRecurringCycle = (cycle, intervalMs) => {
   return () => clearInterval(timer);
 };
 
+/** Controls appearance monitoring and exposes its current status. */
 export type ThemeSyncRuntime = {
   cleanup: () => void;
   getStatus: (ctx: ExtensionContext) => RuntimeStatus;
@@ -62,6 +55,7 @@ export type ThemeSyncRuntime = {
   ) => Promise<void>;
 };
 
+/** Creates an isolated theme sync runtime for one extension instance. */
 export function createThemeSyncRuntime(): ThemeSyncRuntime {
   let runtimeConfig: RuntimeConfig = structuredClone(DEFAULT_CONFIG);
 
@@ -104,7 +98,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
 
       ctx.ui.setTheme(desiredThemeName);
     } catch {
-      // Stale ctx after session replacement — nothing to apply.
+      // The session context can expire while an appearance check is running.
     }
   };
 
@@ -293,9 +287,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
       );
     }
 
-    // One-way for the session. A host that fails to report a change has shown
-    // a static capability gap, so re-promotion would need its own liveness
-    // tracking for no user-visible gain; `/reload` re-probes instead.
+    // Demotion lasts until `/reload` probes subscription support again.
     const demoteColorSchemeSubscription = () => {
       isColorSchemeSubscriptionDemoted = true;
       hasUnreportedAppearanceChange = false;
@@ -303,16 +295,12 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
       colorSchemeSubscription?.removeColorSchemeListener();
       colorSchemeSubscription = undefined;
 
-      // Rebuilding from the polling list drops the subscription detector
-      // without matching on its rendered label.
       availableDetectors = availablePollingDetectors.map(
         (pollingDetector) => DETECTOR_LABELS[pollingDetector],
       );
       detectionStrategy = pollingStrategyLabel();
 
-      // Silence alone cannot distinguish a terminal that never emits reports
-      // from a notification channel that was switched off underneath us, so
-      // this states what was observed rather than naming a cause.
+      // Silence does not reveal whether the terminal or Pi stopped reports.
       warnings.push(
         "Terminal color-scheme notifications stopped arriving, so theme sync switched to polling.",
       );
@@ -330,10 +318,8 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
             }
 
             if (detectedAppearance !== "unknown") {
-              // Any report proves the channel is alive, including one that
-              // disagrees with what polling just saw. Requiring a specific
-              // value would demote a working subscription whenever appearance
-              // changed twice inside one interval.
+              // Any report proves the channel is alive, even when its value
+              // differs from the latest polling result.
               hasUnreportedAppearanceChange = false;
 
               currentAppearance = detectedAppearance;
@@ -349,16 +335,12 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
           colorSchemeSubscription = subscription;
           detectionStrategy = DETECTOR_LABELS[detector];
 
-          // Pi can disable shared notifications mid-session, and some hosts
-          // recognize mode 2031 without sending reports. Try the full polling
-          // chain so a working fallback can detect a missed change. This also
-          // restores the configured theme if the user changes Pi's theme
-          // manually.
+          // Polling catches missed reports and restores the configured theme
+          // after a manual Pi theme change.
           startRecurringCycle(
             async () => {
-              // A notification can land while a poll is already in flight, so a
-              // missed change counts only once it survives to the next cycle
-              // without any report arriving.
+              // Wait one full cycle before treating a polled change as an
+              // unreported change. A notification may arrive during the poll.
               if (
                 hasUnreportedAppearanceChange &&
                 !isColorSchemeSubscriptionDemoted
@@ -372,8 +354,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
                 availablePollingDetectors,
               );
 
-              // The await above yields, so the session may have been replaced
-              // before this continuation runs.
+              // The session may close while the polling request is pending.
               if (isShutDown) {
                 return;
               }
