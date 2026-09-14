@@ -26,21 +26,21 @@ occurs while detection is in flight never crashes Pi.
 #### Scenario: Buffered subscription notification arrives after session replacement
 
 - **WHEN** a color-scheme subscription callback is dispatched for a buffered
-  terminal color-scheme report after the extension's `session_shutdown`
-  cleanup has unsubscribed the listener
-- **THEN** the extension ignores the notification without accessing the
-  replaced `ctx`
+  terminal color-scheme report after the extension's `session_shutdown` cleanup
+  has unsubscribed the listener
+- **THEN** the extension ignores the notification without accessing the replaced
+  `ctx`
 
 #### Scenario: Drift-corrector fires after session replacement
 
 - **WHEN** the drift-corrector interval callback runs after the extension's
   `session_shutdown` cleanup has run
-- **THEN** the extension performs no theme comparison or application against
-  the replaced `ctx`
+- **THEN** the extension performs no theme comparison or application against the
+  replaced `ctx`
 
 #### Scenario: Theme application encounters a replaced context
 
 - **WHEN** theme application is reached with a session `ctx` that has already
   been replaced
-- **THEN** the extension does not propagate the resulting failure as an
-  uncaught exception and Pi continues running
+- **THEN** the extension does not propagate the resulting failure as an uncaught
+  exception and Pi continues running

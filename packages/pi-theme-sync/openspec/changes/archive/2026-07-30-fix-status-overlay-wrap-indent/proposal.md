@@ -2,10 +2,10 @@
 
 Long lines in the `/theme-sync` overlays wrap to column 0, so wrapped
 continuation text stops reading as part of the construct it belongs to: a
-bulleted warning loses its `  - ` alignment, and a long `Available Detectors:`
-row destroys the key/value column alignment of the whole status block. The
-v0.4.0 color-scheme compatibility warning is the first message long enough to
-hit this at the overlay's fixed 78-column width, and it is the extension's only
+bulleted warning loses its ` -` alignment, and a long `Available Detectors:` row
+destroys the key/value column alignment of the whole status block. The v0.4.0
+color-scheme compatibility warning is the first message long enough to hit this
+at the overlay's fixed 78-column width, and it is the extension's only
 compatibility signal, so shortening the text is not an acceptable fix.
 
 ## What Changes

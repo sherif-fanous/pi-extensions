@@ -28,19 +28,19 @@ occurs while detection is in flight never crashes Pi.
 - **WHEN** a DEC mode 2031 subscription callback is dispatched for buffered
   terminal input after the extension's `session_shutdown` cleanup has removed
   the listener
-- **THEN** the extension ignores the notification without accessing the
-  replaced `ctx`
+- **THEN** the extension ignores the notification without accessing the replaced
+  `ctx`
 
 #### Scenario: Drift-corrector fires after session replacement
 
 - **WHEN** the drift-corrector interval callback runs after the extension's
   `session_shutdown` cleanup has run
-- **THEN** the extension performs no theme comparison or application against
-  the replaced `ctx`
+- **THEN** the extension performs no theme comparison or application against the
+  replaced `ctx`
 
 #### Scenario: Theme application encounters a replaced context
 
 - **WHEN** theme application is reached with a session `ctx` that has already
   been replaced
-- **THEN** the extension does not propagate the resulting failure as an
-  uncaught exception and Pi continues running
+- **THEN** the extension does not propagate the resulting failure as an uncaught
+  exception and Pi continues running

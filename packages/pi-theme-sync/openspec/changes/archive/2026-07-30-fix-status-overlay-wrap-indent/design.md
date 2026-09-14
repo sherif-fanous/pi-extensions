@@ -3,8 +3,8 @@
 See `proposal.md` — Why. Relevant current state:
 
 - The `/theme-sync` overlay builds its body in `rebuild()` (`src/command.ts`)
-  from `pi-tui` components, then renders through
-  `ctx.ui.custom(...)` with `overlayOptions.width: 78`.
+  from `pi-tui` components, then renders through `ctx.ui.custom(...)` with
+  `overlayOptions.width: 78`.
 - `Text` is the only text component in use. Its `render(width)` calls
   `wrapTextWithAnsi(text, width - paddingX * 2)` and applies a uniform left
   margin of `paddingX`. It has no concept of a per-line hanging indent, so
@@ -33,8 +33,8 @@ See `proposal.md` — Why. Relevant current state:
 - Reworking the Status overlay into `buildListOverlay`.
 - Wrapping behavior for `SelectList` rows or the footer hint line.
 - Auditing or rewording warning text; the trailing-period inconsistency between
-  `AGENTS.md` and the strings in `src/config.ts` / `src/runtime.ts` is a separate
-  concern.
+  `AGENTS.md` and the strings in `src/config.ts` / `src/runtime.ts` is a
+  separate concern.
 
 ## Decisions
 
@@ -49,8 +49,8 @@ Alternatives considered:
 
 - **Pre-wrap strings in `rebuild()` and keep using `Text`.** Rejected: the
   builder has no width. It would need to hardcode `78 - padding`, duplicating
-  overlay geometry away from `overlayOptions` and producing wrong output whenever
-  the host clamps the overlay on a narrow terminal.
+  overlay geometry away from `overlayOptions` and producing wrong output
+  whenever the host clamps the overlay on a narrow terminal.
 - **Subclass or fork `Text`.** Rejected: its `render` already owns padding,
   caching, and background handling; a sibling component is smaller and does not
   depend on `Text` internals.
@@ -76,10 +76,10 @@ currently applied to the whole joined block before handing it to `Text`.
 
 `wrapTextWithAnsi` is ANSI-aware and would likely survive pre-styled input, but
 wrapping plain text keeps visible-width arithmetic for the indent trivially
-correct and does not depend on that tracker's behavior. Reuse
-`wrapTextWithAnsi` for the wrap itself rather than writing a word-break loop —
-it already handles over-long tokens and matches `Text`'s wrapping semantics, so
-the two components break lines identically.
+correct and does not depend on that tracker's behavior. Reuse `wrapTextWithAnsi`
+for the wrap itself rather than writing a word-break loop — it already handles
+over-long tokens and matches `Text`'s wrapping semantics, so the two components
+break lines identically.
 
 ### Decision 4: Scope includes both config message render sites
 

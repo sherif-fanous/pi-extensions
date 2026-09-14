@@ -2,7 +2,8 @@
 
 ### Requirement: Theme sync remains visually quiet during normal operation
 
-The extension SHALL not render persistent UI or command-driven diagnostics during normal operation in v1.
+The extension SHALL not render persistent UI or command-driven diagnostics
+during normal operation in v1.
 
 #### Scenario: No persistent UI is shown
 

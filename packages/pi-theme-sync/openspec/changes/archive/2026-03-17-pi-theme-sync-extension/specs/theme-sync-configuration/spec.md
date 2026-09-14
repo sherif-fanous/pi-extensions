@@ -2,21 +2,25 @@
 
 ### Requirement: Theme sync loads scoped configuration
 
-The extension SHALL load theme sync configuration from a supported global path and a supported project path.
+The extension SHALL load theme sync configuration from a supported global path
+and a supported project path.
 
 #### Scenario: Use global configuration when project configuration is absent
 
-- **WHEN** a supported global config file exists and no supported project config file exists
+- **WHEN** a supported global config file exists and no supported project config
+  file exists
 - **THEN** the extension uses the global configuration
 
 #### Scenario: Project-local configuration overrides global configuration
 
-- **WHEN** both a supported global config file and a supported project config file exist
+- **WHEN** both a supported global config file and a supported project config
+  file exist
 - **THEN** the extension uses the project configuration
 
 ### Requirement: Theme sync accepts theme mappings and polling settings
 
-The extension SHALL accept configuration for light and dark theme mappings and polling interval.
+The extension SHALL accept configuration for light and dark theme mappings and
+polling interval.
 
 #### Scenario: Read configured polling interval
 
@@ -25,7 +29,8 @@ The extension SHALL accept configuration for light and dark theme mappings and p
 
 ### Requirement: Theme sync validates configured theme mappings
 
-The extension SHALL validate configured light and dark theme mappings against the Pi themes available at runtime.
+The extension SHALL validate configured light and dark theme mappings against
+the Pi themes available at runtime.
 
 #### Scenario: Use configured mappings when themes exist
 
