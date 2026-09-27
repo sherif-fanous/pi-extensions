@@ -10,7 +10,6 @@
  */
 
 import { createNotificationEntry } from "./history.js";
-import { isInteractiveTui } from "./interactive.js";
 import {
   CUSTOM_ENTRY_TYPE,
   type NotificationConfig,
@@ -22,6 +21,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { isInteractiveTui } from "@sherif-fanous/pi-extensions-core";
 
 /** Minimal context surface the runtime mutates and reads. */
 export type CaptureContext = Pick<ExtensionContext, "mode"> & {

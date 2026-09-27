@@ -11,7 +11,15 @@ export {
   writeJsonFile,
 } from "./atomic-write.js";
 export { describeError } from "./errors.js";
+export {
+  guardCommand,
+  type GuardContext,
+  guardEvent,
+  subcommandCompletions,
+  type SubcommandCompletion,
+} from "./extension.js";
 export { isNotFoundError, isRecord } from "./guards.js";
+export { isInteractiveTui } from "./interactive.js";
 export { parseJsonObject, type ParseJsonObjectResult } from "./json.js";
 export { extensionConfigPath, projectConfigPath } from "./paths.js";
 export {

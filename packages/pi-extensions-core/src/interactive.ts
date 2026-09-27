@@ -1,6 +1,7 @@
 /**
  * Decides whether Pi is running its interactive terminal UI, which is the
- * condition for installing the notification wrapper and drawing overlays.
+ * condition for terminal-only work such as overlays, transcript entries
+ * meant to be read in the TUI, and terminal queries.
  */
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";

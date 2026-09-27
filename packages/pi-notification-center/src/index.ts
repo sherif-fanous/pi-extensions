@@ -8,7 +8,7 @@ import { CaptureRuntime } from "./capture.js";
 import { runNotificationsCommand } from "./commands/notifications.js";
 import { loadConfig, type LoadConfigResult } from "./config.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { describeError } from "@sherif-fanous/pi-extensions-core";
+import { guardCommand, guardEvent } from "@sherif-fanous/pi-extensions-core";
 
 /**
  * Register the notification center with the Pi host.
@@ -27,27 +27,19 @@ export default function notificationCenter(
   pi.registerCommand("notifications", {
     description:
       "Browse notifications captured in this session, newest first, with their local date, time, and severity.",
-    handler: async (_args, ctx) => {
-      // A command handler that throws surfaces as an extension error row,
-      // which is the transcript noise this package exists to avoid.
-      try {
-        await runNotificationsCommand(ctx);
-      } catch (err) {
-        ctx.ui.notify(
-          `The notification history could not be opened: ${describe(err)}`,
-          "error",
-        );
-      }
-    },
+    handler: guardCommand("Notification Center", (_args, ctx) =>
+      runNotificationsCommand(ctx),
+    ),
   });
 
-  pi.on("session_start", (_event, ctx) => {
-    // A reload fires `session_start` again, so drop the previous runtime
-    // before installing a new wrapper or its timers and overlay leak.
-    runtime?.dispose();
-    runtime = undefined;
+  pi.on(
+    "session_start",
+    guardEvent("Notification Center", "session_start", (_event, ctx) => {
+      // A reload fires `session_start` again, so drop the previous runtime
+      // before installing a new wrapper or its timers and overlay leak.
+      runtime?.dispose();
+      runtime = undefined;
 
-    try {
       const { config, warnings } = configLoader();
 
       runtime = CaptureRuntime.install(ctx, pi, config);
@@ -68,28 +60,11 @@ export default function notificationCenter(
       for (const warning of warnings) {
         warn(warning);
       }
-    } catch (err) {
-      ctx.ui.notify(
-        `The notification center failed to start: ${describe(err)}`,
-        "error",
-      );
-    }
-  });
+    }),
+  );
 
   pi.on("session_shutdown", () => {
     runtime?.dispose();
     runtime = undefined;
   });
-}
-
-/**
- * Describe an error as a sentence closing with exactly one full stop.
- *
- * Callers embed the result without adding a terminator of their own,
- * since a thrown message may already end in punctuation.
- */
-function describe(err: unknown): string {
-  const message = describeError(err);
-
-  return /[!.?]$/u.test(message) ? message : `${message}.`;
 }

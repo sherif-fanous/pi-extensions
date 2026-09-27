@@ -172,6 +172,69 @@ Remaining lines are unchanged. `createCommandReport` applies these rules; call
 Turns `[label, value]` pairs into lines of the form `  <label> <value>`, with
 every label padded to the longest one so the values line up.
 
+### `guardCommand(extensionName: string, handler): handler`
+
+Wraps a command handler. When the handler throws or rejects, the wrapper
+notifies `<extensionName> command failed: <message>` at error severity instead
+of letting Pi show its generic extension error row, and never rethrows.
+`<message>` is the `describeError` text with a full stop added unless it already
+ends in `.`, `!`, or `?`.
+
+### `guardEvent(extensionName: string, eventName: string, handler): handler`
+
+Wraps a `pi.on` handler. A successful handler's result, such as a
+`before_agent_start` system prompt, passes through unchanged. When the handler
+throws or rejects, the wrapper notifies
+`<extensionName> <eventName> failed: <message>` at error severity and resolves
+to `undefined`. Passed to `pi.on`, the wrapper takes its event, context, and
+result types from the matching overload.
+
+```ts
+import { guardCommand, guardEvent } from "@sherif-fanous/pi-extensions-core";
+
+export default function (pi: ExtensionAPI) {
+  pi.registerCommand("theme-sync", {
+    handler: guardCommand("Theme Sync", (args, ctx) =>
+      runThemeSyncCommand(args, ctx),
+    ),
+  });
+  pi.on(
+    "session_start",
+    guardEvent("Theme Sync", "session_start", (_event, ctx) =>
+      startMonitoring(ctx),
+    ),
+  );
+}
+```
+
+### `subcommandCompletions(subcommands: readonly SubcommandCompletion[])`
+
+Returns a `getArgumentCompletions` function for fixed subcommands, each
+`{ name, description? }`. Only the first word completes: after leading
+whitespace is ignored, a prefix containing a space returns `null`. Otherwise the
+function returns the subcommands whose names start with the prefix, labeled
+`<name>: <description>` or just `<name>`, or `null` when none match.
+
+```ts
+import { subcommandCompletions } from "@sherif-fanous/pi-extensions-core";
+
+pi.registerCommand("rtk", {
+  getArgumentCompletions: subcommandCompletions([
+    { name: "enable" },
+    { name: "disable" },
+    { name: "status", description: "show rtk status" },
+  ]),
+  handler,
+});
+```
+
+### `isInteractiveTui(ctx: Pick<ExtensionContext, "mode">): boolean`
+
+Returns `true` when Pi runs its interactive terminal UI (`ctx.mode` is `"tui"`)
+and `false` for `print`, `json`, and `rpc`. Use it to guard terminal-only work
+such as overlays and terminal queries; `ctx.hasUI` is also `true` under RPC,
+where TUI-backed methods are degraded or no-ops.
+
 ## License
 
 MIT

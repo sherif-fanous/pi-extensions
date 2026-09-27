@@ -3,6 +3,7 @@
  * in TUI mode and as a notification everywhere else.
  */
 
+import { isInteractiveTui } from "./interactive.js";
 import type {
   EntryRenderer,
   ExtensionAPI,
@@ -75,7 +76,7 @@ export function createCommandReport(entryType: string): CommandReportChannel {
 
   return {
     deliver: (ctx, pi, report) => {
-      if (ctx.mode === "tui") {
+      if (isInteractiveTui(ctx)) {
         pi.appendEntry(entryType, report);
 
         return;

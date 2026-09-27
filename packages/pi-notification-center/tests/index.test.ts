@@ -132,7 +132,7 @@ describe("notification-center lifecycle", () => {
     }).not.toThrow();
 
     expect(harness.notify).toHaveBeenCalledWith(
-      "The notification center failed to start: disk on fire.",
+      "Notification Center session_start failed: disk on fire.",
       "error",
     );
   });
@@ -147,7 +147,7 @@ describe("notification-center lifecycle", () => {
     harness.start();
 
     expect(harness.notify).toHaveBeenCalledWith(
-      "The notification center failed to start: Disk on fire.",
+      "Notification Center session_start failed: Disk on fire.",
       "error",
     );
   });

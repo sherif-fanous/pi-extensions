@@ -7,7 +7,6 @@
  */
 
 import { readNotificationHistory } from "../history.js";
-import { isInteractiveTui } from "../interactive.js";
 import type { NotificationEntry } from "../types.js";
 import { HISTORY_EMPTY_MESSAGE } from "../ui/history-format.js";
 import {
@@ -16,6 +15,7 @@ import {
   HistoryViewComponent,
 } from "../ui/history-view.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { isInteractiveTui } from "@sherif-fanous/pi-extensions-core";
 
 /** Command-context surface used to open the overlay. */
 export type NotificationsCommandContext = Pick<

@@ -21,3 +21,8 @@
   TUI mode and as a notification in other modes.
 - `styleReport`, which styles a report's heading, labels, and warnings.
 - `alignLabelRows`, which aligns `label value` rows on the longest label.
+- `guardCommand` and `guardEvent`, which turn a failing command or event handler
+  into an error notification with one wording across extensions.
+- `subcommandCompletions`, which completes a command's fixed subcommands on the
+  first word.
+- `isInteractiveTui`, which checks that Pi runs its interactive terminal UI.
