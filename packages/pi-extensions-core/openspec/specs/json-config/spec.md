@@ -3,8 +3,9 @@
 ## Purpose
 
 Give Pi extensions one way to read a JSON configuration document that must be an
-object and one way to save it, so every extension tells the same failures apart
-and never leaves a half-written configuration file behind.
+object, one wording for the warnings about a file they ignore, and one way to
+save it, so every extension tells the same failures apart and never leaves a
+half-written configuration file behind.
 
 ## Requirements
 
@@ -33,6 +34,47 @@ when the text parses to any other value.
 - **WHEN** `parseJsonObject` receives the text of a JSON array, `null`, or a
   string literal
 - **THEN** it returns `ok: false` with `reason` `"not-object"`
+
+### Requirement: Ignored configuration files are warned about in one wording
+
+The package SHALL export an `unreadableConfigWarning(path, error)` function that
+returns `Could not read configuration at <path>: <message>. Ignored the file.`
+and a `malformedConfigWarning(path, failure)` function that takes a failed
+`parseJsonObject` result and returns
+`Configuration at <path> is not valid JSON: <message>. Ignored the file.` for
+`reason` `"invalid-json"` and
+`Configuration at <path> must be a JSON object. Ignored the file.` for `reason`
+`"not-object"`. `<message>` SHALL be the `describeError` text of the error,
+followed by a full stop unless it already ends in `.`, `!`, or `?`, so the
+warning never contains two full stops in a row.
+
+#### Scenario: A file that could not be read
+
+- **WHEN** `unreadableConfigWarning` receives the path `/a/config.json` and an
+  `Error` with the message `EACCES: denied`
+- **THEN** it returns
+  `Could not read configuration at /a/config.json: EACCES: denied. Ignored the file.`
+
+#### Scenario: An error message that already ends a sentence
+
+- **WHEN** `unreadableConfigWarning` receives an `Error` whose message is
+  `Permission denied.`
+- **THEN** the warning contains `Permission denied. Ignored the file.` with
+  exactly one full stop after `denied`
+
+#### Scenario: A file that is not valid JSON
+
+- **WHEN** `malformedConfigWarning` receives the path `/a/config.json` and an
+  `invalid-json` failure whose error message is `Unexpected end of JSON input`
+- **THEN** it returns
+  `Configuration at /a/config.json is not valid JSON: Unexpected end of JSON input. Ignored the file.`
+
+#### Scenario: A file that is not a JSON object
+
+- **WHEN** `malformedConfigWarning` receives the path `/a/config.json` and a
+  `not-object` failure
+- **THEN** it returns
+  `Configuration at /a/config.json must be a JSON object. Ignored the file.`
 
 ### Requirement: JSON files are written in one format
 

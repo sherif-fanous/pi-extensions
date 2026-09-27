@@ -3,8 +3,9 @@
 ## Purpose
 
 Give Pi extension entry points one way to report command and event handler
-failures, complete fixed subcommands, and detect the interactive terminal UI, so
-every extension words its failures alike and none redefines the same wrappers.
+failures, show warnings, complete fixed subcommands, and detect the interactive
+terminal UI, so every extension words its failures and warnings alike and none
+redefines the same wrappers.
 
 ## Requirements
 
@@ -71,6 +72,41 @@ replaced the session, the returned handler SHALL still resolve.
 
 - **WHEN** a guarded handler fails and the context's `notify` throws
 - **THEN** the returned handler resolves instead of rejecting
+
+### Requirement: Warnings from one operation form one notification
+
+The package SHALL export a `notifyWarnings(ctx, extensionName, warnings)`
+function. When `warnings` is empty, it SHALL NOT notify. Otherwise it SHALL
+notify exactly once, at `warning` severity, with the text
+`<extensionName>: <n> warning` when `<n>` is 1 and
+`<extensionName>: <n> warnings` otherwise, followed by one line `- <warning>`
+per warning in the order given. Like the guards, it SHALL notify on a
+best-effort basis: when the context's `notify` throws, `notifyWarnings` SHALL
+return without throwing.
+
+#### Scenario: No warnings
+
+- **WHEN** `notifyWarnings` receives an empty list
+- **THEN** it does not notify
+
+#### Scenario: One warning
+
+- **WHEN** `notifyWarnings` receives the extension name `Theme Sync` and the
+  single warning `Configuration is not valid JSON.`
+- **THEN** it notifies `Theme Sync: 1 warning` and
+  `- Configuration is not valid JSON.` on separate lines at `warning` severity
+
+#### Scenario: Several warnings
+
+- **WHEN** `notifyWarnings` receives three warnings
+- **THEN** it notifies once, under the heading `<extensionName>: 3 warnings`,
+  with one `- <warning>` line per warning in the order given
+
+#### Scenario: A stale context
+
+- **WHEN** `notifyWarnings` receives at least one warning and the context's
+  `notify` throws
+- **THEN** `notifyWarnings` returns without throwing
 
 ### Requirement: Fixed subcommands complete on the first word
 

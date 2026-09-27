@@ -59,15 +59,47 @@ primitive, so callers can word a warning for each.
 
 ```ts
 import {
-  describeError,
+  malformedConfigWarning,
   parseJsonObject,
 } from "@sherif-fanous/pi-extensions-core";
 
 const parsed = parseJsonObject(text);
-if (!parsed.ok) {
-  return parsed.reason === "invalid-json"
-    ? `${path} contains invalid JSON: ${describeError(parsed.error)}.`
-    : `${path} must contain a JSON object.`;
+if (!parsed.ok) return { warnings: [malformedConfigWarning(path, parsed)] };
+```
+
+### `unreadableConfigWarning(path: string, error: unknown): string`
+
+### `malformedConfigWarning(path: string, failure): string`
+
+Return the standard warnings for a configuration file an extension ignores.
+`unreadableConfigWarning` covers a file that exists but could not be read (treat
+a missing file as absent, not as a warning):
+
+```text
+Could not read configuration at <path>: <message>. Ignored the file.
+```
+
+`malformedConfigWarning` takes a failed `parseJsonObject` result:
+
+```text
+Configuration at <path> is not valid JSON: <message>. Ignored the file.
+Configuration at <path> must be a JSON object. Ignored the file.
+```
+
+`<message>` is the `describeError` text followed by a full stop, unless it
+already ends in `.`, `!`, or `?`, so the warning never shows `..`.
+
+```ts
+import {
+  isNotFoundError,
+  unreadableConfigWarning,
+} from "@sherif-fanous/pi-extensions-core";
+
+try {
+  text = await readFile(path, "utf8");
+} catch (error) {
+  if (isNotFoundError(error)) return { warnings: [] };
+  return { warnings: [unreadableConfigWarning(path, error)] };
 }
 ```
 
@@ -205,6 +237,27 @@ export default function (pi: ExtensionAPI) {
     ),
   );
 }
+```
+
+### `notifyWarnings(ctx: GuardContext, extensionName: string, warnings: readonly string[]): void`
+
+Shows every warning one operation produced as one warning notification, headed
+`<extensionName>: <n> warning` (or `warnings`) with one `- <warning>` line per
+warning in order. An empty list shows nothing. Like the guards, it is best
+effort: a `notify` that throws on a stale context is ignored.
+
+Word each warning as a sentence that does not name the extension, since the
+heading already does: first what is wrong and where, then, optionally, what
+happens instead, such as `Ignored the file.` or `Skipped it.`
+
+```ts
+import { notifyWarnings } from "@sherif-fanous/pi-extensions-core";
+
+const { config, warnings } = loadConfig();
+
+notifyWarnings(ctx, "Notification Center", warnings);
+// Notification Center: 1 warning
+// - Configuration at /agent/notification-center/config.json must be a JSON object. Ignored the file.
 ```
 
 ### `subcommandCompletions(subcommands: readonly SubcommandCompletion[])`

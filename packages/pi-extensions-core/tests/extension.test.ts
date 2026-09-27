@@ -1,10 +1,12 @@
 /**
  * Covers extension scaffolding: the command and event guards' error text
- * and pass-through, and first-word subcommand completions.
+ * and pass-through, warning notifications, and first-word subcommand
+ * completions.
  */
 import {
   guardCommand,
   guardEvent,
+  notifyWarnings,
   subcommandCompletions,
   type GuardContext,
 } from "../src/index.js";
@@ -109,6 +111,50 @@ describe("guardEvent", () => {
       "Presets Plus before_agent_start failed: Disk full!",
       "error",
     );
+  });
+});
+
+describe("notifyWarnings", () => {
+  it("does not notify when there are no warnings", () => {
+    const { ctx, notify } = notifyingContext();
+
+    notifyWarnings(ctx, "Theme Sync", []);
+
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("notifies one warning under a singular heading", () => {
+    const { ctx, notify } = notifyingContext();
+
+    notifyWarnings(ctx, "Theme Sync", ["Configuration is not valid JSON."]);
+
+    expect(notify).toHaveBeenCalledExactlyOnceWith(
+      "Theme Sync: 1 warning\n- Configuration is not valid JSON.",
+      "warning",
+    );
+  });
+
+  it("notifies several warnings once, under a plural heading, in order", () => {
+    const { ctx, notify } = notifyingContext();
+
+    notifyWarnings(ctx, "Presets Plus", ["First.", "Second.", "Third."]);
+
+    expect(notify).toHaveBeenCalledExactlyOnceWith(
+      "Presets Plus: 3 warnings\n- First.\n- Second.\n- Third.",
+      "warning",
+    );
+  });
+
+  it("does not throw when notify itself throws", () => {
+    const ctx: GuardContext = {
+      ui: {
+        notify: () => {
+          throw new Error("stale context");
+        },
+      },
+    };
+
+    expect(() => notifyWarnings(ctx, "RTK", ["Broken."])).not.toThrow();
   });
 });
 

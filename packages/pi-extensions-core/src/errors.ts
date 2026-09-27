@@ -12,3 +12,13 @@
 export function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+/**
+ * Describe a thrown value as the end of a sentence, adding a full stop
+ * unless the message already ends in `.`, `!`, or `?`.
+ */
+export function describeErrorSentence(error: unknown): string {
+  const message = describeError(error);
+
+  return /[!.?]$/u.test(message) ? message : `${message}.`;
+}

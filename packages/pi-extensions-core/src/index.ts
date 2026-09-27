@@ -10,11 +10,16 @@ export {
   type AtomicWriteFs,
   writeJsonFile,
 } from "./atomic-write.js";
+export {
+  malformedConfigWarning,
+  unreadableConfigWarning,
+} from "./config-warnings.js";
 export { describeError } from "./errors.js";
 export {
   guardCommand,
   type GuardContext,
   guardEvent,
+  notifyWarnings,
   subcommandCompletions,
   type SubcommandCompletion,
 } from "./extension.js";

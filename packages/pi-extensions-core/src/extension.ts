@@ -1,13 +1,17 @@
 /**
  * Scaffolding for extension entry points: error guards for command and
- * event handlers, and argument completion for fixed subcommands.
+ * event handlers, warning notifications, and argument completion for
+ * fixed subcommands.
  */
 
-import { describeError } from "./errors.js";
+import { describeErrorSentence } from "./errors.js";
 import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
-/** The part of a handler's context the guards use to report a failure. */
+/**
+ * The part of a handler's context the guards use to report a failure and
+ * {@link notifyWarnings} uses to show warnings.
+ */
 export interface GuardContext {
   readonly ui: Pick<ExtensionUIContext, "notify">;
 }
@@ -73,6 +77,34 @@ export function guardEvent<E, R, C extends GuardContext>(
 }
 
 /**
+ * Show every warning one operation produced as one warning notification.
+ *
+ * Does nothing when `warnings` is empty. Otherwise notifies
+ * `<extensionName>: <n> warning(s)` followed by one `- <warning>` line per
+ * warning, in order, at warning severity. Like the guards, the
+ * notification is best effort: a `notify` that throws on a stale context
+ * is ignored.
+ */
+export function notifyWarnings(
+  ctx: GuardContext,
+  extensionName: string,
+  warnings: readonly string[],
+): void {
+  const count = warnings.length;
+
+  if (count === 0) return;
+
+  try {
+    ctx.ui.notify(
+      `${extensionName}: ${String(count)} warning${count === 1 ? "" : "s"}\n- ${warnings.join("\n- ")}`,
+      "warning",
+    );
+  } catch {
+    // No usable UI is left to report through.
+  }
+}
+
+/**
  * Build a `getArgumentCompletions` function for fixed subcommands.
  *
  * Only the first word completes: once the argument, ignoring leading
@@ -100,16 +132,6 @@ export function subcommandCompletions(
 }
 
 /**
- * Describe a thrown value as the end of a sentence, adding a full stop
- * unless the message already ends in `.`, `!`, or `?`.
- */
-function describeFailure(error: unknown): string {
-  const message = describeError(error);
-
-  return /[!.?]$/u.test(message) ? message : `${message}.`;
-}
-
-/**
  * Notify `<prefix>: <message>` at error severity.
  *
  * The notification is best effort: a handler can fail after Pi has
@@ -122,7 +144,7 @@ function reportFailure(
   error: unknown,
 ): void {
   try {
-    ctx.ui.notify(`${prefix}: ${describeFailure(error)}`, "error");
+    ctx.ui.notify(`${prefix}: ${describeErrorSentence(error)}`, "error");
   } catch {
     // No usable UI is left to report through.
   }
