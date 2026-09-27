@@ -314,6 +314,9 @@ importers:
       '@ianvs/prettier-plugin-sort-imports':
         specifier: ^4.7.1
         version: 4.7.1(prettier@3.9.9)
+      '@sherif-fanous/pi-extensions-testing':
+        specifier: workspace:*
+        version: link:../pi-extensions-testing
       '@stylistic/eslint-plugin':
         specifier: ^5.10.0
         version: 5.10.0(eslint@10.11.0(jiti@2.7.0))
@@ -3747,7 +3750,7 @@ snapshots:
     optionalDependencies:
       vite: 8.3.1(@types/node@25.9.8)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)
 
-  '@vitest/mocker@5.0.2(vite@8.3.1(jiti@2.7.0))':
+  '@vitest/mocker@5.0.2(vite@8.3.1(@types/node@25.9.8)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@vitest/spy': 5.0.2
@@ -4708,7 +4711,7 @@ snapshots:
   vitest@5.0.2(@opentelemetry/api@1.9.0)(@types/node@25.9.8)(vite@8.3.1(@types/node@25.9.8)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.2(vite@8.3.1(jiti@2.7.0))
+      '@vitest/mocker': 5.0.2(vite@8.3.1(@types/node@25.9.8)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
       chai: 6.2.2
       es-module-lexer: 2.3.2
       expect-type: 1.4.0

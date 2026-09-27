@@ -5,6 +5,7 @@ import type { ThemeSyncRuntime } from "../src/runtime.js";
 import type { RuntimeStatus } from "../src/types.js";
 import { STATUS_REPORT_ENTRY_TYPE } from "../src/ui/status-report.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, expect, test, vi } from "vitest";
 
 const status: RuntimeStatus = {
@@ -103,10 +104,7 @@ function commandContext(
       custom,
       getAllThemes: () => [],
       notify,
-      theme: {
-        bold: (text: string) => text,
-        fg: (_color: string, text: string) => text,
-      },
+      theme: createPlainTheme(),
     },
   } as unknown as ExtensionCommandContext;
 }

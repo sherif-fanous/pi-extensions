@@ -9,13 +9,12 @@ import type {
   TerminalInputHandler,
 } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
+import {
+  createDeferred,
+  flushPromises,
+  type Deferred,
+} from "@sherif-fanous/pi-extensions-testing";
 import { assert, test } from "vitest";
-
-type Deferred<T> = {
-  promise: Promise<T>;
-  reject: (reason: Error) => void;
-  resolve: (value: T) => void;
-};
 
 type RuntimeHarness = {
   appliedThemes: string[];
@@ -26,17 +25,6 @@ type RuntimeHarness = {
   notifications: boolean[];
   reportAppearance: (appearance: Appearance) => void;
 };
-
-function createDeferred<T>(): Deferred<T> {
-  let rejectPromise: (reason: Error) => void = () => {};
-  let resolvePromise: (value: T) => void = () => {};
-  const promise = new Promise<T>((resolve, reject) => {
-    rejectPromise = reject;
-    resolvePromise = resolve;
-  });
-
-  return { promise, reject: rejectPromise, resolve: resolvePromise };
-}
 
 async function createRuntimeHarness(
   mode: "polling" | "subscription",
@@ -131,11 +119,6 @@ async function createRuntimeHarness(
     notifications,
     reportAppearance: (appearance) => onAppearanceDetected?.(appearance),
   };
-}
-
-async function flushPromises(): Promise<void> {
-  await new Promise<void>((resolve) => setImmediate(resolve));
-  await new Promise<void>((resolve) => setImmediate(resolve));
 }
 
 for (const mode of ["polling", "subscription"] as const) {

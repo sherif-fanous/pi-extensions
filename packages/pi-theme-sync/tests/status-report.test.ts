@@ -7,6 +7,7 @@ import {
   styleStatusReport,
 } from "../src/ui/status-report.js";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { expect, test, vi } from "vitest";
 
 const status: RuntimeStatus = {
@@ -121,10 +122,7 @@ test.each(["rpc", "json", "print"] as const)(
       mode,
       ui: {
         notify,
-        theme: {
-          bold: (text: string) => text,
-          fg: (_color: string, text: string) => text,
-        },
+        theme: createPlainTheme(),
       },
     } as unknown as ExtensionContext;
 

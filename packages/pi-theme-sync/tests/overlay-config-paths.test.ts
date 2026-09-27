@@ -2,9 +2,11 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import {
+  createFakeCustom,
+  type CustomComponent,
+} from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, expect, test, vi } from "vitest";
-
-type OverlayFactory = Parameters<ExtensionCommandContext["ui"]["custom"]>[0];
 
 const projectDirectory = "/unused-overlay-project";
 const agentDirectory = "/unused-custom-agent";
@@ -159,7 +161,7 @@ test("reports path resolution errors and permits retry without losing edits", as
 
 async function withOverlay(
   files: Set<string>,
-  exercise: (overlay: Awaited<ReturnType<OverlayFactory>>) => Promise<void>,
+  exercise: (overlay: CustomComponent) => Promise<void>,
 ): Promise<void> {
   vi.stubEnv("PI_CODING_AGENT_DIR", agentDirectory);
   vi.resetModules();
@@ -175,23 +177,15 @@ async function withOverlay(
 
   const { openThemeSyncOverlay } = await import("../src/command.js");
   const { createThemeSyncRuntime } = await import("../src/runtime.js");
-  const custom = async (factory: OverlayFactory) => {
-    const overlay = await factory(
-      { requestRender: vi.fn() } as unknown as Parameters<OverlayFactory>[0],
-      {
-        bold: (text: string) => text,
-        fg: (_color: string, text: string) => text,
-      } as unknown as Parameters<OverlayFactory>[1],
-      {} as Parameters<OverlayFactory>[2],
-      vi.fn(),
-    );
-
-    try {
-      await exercise(overlay);
-    } finally {
-      overlay.dispose?.();
-    }
-  };
+  const custom = createFakeCustom({
+    onMount: async (overlay, done) => {
+      try {
+        await exercise(overlay);
+      } finally {
+        done(undefined);
+      }
+    },
+  });
   const reload = vi.fn();
   const ctx = {
     cwd: projectDirectory,

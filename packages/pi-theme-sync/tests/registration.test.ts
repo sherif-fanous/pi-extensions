@@ -1,6 +1,7 @@
 import registerThemeSync from "../src/index.js";
 import { STATUS_REPORT_ENTRY_TYPE } from "../src/ui/status-report.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { expect, test, vi } from "vitest";
 
 test("registers the status entry renderer and revised command description", () => {
@@ -68,11 +69,7 @@ test("reports status delivery failures through the command lifecycle guard", asy
     mode: "tui",
     ui: {
       notify,
-      theme: {
-        bold: (text: string) => text,
-        fg: (_color: string, text: string) => text,
-        name: "dark",
-      },
+      theme: { ...createPlainTheme(), name: "dark" },
     },
   } as unknown as ExtensionCommandContext;
 

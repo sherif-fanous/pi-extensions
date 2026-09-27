@@ -4,9 +4,12 @@ import { openThemeSyncOverlay } from "../src/command.js";
 import { writeConfigChanges } from "../src/config.js";
 import { createThemeSyncRuntime } from "../src/runtime.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import {
+  createDeferred,
+  createFakeCustom,
+} from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, expect, test, vi } from "vitest";
 
-type OverlayFactory = Parameters<ExtensionCommandContext["ui"]["custom"]>[0];
 type SaveResult = Awaited<ReturnType<typeof writeConfigChanges>>;
 
 vi.mock("../src/config.js", async (importOriginal) => ({
@@ -96,32 +99,16 @@ async function startOverlay() {
   );
 
   let acceptInput: (data: string) => void = () => {};
-  let close = () => {};
-  let markReady = () => {};
-  const ready = new Promise<void>((resolve) => {
-    markReady = resolve;
-  });
-  const customClosed = new Promise<void>((resolve) => {
-    close = resolve;
-  });
-  const done = vi.fn(() => close());
+  const ready = createDeferred();
+  const done = vi.fn();
   const reload = vi.fn();
-  const custom = async (factory: OverlayFactory) => {
-    const overlay = await factory(
-      { requestRender: vi.fn() } as unknown as Parameters<OverlayFactory>[0],
-      {
-        bold: (text: string) => text,
-        fg: (_color: string, text: string) => text,
-      } as unknown as Parameters<OverlayFactory>[1],
-      {} as Parameters<OverlayFactory>[2],
-      done,
-    );
-
-    acceptInput = (data) => overlay.handleInput?.(data);
-    markReady();
-    await customClosed;
-    overlay.dispose?.();
-  };
+  const custom = createFakeCustom({
+    onDone: done,
+    onMount: (overlay) => {
+      acceptInput = (data) => overlay.handleInput?.(data);
+      ready.resolve();
+    },
+  });
   const ctx = {
     cwd: "/unused-overlay-save-test",
     hasUI: true,
@@ -135,7 +122,7 @@ async function startOverlay() {
   } as unknown as ExtensionCommandContext;
   const closed = openThemeSyncOverlay(createThemeSyncRuntime(), ctx);
 
-  await ready;
+  await ready.promise;
 
   return {
     closed,
