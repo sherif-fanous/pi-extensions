@@ -14,6 +14,7 @@ import type {
   ExtensionCommandContext,
   Theme,
 } from "@earendil-works/pi-coding-agent";
+import { isInteractiveTui } from "@sherif-fanous/pi-extensions-core";
 
 /** Text and severity to display for one `show-prompt` invocation. */
 export interface ShowPromptNotification {
@@ -115,7 +116,7 @@ export async function runShowPrompt(
 
   // Neither branch appends to the transcript. Inspecting a prompt must not
   // copy the preset instructions into the session.
-  if (ctx.mode !== "tui" || typeof ctx.ui.custom !== "function") {
+  if (!isInteractiveTui(ctx) || typeof ctx.ui.custom !== "function") {
     ctx.ui.notify(notification.body, notification.severity);
 
     return;

@@ -19,11 +19,15 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
+import { subcommandCompletions } from "@sherif-fanous/pi-extensions-core";
 
-/** One `/presets` subcommand: the token, its completion label, and its runner. */
+/**
+ * One `/presets` subcommand: the token, the description its completion
+ * label shows, and its runner.
+ */
 interface Subcommand {
-  readonly value: string;
-  readonly label: string;
+  readonly description: string;
+  readonly name: string;
   run(
     ctx: ExtensionCommandContext,
     args: readonly string[],
@@ -36,31 +40,34 @@ interface Subcommand {
 /** Every subcommand, read by both autocomplete and dispatch. */
 const SUBCOMMANDS: readonly Subcommand[] = [
   {
-    value: "reload",
-    label: "reload: re-read both scope files",
+    name: "reload",
+    description: "re-read both scope files",
     run: runReloadWrapper,
   },
   {
-    value: "clear",
-    label: "clear: clear the active preset",
+    name: "clear",
+    description: "clear the active preset",
     run: runClearWrapper,
   },
   {
-    value: "status",
-    label: "status: show active preset details",
+    name: "status",
+    description: "show active preset details",
     run: runStatusWrapper,
   },
   {
-    value: "policy",
-    label: "policy: show access policy for this directory",
+    name: "policy",
+    description: "show access policy for this directory",
     run: runPolicyWrapper,
   },
   {
-    value: "show-prompt",
-    label: "show-prompt: show the active preset's prompt (or [name])",
+    name: "show-prompt",
+    description: "show the active preset's prompt (or [name])",
     run: runShowPrompt,
   },
 ] as const;
+
+/** Completes the first word of the argument with a subcommand name. */
+const completeSubcommand = subcommandCompletions(SUBCOMMANDS);
 
 /**
  * Complete the argument after `/presets`: preset names once the user has
@@ -82,11 +89,7 @@ export async function getArgumentCompletions(
       .map((name) => ({ label: name, value: name }));
   }
 
-  if (trimmedPrefix.includes(" ")) return [];
-
-  return SUBCOMMANDS.filter((subcommand) =>
-    subcommand.value.startsWith(trimmedPrefix),
-  ).map(({ value, label }) => ({ value, label }));
+  return completeSubcommand(prefix) ?? [];
 }
 
 /**
@@ -122,7 +125,7 @@ export async function handlePresetsCommand(
   }
 
   const target = SUBCOMMANDS.find(
-    (subcommand) => subcommand.value === subCommand,
+    (subcommand) => subcommand.name === subCommand,
   );
 
   if (target) {
@@ -169,7 +172,7 @@ async function activateNamedPreset(
 function formatSupportedCommandHint(): string {
   const commands = [
     "/presets",
-    ...SUBCOMMANDS.map((subcommand) => `/presets ${subcommand.value}`),
+    ...SUBCOMMANDS.map((subcommand) => `/presets ${subcommand.name}`),
   ];
 
   if (commands.length <= 1) return commands[0] ?? "/presets";

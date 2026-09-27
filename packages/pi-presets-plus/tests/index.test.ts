@@ -40,6 +40,7 @@ const { maybeApplyPolicyDefault: realMaybeApplyPolicyDefault } =
     "../src/activation/policy-default.js",
   );
 
+type CommandHandler = (args: string, ctx: ExtensionContext) => Promise<void>;
 type Handler = (event: unknown, ctx: ExtensionContext) => Promise<unknown>;
 
 let agentDir: string;
@@ -71,6 +72,7 @@ function makeContext(
 }
 
 function makePi(): {
+  commands: Map<string, CommandHandler>;
   handlers: Map<string, Handler>;
   pi: ExtensionAPI;
   spies: {
@@ -82,6 +84,7 @@ function makePi(): {
     setThinkingLevel: ReturnType<typeof vi.fn>;
   };
 } {
+  const commands = new Map<string, CommandHandler>();
   const handlers = new Map<string, Handler>();
   const spies = {
     appendEntry: vi.fn(),
@@ -100,7 +103,11 @@ function makePi(): {
     on: vi.fn((event: string, handler: Handler) => {
       handlers.set(event, handler);
     }),
-    registerCommand: vi.fn(),
+    registerCommand: vi.fn(
+      (name: string, options: { handler: CommandHandler }) => {
+        commands.set(name, options.handler);
+      },
+    ),
     registerEntryRenderer: vi.fn(),
     registerFlag: vi.fn(),
     registerShortcut: spies.registerShortcut,
@@ -109,7 +116,7 @@ function makePi(): {
     setThinkingLevel: spies.setThinkingLevel,
   } as unknown as ExtensionAPI;
 
-  return { handlers, pi, spies };
+  return { commands, handlers, pi, spies };
 }
 
 async function writeConfig(contents: string): Promise<void> {
@@ -155,6 +162,23 @@ afterEach(async () => {
   }
 
   await rm(agentDir, { force: true, recursive: true });
+});
+
+describe("/presets command", () => {
+  it("reports a failing subcommand as an error notification", async () => {
+    loadAllMock.mockRejectedValue(new Error("disk on fire"));
+
+    const { commands, pi } = makePi();
+    const { ctx, notify } = makeContext({});
+
+    presetsPlus(pi);
+    await commands.get("presets")?.("reload", ctx);
+
+    expect(notify).toHaveBeenCalledWith(
+      "Presets Plus command failed: disk on fire.",
+      "error",
+    );
+  });
 });
 
 describe("session_start configuration", () => {

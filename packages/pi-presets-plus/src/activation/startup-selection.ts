@@ -10,6 +10,7 @@ import {
   SettingsManager,
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { isInteractiveTui } from "@sherif-fanous/pi-extensions-core";
 
 const PI_STARTUP_THINKING_FALLBACK: ThinkingLevel = "medium";
 
@@ -67,7 +68,7 @@ export function isAutomaticDefaultEligible(
   ) => FileBackedDefaults | undefined = readFileBackedDefaults,
 ): boolean {
   return (
-    ctx.mode === "tui" &&
+    isInteractiveTui(ctx) &&
     startupSelectionMatchesDefaults(startup, ctx, readDefaults)
   );
 }
