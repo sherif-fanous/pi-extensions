@@ -8,7 +8,6 @@
  */
 
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
 import {
   CONFIG_RANGES,
@@ -18,7 +17,12 @@ import {
   type ToastConfig,
 } from "./types.js";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { isNotFoundError, isRecord } from "@sherif-fanous/pi-extensions-core";
+import {
+  extensionConfigPath,
+  isNotFoundError,
+  isRecord,
+  parseJsonObject,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** File-reading seam so tests do not need a real agent directory. */
 export interface ConfigFs {
@@ -47,7 +51,11 @@ export function loadConfig(
   agentDir: string = getAgentDir(),
   fs: ConfigFs = DEFAULT_CONFIG_FS,
 ): LoadConfigResult {
-  const configFilePath = join(agentDir, "notification-center", "config.json");
+  const configFilePath = extensionConfigPath({
+    extension: "notification-center",
+    file: "config.json",
+    agentDir,
+  });
 
   let contents: string;
 
@@ -66,29 +74,20 @@ export function loadConfig(
     };
   }
 
-  let parsed: unknown;
+  const parsed = parseJsonObject(contents);
 
-  try {
-    parsed = JSON.parse(contents);
-  } catch {
+  if (!parsed.ok) {
     return {
       config: defaults(),
       warnings: [
-        `Notification-center configuration at ${configFilePath} is not valid JSON. The extension is using default settings.`,
+        parsed.reason === "invalid-json"
+          ? `Notification-center configuration at ${configFilePath} is not valid JSON. The extension is using default settings.`
+          : `Notification-center configuration at ${configFilePath} must be a JSON object. The extension is using default settings.`,
       ],
     };
   }
 
-  if (!isRecord(parsed)) {
-    return {
-      config: defaults(),
-      warnings: [
-        `Notification-center configuration at ${configFilePath} must be a JSON object. The extension is using default settings.`,
-      ],
-    };
-  }
-
-  const record = parsed;
+  const record = parsed.value;
   const config = defaults();
   const warnings: string[] = [];
   const nested = record.toast;
