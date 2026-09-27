@@ -8,7 +8,11 @@ import { CaptureRuntime } from "./capture.js";
 import { runNotificationsCommand } from "./commands/notifications.js";
 import { loadConfig, type LoadConfigResult } from "./config.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { guardCommand, guardEvent } from "@sherif-fanous/pi-extensions-core";
+import {
+  guardCommand,
+  guardEvent,
+  notifyWarnings,
+} from "@sherif-fanous/pi-extensions-core";
 
 /**
  * Register the notification center with the Pi host.
@@ -49,17 +53,17 @@ export default function notificationCenter(
       // runtime, and the untouched notify is the only way to reach the
       // user.
       const capture = runtime;
-      const warn = capture
-        ? (message: string) => {
-            capture.warn(message);
+      const warningContext = capture
+        ? {
+            ui: {
+              notify: (message: string) => {
+                capture.warn(message);
+              },
+            },
           }
-        : (message: string) => {
-            ctx.ui.notify(message, "warning");
-          };
+        : ctx;
 
-      for (const warning of warnings) {
-        warn(warning);
-      }
+      notifyWarnings(warningContext, "Notification Center", warnings);
     }),
   );
 

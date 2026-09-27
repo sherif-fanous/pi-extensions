@@ -44,13 +44,30 @@ describe("notification-center lifecycle", () => {
     expect(harness.appended).toHaveLength(1);
     expect(harness.appended[0]?.customType).toBe(CUSTOM_ENTRY_TYPE);
     expect(harness.appended[0]?.data).toMatchObject({
-      message: "configuration is not valid JSON",
+      message:
+        "Notification Center: 1 warning\n- configuration is not valid JSON",
       severity: "warning",
     });
 
     // The warning travels the capture path, so it never reaches the
     // untouched transcript notify.
     expect(harness.notify).not.toHaveBeenCalled();
+  });
+
+  it("records several configuration warnings as one warning entry", () => {
+    const harness = setup({
+      config: DEFAULT_CONFIG,
+      warnings: ["first rejected value", "second rejected value"],
+    });
+
+    harness.start();
+
+    expect(harness.appended).toHaveLength(1);
+    expect(harness.appended[0]?.data).toMatchObject({
+      message:
+        "Notification Center: 2 warnings\n- first rejected value\n- second rejected value",
+      severity: "warning",
+    });
   });
 
   it("does not duplicate the warning across reloads", () => {
@@ -78,7 +95,10 @@ describe("notification-center lifecycle", () => {
     harness.start();
 
     expect(harness.appended).toEqual([]);
-    expect(harness.notify).toHaveBeenCalledWith("bad config", "warning");
+    expect(harness.notify).toHaveBeenCalledWith(
+      "Notification Center: 1 warning\n- bad config",
+      "warning",
+    );
   });
 
   it("replaces the previous runtime on reload without leaking timers", async () => {

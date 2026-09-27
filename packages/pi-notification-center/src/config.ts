@@ -21,7 +21,9 @@ import {
   extensionConfigPath,
   isNotFoundError,
   isRecord,
+  malformedConfigWarning,
   parseJsonObject,
+  unreadableConfigWarning,
 } from "@sherif-fanous/pi-extensions-core";
 
 /** File-reading seam so tests do not need a real agent directory. */
@@ -68,9 +70,7 @@ export function loadConfig(
 
     return {
       config: defaults(),
-      warnings: [
-        `Notification-center configuration at ${configFilePath} could not be read. The extension is using default settings.`,
-      ],
+      warnings: [unreadableConfigWarning(configFilePath, err)],
     };
   }
 
@@ -79,11 +79,7 @@ export function loadConfig(
   if (!parsed.ok) {
     return {
       config: defaults(),
-      warnings: [
-        parsed.reason === "invalid-json"
-          ? `Notification-center configuration at ${configFilePath} is not valid JSON. The extension is using default settings.`
-          : `Notification-center configuration at ${configFilePath} must be a JSON object. The extension is using default settings.`,
-      ],
+      warnings: [malformedConfigWarning(configFilePath, parsed)],
     };
   }
 
@@ -94,7 +90,7 @@ export function loadConfig(
 
   if (nested !== undefined && !isRecord(nested)) {
     warnings.push(
-      `Notification-center setting "toast" must be a JSON object. The extension is using default toast settings.`,
+      `Setting "toast" must be a JSON object, not ${JSON.stringify(nested)}. Using default toast settings.`,
     );
   }
 
@@ -122,7 +118,7 @@ export function loadConfig(
           : DEFAULT_CONFIG.toast[leaf];
 
       warnings.push(
-        `Notification-center setting "${path}" must be an integer from ${String(range.min)} through ${String(range.max)}. The extension is using the default value ${String(fallback)}.`,
+        `Setting "${path}" must be an integer from ${String(range.min)} through ${String(range.max)}, not ${JSON.stringify(raw)}. Using the default value ${String(fallback)}.`,
       );
 
       continue;

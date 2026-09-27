@@ -169,7 +169,8 @@ card may be drawn rather than a fixed size. Defaults SHALL be 5 visible toasts,
 - **WHEN** configuration cannot be parsed, the `toast` section is not an object,
   or a supported value is outside its documented valid range
 - **THEN** the extension uses the default for each invalid value, remains
-  operational, and records one warning describing the rejected configuration
+  operational, and records one warning notification, headed
+  `Notification Center: <n> warning(s)`, that lists every rejected value
 
 ### Requirement: Toasts expire independently
 

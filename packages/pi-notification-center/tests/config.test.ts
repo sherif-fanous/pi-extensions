@@ -87,9 +87,11 @@ describe("loadConfig", () => {
       maxToastsVisible: DEFAULT_CONFIG.maxToastsVisible,
       toast: { ...DEFAULT_CONFIG.toast, timeout: 5000 },
     });
-    expect(result.warnings).toHaveLength(2);
-    expect(result.warnings.join(" ")).toContain("maxToastsVisible");
-    expect(result.warnings.join(" ")).toContain("toast.width");
+
+    expect(result.warnings).toEqual([
+      'Setting "maxToastsVisible" must be an integer from 1 through 10, not 99. Using the default value 5.',
+      'Setting "toast.width" must be an integer from 20 through 80, not "wide". Using the default value 64.',
+    ]);
   });
 
   it("rejects non-integer and out-of-range numbers", () => {
@@ -120,8 +122,10 @@ describe("loadConfig", () => {
       maxToastsVisible: 2,
       toast: { ...DEFAULT_CONFIG.toast },
     });
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toContain('"toast" must be a JSON object');
+
+    expect(result.warnings).toEqual([
+      'Setting "toast" must be a JSON object, not "wide". Using default toast settings.',
+    ]);
   });
 
   it("reports malformed JSON once and uses all defaults", () => {
@@ -129,15 +133,18 @@ describe("loadConfig", () => {
 
     expect(result.config).toEqual(DEFAULT_CONFIG);
     expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toContain("not valid JSON");
+    expect(result.warnings[0]).toMatch(
+      /^Configuration at \/agent\/notification-center\/config\.json is not valid JSON: .+[^.]\. Ignored the file\.$/u,
+    );
   });
 
   it("reports a non-object document once and uses all defaults", () => {
     const result = loadConfig("/agent", contentsFs("[1, 2, 3]"));
 
     expect(result.config).toEqual(DEFAULT_CONFIG);
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toContain("must be a JSON object");
+    expect(result.warnings).toEqual([
+      "Configuration at /agent/notification-center/config.json must be a JSON object. Ignored the file.",
+    ]);
   });
 
   it("reports an unreadable file rather than treating it as absent", () => {
@@ -148,8 +155,9 @@ describe("loadConfig", () => {
     });
 
     expect(result.config).toEqual(DEFAULT_CONFIG);
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toContain("could not be read");
+    expect(result.warnings).toEqual([
+      "Could not read configuration at /agent/notification-center/config.json: denied. Ignored the file.",
+    ]);
   });
 });
 
