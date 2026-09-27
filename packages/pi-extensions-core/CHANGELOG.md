@@ -31,3 +31,5 @@
 - `subcommandCompletions`, which completes a command's fixed subcommands on the
   first word.
 - `isInteractiveTui`, which checks that Pi runs its interactive terminal UI.
+- `requireInteractiveTui`, which lets a command that opens an overlay run only
+  in the interactive terminal UI and shows one warning in other modes.

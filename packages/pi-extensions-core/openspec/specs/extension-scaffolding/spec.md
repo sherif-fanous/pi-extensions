@@ -4,8 +4,8 @@
 
 Give Pi extension entry points one way to report command and event handler
 failures, show warnings, complete fixed subcommands, and detect the interactive
-terminal UI, so every extension words its failures and warnings alike and none
-redefines the same wrappers.
+terminal UI or warn when a command needs it, so every extension words its
+failures and warnings alike and none redefines the same wrappers.
 
 ## Requirements
 
@@ -165,3 +165,27 @@ where `ctx.hasUI` is also `true`.
 - **WHEN** `isInteractiveTui` receives a context whose mode is `print`, `json`,
   or `rpc`
 - **THEN** it returns `false`
+
+### Requirement: Overlay commands warn outside the interactive terminal UI
+
+The package SHALL export a `requireInteractiveTui(ctx, extensionName, command)`
+function for commands that open a terminal overlay. When `isInteractiveTui(ctx)`
+is `true`, it SHALL return `true` and SHALL NOT notify. Otherwise it SHALL show,
+through `notifyWarnings` under `extensionName`, the single warning
+`<command> needs Pi's interactive terminal UI. Run it from the TUI.`, and SHALL
+return `false`.
+
+#### Scenario: Interactive mode
+
+- **WHEN** `requireInteractiveTui` receives a context whose mode is `tui`
+- **THEN** it returns `true`
+- **AND** it does not notify
+
+#### Scenario: Any other mode
+
+- **WHEN** `requireInteractiveTui` receives a context whose mode is `print`,
+  `json`, or `rpc`, the extension name `Session Slice`, and the command `/slice`
+- **THEN** it notifies `Session Slice: 1 warning` and
+  `- /slice needs Pi's interactive terminal UI. Run it from the TUI.` on
+  separate lines at `warning` severity
+- **AND** it returns `false`

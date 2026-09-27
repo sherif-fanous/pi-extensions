@@ -288,6 +288,23 @@ and `false` for `print`, `json`, and `rpc`. Use it to guard terminal-only work
 such as overlays and terminal queries; `ctx.hasUI` is also `true` under RPC,
 where TUI-backed methods are degraded or no-ops.
 
+### `requireInteractiveTui(ctx, extensionName: string, command: string): boolean`
+
+Gates a command that opens a terminal overlay. Returns `true` in the interactive
+terminal UI. In `print`, `json`, and `rpc` it shows one warning through
+`notifyWarnings` and returns `false`, since Pi's `ctx.ui.custom` resolves
+`undefined` there without showing anything. Pass the command as the user types
+it. Commands with a text equivalent, such as a summary notification, should fall
+back to it with `isInteractiveTui` instead.
+
+```ts
+import { requireInteractiveTui } from "@sherif-fanous/pi-extensions-core";
+
+if (!requireInteractiveTui(ctx, "Session Slice", "/slice")) return;
+// Session Slice: 1 warning
+// - /slice needs Pi's interactive terminal UI. Run it from the TUI.
+```
+
 ## License
 
 MIT
