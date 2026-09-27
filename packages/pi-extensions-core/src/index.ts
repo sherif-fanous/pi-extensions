@@ -14,3 +14,10 @@ export { describeError } from "./errors.js";
 export { isNotFoundError, isRecord } from "./guards.js";
 export { parseJsonObject, type ParseJsonObjectResult } from "./json.js";
 export { extensionConfigPath, projectConfigPath } from "./paths.js";
+export {
+  alignLabelRows,
+  type CommandReport,
+  type CommandReportChannel,
+  createCommandReport,
+  styleReport,
+} from "./report.js";

@@ -17,3 +17,7 @@
   ending in a newline.
 - `extensionConfigPath` and `projectConfigPath`, which locate an extension's
   file in Pi's agent directory and in a project.
+- `createCommandReport`, which shows a command's report as a transcript entry in
+  TUI mode and as a notification in other modes.
+- `styleReport`, which styles a report's heading, labels, and warnings.
+- `alignLabelRows`, which aligns `label value` rows on the longest label.

@@ -2,16 +2,16 @@
 
 ## Purpose
 
-Give Pi extensions one way to turn a thrown value into text they can show
-the user, so every extension reports failures the same way without
-redefining the same helper.
+Give Pi extensions one way to turn a thrown value into text they can show the
+user, so every extension reports failures the same way without redefining the
+same helper.
 
 ## Requirements
 
 ### Requirement: Thrown values are described as text
 
-The package SHALL export a `describeError(error: unknown): string` function
-that returns the `message` of an `Error` (including subclasses), and returns
+The package SHALL export a `describeError(error: unknown): string` function that
+returns the `message` of an `Error` (including subclasses), and returns
 `String(error)` for any other thrown value.
 
 #### Scenario: An Error is thrown
@@ -42,8 +42,8 @@ embed the result mid-sentence and apply their own sentence ending.
 
 ### Requirement: Helpers hold no module-level state
 
-Every export of the package SHALL be stateless, because each installed
-extension may load its own copy of the package.
+Every export of the package SHALL be stateless, because each installed extension
+may load its own copy of the package.
 
 #### Scenario: Two extensions load separate copies
 

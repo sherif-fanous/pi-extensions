@@ -117,6 +117,61 @@ const projectPath = projectConfigPath({
 });
 ```
 
+### `createCommandReport(entryType: string): CommandReportChannel`
+
+Returns the functions that show a command's plain-text report of type
+`CommandReport` (`{ body, severity? }`, where `severity` is `"info"` or
+`"warning"` and defaults to `"info"`):
+
+- `deliver(ctx, pi, report)` appends the report as a transcript entry of type
+  `entryType` in TUI mode, and notifies with the styled body at the report's
+  severity in every other mode.
+- `render` renders a stored entry as text styled with the current theme.
+- `register(pi)` registers `render` for `entryType`. Call it when the extension
+  loads so reports restored from a session render too.
+
+The body is stored as plain text, so a restored report takes the theme active
+when it is shown.
+
+```ts
+import {
+  alignLabelRows,
+  createCommandReport,
+} from "@sherif-fanous/pi-extensions-core";
+
+const statusReport = createCommandReport("theme-sync:status-report");
+
+export default function (pi: ExtensionAPI) {
+  statusReport.register(pi);
+  pi.registerCommand("theme-sync", {
+    handler: async (_args, ctx) => {
+      const body = [
+        "Theme Sync Status",
+        ...alignLabelRows([
+          ["Appearance:", "dark"],
+          ["Applied Theme:", "solarized-dark"],
+        ]),
+      ].join("\n");
+
+      statusReport.deliver(ctx, pi, { body });
+    },
+  });
+}
+```
+
+### `styleReport(body: string, theme: Pick<Theme, "bold" | "fg">): string`
+
+Styles a plain report body line by line. The first line is the heading, in bold
+accent. A `Warnings:` line and every line after it are warning-colored. On any
+other line, the text up to and including the first colon is a muted label.
+Remaining lines are unchanged. `createCommandReport` applies these rules; call
+`styleReport` directly to show a report on another surface, such as a dialog.
+
+### `alignLabelRows(rows: readonly (readonly [label: string, value: string])[]): string[]`
+
+Turns `[label, value]` pairs into lines of the form `  <label> <value>`, with
+every label padded to the longest one so the values line up.
+
 ## License
 
 MIT

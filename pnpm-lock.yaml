@@ -37,6 +37,9 @@ importers:
       '@ianvs/prettier-plugin-sort-imports':
         specifier: ^4.7.1
         version: 4.7.1(prettier@3.9.9)
+      '@sherif-fanous/pi-extensions-testing':
+        specifier: workspace:*
+        version: link:../pi-extensions-testing
       '@stylistic/eslint-plugin':
         specifier: ^5.10.0
         version: 5.10.0(eslint@10.11.0(jiti@2.7.0))
