@@ -8,11 +8,13 @@ import {
 import type { SliceCandidate } from "../src/slice.js";
 import type {
   ExtensionUIContext,
-  KeybindingsManager,
   Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { Component, TUI } from "@earendil-works/pi-tui";
-import { describe, expect, it, vi } from "vitest";
+import {
+  createFakeCustom,
+  createFakeKeybindings,
+} from "@sherif-fanous/pi-extensions-testing";
+import { describe, expect, it } from "vitest";
 
 const CANDIDATES: SliceCandidate[] = [
   {
@@ -31,53 +33,42 @@ const CANDIDATES: SliceCandidate[] = [
   },
 ];
 
-type PickerFactory = (
-  tui: TUI,
-  theme: Theme,
-  keybindings: KeybindingsManager,
-  done: (result: PickerResult) => void,
-) => Component | Promise<Component>;
-
-const KEYBINDINGS = {
-  matches: (data: string, action: string) =>
-    (data === "down" && action === "tui.select.down") ||
-    (data === "up" && action === "tui.select.up") ||
-    (data === "enter" && action === "tui.select.confirm") ||
-    (data === "escape" && action === "tui.select.cancel"),
-} as unknown as KeybindingsManager;
+const KEYBINDINGS = createFakeKeybindings({
+  "tui.select.cancel": "escape",
+  "tui.select.confirm": "enter",
+  "tui.select.down": "down",
+  "tui.select.up": "up",
+});
 
 const THEME = {
   bold: (text: string) => `<b>${text}</b>`,
   fg: (_color: string, text: string) => text,
-} as unknown as Theme;
+} as Theme;
+
+/** Where to record the lines the picker renders before it receives keys. */
+interface PickerRender {
+  readonly lines: string[];
+  readonly width: number;
+}
 
 async function drivePicker(
   keys: readonly string[],
   invoke: (ui: ExtensionUIContext) => Promise<PickerResult>,
-  inspect?: (component: Component) => void,
+  render?: PickerRender,
 ): Promise<PickerResult> {
-  const custom = vi.fn(async (factory: PickerFactory) => {
-    let result: PickerResult | undefined;
-    const component = await factory(
-      {} as unknown as TUI,
-      THEME,
-      KEYBINDINGS,
-      (value) => {
-        result = value;
-      },
-    );
-
-    inspect?.(component);
-
-    if (!component.handleInput) {
-      throw new Error("The picker root cannot receive keyboard input.");
-    }
-
-    for (const key of keys) component.handleInput(key);
-
-    if (!result) throw new Error("The picker did not finish.");
-
-    return result;
+  let finished = false;
+  const custom = createFakeCustom({
+    keybindings: KEYBINDINGS,
+    keys,
+    onDone: () => {
+      finished = true;
+    },
+    onMount: () => {
+      if (!finished) throw new Error("The picker did not finish.");
+    },
+    rendered: render?.lines,
+    theme: THEME,
+    width: render?.width,
   });
   const ui = { custom } as unknown as ExtensionUIContext;
 
@@ -128,15 +119,12 @@ describe("slice picker input", () => {
 
 describe("slice picker rendering", () => {
   it("renders two-line rows with a bold selection and metadata", async () => {
-    let lines: string[] = [];
+    const lines: string[] = [];
 
-    await drivePicker(
-      ["escape"],
-      (ui) => showStartPicker(ui, CANDIDATES),
-      (component) => {
-        lines = component.render(40);
-      },
-    );
+    await drivePicker(["escape"], (ui) => showStartPicker(ui, CANDIDATES), {
+      lines,
+      width: 40,
+    });
 
     const selectedIndex = lines.findIndex((line) =>
       line.includes("<b>second</b>"),
@@ -155,29 +143,23 @@ describe("slice picker rendering", () => {
       timestamp: new Date().toISOString(),
       total: 12,
     }));
-    let lines: string[] = [];
+    const lines: string[] = [];
 
-    await drivePicker(
-      ["escape"],
-      (ui) => showStartPicker(ui, candidates),
-      (component) => {
-        lines = component.render(36);
-      },
-    );
+    await drivePicker(["escape"], (ui) => showStartPicker(ui, candidates), {
+      lines,
+      width: 36,
+    });
 
     expect(lines).toContain("  (12/12)");
   });
 
   it("renders the editor hint for an end-message row", async () => {
-    let lines: string[] = [];
+    const lines: string[] = [];
 
-    await drivePicker(
-      ["escape"],
-      (ui) => showEndPicker(ui, CANDIDATES, 1),
-      (component) => {
-        lines = component.render(60);
-      },
-    );
+    await drivePicker(["escape"], (ui) => showEndPicker(ui, CANDIDATES, 1), {
+      lines,
+      width: 60,
+    });
 
     expect(lines.some((line) => line.includes("goes to your editor"))).toBe(
       true,
@@ -185,13 +167,11 @@ describe("slice picker rendering", () => {
   });
 
   it("shows only the default when the start is the last user message", async () => {
-    let lines: string[] = [];
+    const lines: string[] = [];
     const result = await drivePicker(
       ["enter"],
       (ui) => showEndPicker(ui, CANDIDATES, 2),
-      (component) => {
-        lines = component.render(50);
-      },
+      { lines, width: 50 },
     );
 
     expect(result).toEqual({ kind: "end" });
@@ -227,15 +207,12 @@ describe("slice picker rendering", () => {
         total: 2,
       },
     ];
-    let lines: string[] = [];
+    const lines: string[] = [];
 
-    await drivePicker(
-      ["escape"],
-      (ui) => showStartPicker(ui, candidates),
-      (component) => {
-        lines = component.render(50);
-      },
-    );
+    await drivePicker(["escape"], (ui) => showStartPicker(ui, candidates), {
+      lines,
+      width: 50,
+    });
 
     expect(lines.some((line) => line.includes("2h ago"))).toBe(true);
     expect(lines.some((line) => line.includes(expectedDate))).toBe(true);
