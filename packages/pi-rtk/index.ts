@@ -26,7 +26,9 @@ import {
   createCommandReport,
   guardCommand,
   guardEvent,
+  notifyWarnings,
   subcommandCompletions,
+  type GuardContext,
 } from "@sherif-fanous/pi-extensions-core";
 
 const REWRITE_TIMEOUT_MS = 5000;
@@ -37,7 +39,6 @@ const VALID_RTK_SUBCOMMANDS = ["enable", "disable", "status"] as const;
 // Pi process start and is never persisted to disk.
 let sessionEnabled = true;
 
-type Notify = (message: string, level: "info" | "warning" | "error") => void;
 type RtkSubcommand = (typeof VALID_RTK_SUBCOMMANDS)[number];
 type RtkUnavailableReason = "missing" | "unexecutable";
 
@@ -45,27 +46,27 @@ type SpawnErrorClassification = RtkUnavailableReason | "other";
 
 // Availability notifications are warn-once per outage: a successful rewrite
 // spawn resets the gate, and the next ENOENT/EACCES may warn again. Pi only
-// exposes the TUI notify surface through lifecycle context, so the callable is
+// exposes the TUI notify surface through lifecycle context, so the context is
 // captured from the first relevant event rather than at module load.
 let rtkUnavailableNotified = false;
-let cachedNotify: Notify | null = null;
+let cachedNotifyContext: GuardContext | null = null;
 
 function alertRtkUnavailable(reason: RtkUnavailableReason): void {
-  if (rtkUnavailableNotified || cachedNotify === null) return;
+  if (rtkUnavailableNotified || cachedNotifyContext === null) return;
 
   const messages: Record<RtkUnavailableReason, string> = {
     missing:
-      "[pi-rtk] rtk binary not found on PATH. Shell command rewrites are disabled. Install rtk: https://github.com/rtk-ai/rtk#installation",
+      "The rtk binary was not found on PATH. Running shell commands without rewrites. See https://github.com/rtk-ai/rtk#installation to install rtk.",
     unexecutable:
-      "[pi-rtk] rtk binary found on PATH but is not executable. Shell command rewrites are disabled. Run: chmod +x $(command -v rtk)",
+      "The rtk binary on PATH is not executable. Running shell commands without rewrites. Run chmod +x $(command -v rtk) to fix it.",
   };
 
   rtkUnavailableNotified = true;
-  cachedNotify(messages[reason], "warning");
+  notifyWarnings(cachedNotifyContext, "RTK", [messages[reason]]);
 }
 
-function cacheNotify(notify: Notify): void {
-  if (cachedNotify === null) cachedNotify = notify;
+function cacheNotifyContext(ctx: GuardContext): void {
+  if (cachedNotifyContext === null) cachedNotifyContext = ctx;
 }
 
 function classifySpawnError(
@@ -243,7 +244,7 @@ export default function (pi: ExtensionAPI) {
   pi.on(
     "session_start",
     guardEvent("RTK", "session_start", (_event, ctx) => {
-      cacheNotify((message, level) => ctx.ui.notify(message, level));
+      cacheNotifyContext(ctx);
       updateFooterStatus(ctx);
 
       const result = spawnSync("rtk", ["--version"], {
@@ -262,7 +263,7 @@ export default function (pi: ExtensionAPI) {
   pi.on(
     "user_bash",
     guardEvent("RTK", "user_bash", (event, ctx) => {
-      cacheNotify((message, level) => ctx.ui.notify(message, level));
+      cacheNotifyContext(ctx);
 
       if (event.excludeFromContext) {
         return;
