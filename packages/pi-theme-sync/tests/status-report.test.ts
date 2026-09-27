@@ -4,7 +4,6 @@ import {
   formatStatusReport,
   renderStatusReport,
   STATUS_REPORT_ENTRY_TYPE,
-  styleStatusReport,
 } from "../src/ui/status-report.js";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
@@ -75,22 +74,6 @@ test("formats a Unix epoch update instead of treating it as absent", () => {
 
   expect(report).toContain(`${"Last Update:".padEnd(20)} Unix epoch`);
   expect(formatTime).toHaveBeenCalledWith(0);
-});
-
-test("styles heading, labels, and warning rows with semantic colors", () => {
-  const theme = {
-    bold: (text: string) => `<bold>${text}</bold>`,
-    fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
-  } as Theme;
-  const styled = styleStatusReport(
-    formatStatusReport(status, () => "now"),
-    theme,
-  );
-
-  expect(styled).toContain("<accent><bold>Theme Sync Status</bold></accent>");
-  expect(styled).toContain("<muted>Appearance:</muted>          dark");
-  expect(styled).toContain("<warning>Warnings:</warning>");
-  expect(styled).toContain("<warning>  - First warning.</warning>");
 });
 
 test("restyles persisted plain entry data with the current theme", () => {
