@@ -18,6 +18,7 @@ import {
   type ToastConfig,
 } from "./types.js";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { isNotFoundError, isRecord } from "@sherif-fanous/pi-extensions-core";
 
 /** File-reading seam so tests do not need a real agent directory. */
 export interface ConfigFs {
@@ -53,7 +54,7 @@ export function loadConfig(
   try {
     contents = fs.readFileSync(configFilePath);
   } catch (err) {
-    if (isMissingFileError(err)) {
+    if (isNotFoundError(err)) {
       return { config: defaults(), warnings: [] };
     }
 
@@ -78,7 +79,7 @@ export function loadConfig(
     };
   }
 
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+  if (!isRecord(parsed)) {
     return {
       config: defaults(),
       warnings: [
@@ -87,18 +88,18 @@ export function loadConfig(
     };
   }
 
-  const record = parsed as Record<string, unknown>;
+  const record = parsed;
   const config = defaults();
   const warnings: string[] = [];
   const nested = record.toast;
 
-  if (nested !== undefined && !isPlainObject(nested)) {
+  if (nested !== undefined && !isRecord(nested)) {
     warnings.push(
       `Notification-center setting "toast" must be a JSON object. The extension is using default toast settings.`,
     );
   }
 
-  const toastRecord = isPlainObject(nested) ? nested : {};
+  const toastRecord = isRecord(nested) ? nested : {};
 
   for (const path of CONFIG_PATHS) {
     // `undefined` marks the one top-level setting; every other path names
@@ -161,19 +162,6 @@ function defaults(): NotificationConfig {
     maxToastsVisible: DEFAULT_CONFIG.maxToastsVisible,
     toast: { ...DEFAULT_CONFIG.toast },
   };
-}
-
-function isMissingFileError(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code?: unknown }).code === "ENOENT"
-  );
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isValidFieldValue(
