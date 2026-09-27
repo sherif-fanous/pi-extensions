@@ -11,6 +11,7 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
+import { describeError } from "@sherif-fanous/pi-extensions-core";
 
 /** Run the interactive session-slice flow. */
 export async function handleSliceCommand(
@@ -102,7 +103,7 @@ export async function handleSliceCommand(
     );
   } catch (error) {
     ctx.ui.notify(
-      `Could not create the sliced session: ${error instanceof Error ? error.message : String(error)}.`,
+      `Could not create the sliced session: ${describeError(error)}.`,
       "error",
     );
 

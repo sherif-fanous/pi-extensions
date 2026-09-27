@@ -266,6 +266,10 @@ importers:
         version: 8.70.1(eslint@10.11.0(jiti@2.7.0))(typescript@5.9.3)
 
   packages/pi-session-slice:
+    dependencies:
+      '@sherif-fanous/pi-extensions-core':
+        specifier: workspace:*
+        version: link:../pi-extensions-core
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.5.13
