@@ -11,17 +11,23 @@ import type {
   RuntimeConfig,
   RuntimeConfigSources,
 } from "./types.js";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
-  getAgentDir,
-  type ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
-import { isNotFoundError, isRecord } from "@sherif-fanous/pi-extensions-core";
+  extensionConfigPath,
+  isNotFoundError,
+  parseJsonObject,
+  projectConfigPath,
+  writeJsonFile,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** Paths used for the current global and project configuration files. */
 export const CONFIG_PATHS = {
-  global: path.join(getAgentDir(), "theme-sync", "settings.json"),
+  global: extensionConfigPath({
+    extension: "theme-sync",
+    file: "settings.json",
+  }),
   project: (cwd: string) =>
-    path.join(cwd, ".pi", "theme-sync", "settings.json"),
+    projectConfigPath({ cwd, extension: "theme-sync", file: "settings.json" }),
 };
 
 /** Runtime values used when configuration does not provide a valid value. */
@@ -218,7 +224,7 @@ export async function writeConfigChanges(
     nextConfig.isSyncActive = changes.isSyncActive;
   }
 
-  await writeJson(filePath, nextConfig);
+  await writeJsonFile(filePath, nextConfig);
 
   return { ok: true };
 }
@@ -236,21 +242,18 @@ async function readJsonIfExists(filePath: string): Promise<ReadJsonResult> {
     throw error;
   }
 
-  try {
-    const parsed: unknown = JSON.parse(content);
+  const parsed = parseJsonObject(content);
 
-    if (!isRecord(parsed)) {
-      return {
-        warning: `Configuration in ${filePath} must be a JSON object. File ignored.`,
-      };
-    }
-
-    return { config: parsed };
-  } catch {
-    return {
-      warning: `Invalid JSON in ${filePath} — file ignored`,
-    };
+  if (parsed.ok) {
+    return { config: parsed.value };
   }
+
+  return {
+    warning:
+      parsed.reason === "invalid-json"
+        ? `Invalid JSON in ${filePath} — file ignored`
+        : `Configuration in ${filePath} must be a JSON object. File ignored.`,
+  };
 }
 
 async function readScopedConfig(
@@ -359,12 +362,4 @@ function validateTheme(
   }
 
   return { source, value: themeName };
-}
-
-async function writeJson(
-  filePath: string,
-  config: LoadedConfig,
-): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
 }

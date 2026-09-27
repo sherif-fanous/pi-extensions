@@ -192,6 +192,19 @@ NOT automatically move or delete config files.
 - **THEN** the next save selects and rereads the preferred file before applying
   changes instead of writing the previously selected legacy file
 
+### Requirement: Theme sync replaces config files atomically
+
+The extension SHALL save a config file by writing the new contents to a
+temporary file beside it and renaming that file over the destination, so the
+destination never holds partially written contents.
+
+#### Scenario: Save is interrupted
+
+- **WHEN** a save fails or the process stops before the new contents are in
+  place
+- **THEN** the selected config file holds either its previous contents or the
+  complete new contents, never a partial write
+
 ### Requirement: Theme sync requires reload to apply config changes
 
 The extension SHALL require an explicit reload before saved config changes take

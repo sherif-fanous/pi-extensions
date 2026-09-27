@@ -35,6 +35,13 @@ vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => ({
   }),
 }));
 
+vi.mock("@sherif-fanous/pi-extensions-core", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@sherif-fanous/pi-extensions-core")>();
+
+  return { ...actual, writeJsonFile: vi.fn(actual.writeJsonFile) };
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
@@ -111,16 +118,14 @@ test("refreshes paths when reopening after migration and retains pending edits",
       expect(rendered).toContain(`Global (${globalPreferred})`);
     });
 
-    const writeSpy = vi.spyOn(fs, "writeFile").mockResolvedValue();
+    const { writeJsonFile } = await import("@sherif-fanous/pi-extensions-core");
+    const writeSpy = vi.mocked(writeJsonFile).mockResolvedValue();
 
-    vi.spyOn(fs, "mkdir").mockResolvedValue(undefined);
     overlay.handleInput?.("\r");
     await vi.waitFor(() =>
-      expect(writeSpy).toHaveBeenCalledExactlyOnceWith(
-        projectPreferred,
-        `${JSON.stringify({ themes: { light: "dark" } }, null, 2)}\n`,
-        "utf8",
-      ),
+      expect(writeSpy).toHaveBeenCalledExactlyOnceWith(projectPreferred, {
+        themes: { light: "dark" },
+      }),
     );
   });
 });
@@ -145,16 +150,14 @@ test("reports path resolution errors and permits retry without losing edits", as
       expect(overlay.render(240).join("\n")).toContain("Write Config To"),
     );
 
-    const writeSpy = vi.spyOn(fs, "writeFile").mockResolvedValue();
+    const { writeJsonFile } = await import("@sherif-fanous/pi-extensions-core");
+    const writeSpy = vi.mocked(writeJsonFile).mockResolvedValue();
 
-    vi.spyOn(fs, "mkdir").mockResolvedValue(undefined);
     overlay.handleInput?.("\r");
     await vi.waitFor(() =>
-      expect(writeSpy).toHaveBeenCalledExactlyOnceWith(
-        projectPreferred,
-        `${JSON.stringify({ themes: { light: "dark" } }, null, 2)}\n`,
-        "utf8",
-      ),
+      expect(writeSpy).toHaveBeenCalledExactlyOnceWith(projectPreferred, {
+        themes: { light: "dark" },
+      }),
     );
   });
 });

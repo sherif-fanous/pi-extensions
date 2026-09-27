@@ -13,7 +13,15 @@ import {
 } from "../src/config.js";
 import type { ConfigScope, LoadedConfig } from "../src/types.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { writeJsonFile } from "@sherif-fanous/pi-extensions-core";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+vi.mock("@sherif-fanous/pi-extensions-core", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@sherif-fanous/pi-extensions-core")>();
+
+  return { ...actual, writeJsonFile: vi.fn(actual.writeJsonFile) };
+});
 
 const availableThemeNames = ["light", "dark", "project-light", "global-dark"];
 
@@ -34,6 +42,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  vi.mocked(writeJsonFile).mockReset();
   await rm(testRoot, { force: true, recursive: true });
 });
 
@@ -256,7 +265,7 @@ describe("writeConfigChanges", () => {
       await writeConfigFile(filePath, existingConfig);
 
       const readSpy = vi.spyOn(fs, "readFile");
-      const writeSpy = vi.spyOn(fs, "writeFile");
+      const writeSpy = vi.mocked(writeJsonFile);
 
       try {
         const result = await writeConfigChanges(scope, projectDirectory, {
@@ -312,7 +321,7 @@ describe("writeConfigChanges", () => {
 
   test("does no filesystem work when there are no changes", async () => {
     const readSpy = vi.spyOn(fs, "readFile");
-    const writeSpy = vi.spyOn(fs, "writeFile");
+    const writeSpy = vi.mocked(writeJsonFile);
 
     try {
       expect(await writeConfigChanges("project", projectDirectory, {})).toEqual(
@@ -337,7 +346,7 @@ describe("writeConfigChanges", () => {
       await mkdir(path.dirname(filePath), { recursive: true });
       await writeFile(filePath, malformedContents);
 
-      const writeSpy = vi.spyOn(fs, "writeFile");
+      const writeSpy = vi.mocked(writeJsonFile);
 
       try {
         expect(
@@ -394,7 +403,7 @@ describe("writeConfigChanges", () => {
         `Configuration in ${filePath} must be a JSON object. File ignored.`,
       ]);
 
-      const writeSpy = vi.spyOn(fs, "writeFile");
+      const writeSpy = vi.mocked(writeJsonFile);
 
       try {
         expect(
@@ -446,7 +455,7 @@ describe("writeConfigChanges", () => {
 
     const readSpy = vi.spyOn(fs, "readFile");
     const writeSpy = vi
-      .spyOn(fs, "writeFile")
+      .mocked(writeJsonFile)
       .mockRejectedValueOnce(new Error("expected write failure"));
 
     try {
@@ -685,7 +694,7 @@ describe.each(["project", "global"] as const)("%s file selection", (scope) => {
     await writeConfigFile(legacy, { isSyncActive: false });
 
     const writeSpy = vi
-      .spyOn(fs, "writeFile")
+      .mocked(writeJsonFile)
       .mockRejectedValue(
         Object.assign(new Error("expected write failure"), { code: "EACCES" }),
       );
