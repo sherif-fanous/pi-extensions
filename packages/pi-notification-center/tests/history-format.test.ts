@@ -7,8 +7,11 @@ import {
   markDetailScroll,
   toPreviewLine,
 } from "../src/ui/history-format.js";
-import { createMarkerTheme, createPlainTheme } from "./helpers.js";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import {
+  createMarkerTheme,
+  createPlainTheme,
+} from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it } from "vitest";
 
 const PLAIN = createPlainTheme();

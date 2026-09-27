@@ -1,8 +1,12 @@
 import type { LoadConfigResult } from "../src/config.js";
 import notificationCenter from "../src/index.js";
 import { CUSTOM_ENTRY_TYPE, DEFAULT_CONFIG } from "../src/types.js";
-import { createFakeTui, createFakeWidgets, type FakeTui } from "./helpers.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+  createFakeTui,
+  createFakeWidgets,
+  type FakeTui,
+} from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("notification-center lifecycle", () => {

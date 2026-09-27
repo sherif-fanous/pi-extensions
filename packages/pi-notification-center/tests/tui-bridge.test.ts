@@ -1,6 +1,9 @@
 import { createToastSurface, type BridgeUi } from "../src/ui/tui-bridge.js";
-import { createFakeTui, createPlainTheme } from "./helpers.js";
 import type { Component, TUI } from "@earendil-works/pi-tui";
+import {
+  createFakeTui,
+  createPlainTheme,
+} from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it } from "vitest";
 
 describe("createToastSurface", () => {

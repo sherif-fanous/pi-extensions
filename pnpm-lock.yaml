@@ -53,7 +53,7 @@ importers:
         specifier: ^5.0.0
         version: 5.0.2(@opentelemetry/api@1.9.0)(@types/node@25.9.8)(vite@8.3.1(@types/node@25.9.8)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
-  packages/pi-notification-center:
+  packages/pi-extensions-testing:
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.5.12
@@ -70,6 +70,52 @@ importers:
       '@ianvs/prettier-plugin-sort-imports':
         specifier: ^4.7.1
         version: 4.7.1(prettier@3.9.9)
+      '@stylistic/eslint-plugin':
+        specifier: ^5.10.0
+        version: 5.10.0(eslint@10.11.0(jiti@2.7.0))
+      eslint:
+        specifier: ^10.9.1
+        version: 10.11.0(jiti@2.7.0)
+      eslint-plugin-perfectionist:
+        specifier: ^5.11.0
+        version: 5.12.1(eslint@10.11.0(jiti@2.7.0))(typescript@6.0.3)
+      eslint-plugin-unicorn:
+        specifier: ^74.0.0
+        version: 74.0.0(eslint@10.11.0(jiti@2.7.0))
+      prettier:
+        specifier: ^3.9.6
+        version: 3.9.9
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      typescript-eslint:
+        specifier: ^8.69.0
+        version: 8.70.1(eslint@10.11.0(jiti@2.7.0))(typescript@6.0.3)
+
+  packages/pi-notification-center:
+    dependencies:
+      '@sherif-fanous/pi-extensions-core':
+        specifier: workspace:*
+        version: link:../pi-extensions-core
+    devDependencies:
+      '@biomejs/biome':
+        specifier: ^2.5.12
+        version: 2.5.14
+      '@earendil-works/pi-coding-agent':
+        specifier: ^0.84.4
+        version: 0.84.4(ws@8.22.0)(zod@4.6.5)
+      '@earendil-works/pi-tui':
+        specifier: ^0.84.4
+        version: 0.84.4
+      '@eslint/js':
+        specifier: ^10.0.1
+        version: 10.0.1(eslint@10.11.0(jiti@2.7.0))
+      '@ianvs/prettier-plugin-sort-imports':
+        specifier: ^4.7.1
+        version: 4.7.1(prettier@3.9.9)
+      '@sherif-fanous/pi-extensions-testing':
+        specifier: workspace:*
+        version: link:../pi-extensions-testing
       '@stylistic/eslint-plugin':
         specifier: ^5.10.0
         version: 5.10.0(eslint@10.11.0(jiti@2.7.0))

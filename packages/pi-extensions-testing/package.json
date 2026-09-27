@@ -1,0 +1,53 @@
+{
+  "name": "@sherif-fanous/pi-extensions-testing",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Test doubles for Pi extensions: fake TUI, keybindings, widgets, and themes.",
+  "license": "MIT",
+  "author": "Sherif Fanous",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "prettier": {
+    "importOrder": [
+      "<BUILTIN_MODULES>",
+      "",
+      "<THIRD_PARTY_MODULES>"
+    ],
+    "importOrderTypeScriptVersion": "6.0.0",
+    "overrides": [
+      {
+        "files": [
+          "*.md",
+          "*.mdx"
+        ],
+        "options": {
+          "printWidth": 80,
+          "proseWrap": "always"
+        }
+      }
+    ],
+    "plugins": [
+      "@ianvs/prettier-plugin-sort-imports"
+    ]
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.12",
+    "@earendil-works/pi-coding-agent": "^0.84.4",
+    "@earendil-works/pi-tui": "^0.84.4",
+    "@eslint/js": "^10.0.1",
+    "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "eslint": "^10.9.1",
+    "eslint-plugin-perfectionist": "^5.11.0",
+    "eslint-plugin-unicorn": "^74.0.0",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.69.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  }
+}

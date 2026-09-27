@@ -7,7 +7,11 @@ import {
 import { ToastManager } from "../src/ui/toast-manager.js";
 import { TOAST_FRAME_ROWS } from "../src/ui/toast-stack.js";
 import type { BridgeUi } from "../src/ui/tui-bridge.js";
-import { createFakeTui, createFakeWidgets, type FakeTui } from "./helpers.js";
+import {
+  createFakeTui,
+  createFakeWidgets,
+  type FakeTui,
+} from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 interface ConfigOverrides {

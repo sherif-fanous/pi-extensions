@@ -6,7 +6,11 @@ import {
 } from "../src/capture.js";
 import { readNotificationHistory, type BranchEntry } from "../src/history.js";
 import { CUSTOM_ENTRY_TYPE, DEFAULT_CONFIG } from "../src/types.js";
-import { createFakeTui, createFakeWidgets, type FakeTui } from "./helpers.js";
+import {
+  createFakeTui,
+  createFakeWidgets,
+  type FakeTui,
+} from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("CaptureRuntime.install", () => {

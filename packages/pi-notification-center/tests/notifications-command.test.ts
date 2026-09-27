@@ -5,12 +5,12 @@ import {
 import { createNotificationEntry } from "../src/history.js";
 import { CUSTOM_ENTRY_TYPE, type NotificationEntry } from "../src/types.js";
 import { HistoryViewComponent } from "../src/ui/history-view.js";
+import type { Component } from "@earendil-works/pi-tui";
 import {
   createFakeKeybindings,
   createFakeTui,
   createPlainTheme,
-} from "./helpers.js";
-import type { Component } from "@earendil-works/pi-tui";
+} from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it, vi } from "vitest";
 
 const FIRST = 1_715_933_350_000;

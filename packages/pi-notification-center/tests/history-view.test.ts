@@ -6,12 +6,12 @@ import {
   layoutHistory,
   type HistoryLayout,
 } from "../src/ui/history-view.js";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import {
   createFakeKeybindings,
   createMarkerTheme,
   createPlainTheme,
-} from "./helpers.js";
-import { visibleWidth } from "@earendil-works/pi-tui";
+} from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it, vi } from "vitest";
 
 const FIRST = 1_715_933_350_000;

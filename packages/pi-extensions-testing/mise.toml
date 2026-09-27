@@ -1,0 +1,24 @@
+[env]
+_.path = ["{{config_root}}/node_modules/.bin"]
+
+[tasks.check]
+depends = ["format-check", "type-check", "lint"]
+
+[tasks.format]
+run = "prettier --write eslint.config.mjs package.json src/. tsconfig.json"
+
+[tasks.format-check]
+run = "prettier --check eslint.config.mjs package.json src/. tsconfig.json"
+
+[tasks.lint]
+run = "biome lint src/. && eslint src/."
+
+[tasks.lint-fix]
+run = "biome lint src/. --fix && eslint src/. --fix"
+
+[tasks.type-check]
+run = "tsc --noEmit"
+
+[tools]
+node = "lts"
+"npm:pnpm" = "latest"

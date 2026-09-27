@@ -8,6 +8,7 @@ import { CaptureRuntime } from "./capture.js";
 import { runNotificationsCommand } from "./commands/notifications.js";
 import { loadConfig, type LoadConfigResult } from "./config.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { describeError } from "@sherif-fanous/pi-extensions-core";
 
 /**
  * Register the notification center with the Pi host.
@@ -88,7 +89,7 @@ export default function notificationCenter(
  * since a thrown message may already end in punctuation.
  */
 function describe(err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err);
+  const message = describeError(err);
 
   return /[!.?]$/u.test(message) ? message : `${message}.`;
 }

@@ -60,12 +60,16 @@
       "@ianvs/prettier-plugin-sort-imports"
     ]
   },
+  "dependencies": {
+    "@sherif-fanous/pi-extensions-core": "workspace:*"
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",
     "@earendil-works/pi-coding-agent": "^0.84.4",
     "@earendil-works/pi-tui": "^0.84.4",
     "@eslint/js": "^10.0.1",
     "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
+    "@sherif-fanous/pi-extensions-testing": "workspace:*",
     "@stylistic/eslint-plugin": "^5.10.0",
     "eslint": "^10.9.1",
     "eslint-plugin-perfectionist": "^5.11.0",
