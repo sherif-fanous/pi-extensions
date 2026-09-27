@@ -1,7 +1,7 @@
 /** Validates preset arrays from consolidated configuration documents. */
 import type { Preset } from "../types.js";
-import { isRecord } from "./guards.js";
 import { findDuplicatePresetNames, validatePresetShape } from "./validate.js";
+import { isRecord } from "@sherif-fanous/pi-extensions-core";
 
 interface ParsedPresetArray {
   presets: Preset[];

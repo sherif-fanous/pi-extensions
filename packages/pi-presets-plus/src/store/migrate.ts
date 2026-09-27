@@ -5,7 +5,6 @@
 import { readFile, unlink } from "node:fs/promises";
 
 import type { ConfigDocument, PresetScope } from "../types.js";
-import { isNotFoundError, isRecord } from "./guards.js";
 import {
   getGlobalConfigPath,
   getGlobalPolicyPath,
@@ -14,6 +13,11 @@ import {
   getProjectPresetsPath,
 } from "./paths.js";
 import { atomicWrite, type AtomicWriteFs } from "./save.js";
+import {
+  describeError,
+  isNotFoundError,
+  isRecord,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** File-system seam for migration tests. */
 export interface MigrationFs {
@@ -189,10 +193,6 @@ export async function migrateScope(
   }
 
   return { scope, attempted: true, migrated: true, warnings };
-}
-
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function failed(

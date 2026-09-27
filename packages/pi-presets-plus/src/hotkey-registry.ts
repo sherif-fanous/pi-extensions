@@ -18,6 +18,7 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import type { KeyId } from "@earendil-works/pi-tui";
+import { describeError } from "@sherif-fanous/pi-extensions-core";
 
 export type { PresetIdentity } from "./preset-identity.js";
 
@@ -128,7 +129,7 @@ export class HotkeyRegistry {
             notifyApplyResult(handlerCtx, current, result);
           } catch (err) {
             handlerCtx.ui.notify(
-              `pi-presets-plus failed to activate preset "${registeredName}" from hotkey: ${err instanceof Error ? err.message : String(err)}.`,
+              `pi-presets-plus failed to activate preset "${registeredName}" from hotkey: ${describeError(err)}.`,
               "error",
             );
           }

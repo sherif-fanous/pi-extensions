@@ -5,8 +5,8 @@
  */
 import type { LoadedPreset } from "../types.js";
 import { loadScope } from "./config.js";
-import { isRecord } from "./guards.js";
 import { getGlobalConfigPath } from "./paths.js";
+import { isRecord } from "@sherif-fanous/pi-extensions-core";
 
 /** One allow, prohibit, or default pattern with its regex compiled. */
 export interface CompiledPolicyMatcher {

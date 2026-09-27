@@ -5,8 +5,8 @@
  */
 import { validThinkingLevels } from "../activation/thinking.js";
 import { THINKING_LEVELS, type Preset, type ThinkingLevel } from "../types.js";
-import { isRecord } from "./guards.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { isRecord } from "@sherif-fanous/pi-extensions-core";
 
 /** Result of a single-preset shape check. */
 interface ValidationResult {

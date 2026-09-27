@@ -10,9 +10,13 @@ import type {
   ScopeConfig,
   ScopeWarnings,
 } from "../types.js";
-import { isNotFoundError, isRecord } from "./guards.js";
 import { parsePresetArray } from "./load.js";
 import { getGlobalConfigPath, getProjectConfigPath } from "./paths.js";
+import {
+  describeError,
+  isNotFoundError,
+  isRecord,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** File-system seam used by scope loading tests. */
 export interface ConfigFs {
@@ -119,10 +123,6 @@ export async function loadScope(
     ...(showInactiveStatus === undefined ? {} : { showInactiveStatus }),
     warnings,
   };
-}
-
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function emptyWarnings(): ScopeWarnings {

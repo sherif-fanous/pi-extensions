@@ -26,6 +26,7 @@ import { loadAll } from "./store/api.js";
 import { describeMigration, migrateAll } from "./store/migrate.js";
 import { registerCommandReportRenderer } from "./ui/command-report.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { describeError } from "@sherif-fanous/pi-extensions-core";
 
 /** Register every pi-presets-plus command, flag, and event handler. */
 export default function presetsPlus(pi: ExtensionAPI) {
@@ -131,7 +132,7 @@ export default function presetsPlus(pi: ExtensionAPI) {
       );
     } catch (err) {
       startupWarnings.push(
-        `pi-presets-plus failed to load preset files: ${err instanceof Error ? err.message : String(err)}.`,
+        `pi-presets-plus failed to load preset files: ${describeError(err)}.`,
       );
     }
 
