@@ -130,32 +130,46 @@ test("refreshes paths when reopening after migration and retains pending edits",
   });
 });
 
-test("reports path resolution errors and permits retry without losing edits", async () => {
-  await withOverlay(new Set(), async (overlay) => {
+test("keeps an unreadable preferred file selected, refuses to save over it, and permits retry without losing edits", async () => {
+  await withOverlay(new Set([projectLegacy]), async (overlay) => {
     for (const event of ["\r", "\x1b[B", "\r"]) {
       overlay.handleInput?.(event);
     }
 
-    vi.mocked(fs.readFile).mockRejectedValueOnce(
-      Object.assign(new Error("permission denied"), { code: "EACCES" }),
-    );
+    const permissionDenied = Object.assign(new Error("permission denied"), {
+      code: "EACCES",
+    });
+
+    vi.mocked(fs.readFile).mockRejectedValueOnce(permissionDenied);
     overlay.handleInput?.("\x13");
     await vi.waitFor(() =>
       expect(overlay.render(240).join("\n")).toContain(
-        "Error resolving config paths: permission denied",
+        `Project (${projectPreferred})`,
       ),
-    );
-    overlay.handleInput?.("\x13");
-    await vi.waitFor(() =>
-      expect(overlay.render(240).join("\n")).toContain("Write Config To"),
     );
 
     const { writeJsonFile } = await import("@sherif-fanous/pi-extensions-core");
-    const writeSpy = vi.mocked(writeJsonFile).mockResolvedValue();
+    // Earlier tests in this file leave calls on the shared module mock.
+    const writeSpy = vi.mocked(writeJsonFile).mockClear().mockResolvedValue();
 
+    vi.mocked(fs.readFile).mockRejectedValueOnce(permissionDenied);
     overlay.handleInput?.("\r");
     await vi.waitFor(() =>
-      expect(writeSpy).toHaveBeenCalledExactlyOnceWith(projectPreferred, {
+      expect(overlay.render(240).join("\n")).toContain(
+        "It must be readable and contain a valid JSON object.",
+      ),
+    );
+    expect(writeSpy).not.toHaveBeenCalled();
+
+    overlay.handleInput?.("\x13");
+    await vi.waitFor(() =>
+      expect(overlay.render(240).join("\n")).toContain(
+        `Project (${projectLegacy})`,
+      ),
+    );
+    overlay.handleInput?.("\r");
+    await vi.waitFor(() =>
+      expect(writeSpy).toHaveBeenCalledExactlyOnceWith(projectLegacy, {
         themes: { light: "dark" },
       }),
     );

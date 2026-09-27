@@ -75,7 +75,7 @@ describe("loadConfig", () => {
       );
 
       expect(result.warnings).toEqual([
-        `${scope === "project" ? "Project" : "Global"} config: pollIntervalMs "60001" must be a number between 1000 and 60000 milliseconds. Using default (2000ms).`,
+        `${scope === "project" ? "Project" : "Global"} setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not 60001. Using the default value 2000.`,
       ]);
     },
   );
@@ -175,7 +175,28 @@ describe("loadConfig", () => {
     expect(result.runtimeConfig.isSyncActive).toBe(false);
     expect(result.runtimeConfigSources.isSyncActive).toBe("global");
     expect(result.warnings).toEqual([
-      'Project config: isSyncActive ""invalid"" is not a boolean — ignored',
+      'Project setting "isSyncActive" must be a boolean, not "invalid". Ignored it.',
+    ]);
+  });
+
+  test("uses the default activation value when no scope supplies a valid one", async () => {
+    for (const [scope, value] of [
+      ["global", "no"],
+      ["project", "invalid"],
+    ] as const) {
+      const filePath = getConfigFilePath(scope);
+
+      await mkdir(path.dirname(filePath), { recursive: true });
+      await writeFile(filePath, JSON.stringify({ isSyncActive: value }));
+    }
+
+    const result = await loadConfig(createContext());
+
+    expect(result.runtimeConfig.isSyncActive).toBe(true);
+    expect(result.runtimeConfigSources.isSyncActive).toBe("default");
+    expect(result.warnings).toEqual([
+      'Project setting "isSyncActive" must be a boolean, not "invalid". Using the default value true.',
+      'Global setting "isSyncActive" must be a boolean, not "no". Using the default value true.',
     ]);
   });
 
@@ -353,7 +374,7 @@ describe("writeConfigChanges", () => {
           await writeConfigChanges(scope, projectDirectory, changes),
         ).toEqual({
           ok: false,
-          reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It must contain a valid JSON object. Fix the file and try again.`,
+          reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It must be readable and contain a valid JSON object. Fix the file and try again.`,
         });
         expect(writeSpy).not.toHaveBeenCalled();
         expect(await readFile(filePath, "utf8")).toBe(malformedContents);
@@ -400,7 +421,7 @@ describe("writeConfigChanges", () => {
       expect(loaded.runtimeConfig).toEqual(DEFAULT_CONFIG);
       expect(loaded.runtimeConfigSources.isSyncActive).toBe("default");
       expect(loaded.warnings).toEqual([
-        `Configuration in ${filePath} must be a JSON object. File ignored.`,
+        `Configuration at ${filePath} must be a JSON object. Ignored the file.`,
       ]);
 
       const writeSpy = vi.mocked(writeJsonFile);
@@ -412,7 +433,7 @@ describe("writeConfigChanges", () => {
           }),
         ).toEqual({
           ok: false,
-          reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It must contain a valid JSON object. Fix the file and try again.`,
+          reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It must be readable and contain a valid JSON object. Fix the file and try again.`,
         });
         expect(writeSpy).not.toHaveBeenCalled();
         expect(await readFile(filePath, "utf8")).toBe(content);
@@ -656,7 +677,7 @@ describe.each(["project", "global"] as const)("%s file selection", (scope) => {
   });
 
   test.each(["EACCES", "EISDIR", "ENOTDIR"])(
-    "does not fall back on read error %s",
+    "warns, ignores, and protects the preferred file on read error %s without legacy fallback",
     async (code) => {
       const { preferred, legacy } = paths();
 
@@ -672,13 +693,24 @@ describe.each(["project", "global"] as const)("%s file selection", (scope) => {
           return readFile(filePath, options);
         });
 
-      await expect(
-        getConfigPath(scope, projectDirectory),
-      ).rejects.toMatchObject({ code });
-      await expect(loadConfig(createContext())).rejects.toMatchObject({ code });
-      await expect(
-        writeConfigChanges(scope, projectDirectory, { isSyncActive: true }),
-      ).rejects.toMatchObject({ code });
+      expect(await getConfigPath(scope, projectDirectory)).toBe(preferred);
+
+      const loaded = await loadConfig(createContext());
+
+      expect(loaded.runtimeConfig).toEqual(DEFAULT_CONFIG);
+      expect(loaded.warnings).toEqual([
+        `Could not read configuration at ${preferred}: expected read failure. Ignored the file.`,
+      ]);
+
+      expect(
+        await writeConfigChanges(scope, projectDirectory, {
+          isSyncActive: true,
+        }),
+      ).toEqual({
+        ok: false,
+        reason: `Theme Sync did not change the ${scope} config file at ${preferred}. It must be readable and contain a valid JSON object. Fix the file and try again.`,
+      });
+      expect(vi.mocked(writeJsonFile)).not.toHaveBeenCalled();
 
       expect(readSpy.mock.calls.some(([filePath]) => filePath === legacy)).toBe(
         false,

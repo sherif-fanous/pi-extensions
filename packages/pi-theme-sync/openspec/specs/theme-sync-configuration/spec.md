@@ -66,12 +66,14 @@ every load.
 - **THEN** the extension reports the preferred file's validation warning and
   does not load that scope's legacy file
 
-#### Scenario: Unreadable preferred file does not trigger fallback
+#### Scenario: Unreadable preferred file is ignored without fallback
 
 - **WHEN** reading the preferred file fails for a reason other than a missing
   path
-- **THEN** the extension reports the I/O failure through existing error handling
-  and does not read the legacy file instead
+- **THEN** the extension reports the warning
+  `Could not read configuration at <path>: <message>. Ignored the file.`, uses
+  the other scope and defaults as if that scope had no configured values, and
+  does not read the legacy file instead
 
 #### Scenario: Global directory override applies to both candidates
 
@@ -105,6 +107,14 @@ polling interval, and `isSyncActive`.
 - **THEN** the extension uses the default `2000` milliseconds, reports Default
   provenance, and emits a validation warning
 
+#### Scenario: Reject a non-boolean sync activation state
+
+- **WHEN** a scope's `isSyncActive` is present but not a boolean
+- **THEN** the extension emits the warning
+  `<Project|Global> setting "isSyncActive" must be a boolean, not <value>.`
+  followed by `Using the default value true.` when no scope supplies a valid
+  value, or by `Ignored it.` when the other scope's value applies
+
 #### Scenario: Read configured sync activation state
 
 - **WHEN** the user configures `isSyncActive`
@@ -137,9 +147,9 @@ The extension SHALL support writing saved config changes to either the project
 or global config file. On every save it SHALL resolve the destination afresh
 using the same missing-only fallback rule as loading. It SHALL update only the
 selected file, preserve unrelated settings, and refuse to overwrite a selected
-file containing malformed JSON or a non-object JSON value. If neither candidate
-exists, it SHALL create the preferred path and its parent directory. It SHALL
-NOT automatically move or delete config files.
+file that cannot be read or contains malformed JSON or a non-object JSON value.
+If neither candidate exists, it SHALL create the preferred path and its parent
+directory. It SHALL NOT automatically move or delete config files.
 
 #### Scenario: Write config change to project scope
 
@@ -178,10 +188,16 @@ NOT automatically move or delete config files.
 - **THEN** the extension refuses the save, identifies the selected path in the
   error, and leaves both candidates unchanged
 
-#### Scenario: Save does not fall back after an I/O failure
+#### Scenario: Unreadable selected file is protected
 
-- **WHEN** reading or writing the selected destination fails with an I/O error
-  other than a missing file on read
+- **WHEN** reading the selected preferred file fails with an I/O error other
+  than a missing file and the user saves changes
+- **THEN** the extension refuses the save, identifies the selected path in the
+  error, and leaves both candidates unchanged
+
+#### Scenario: Save does not fall back after a write failure
+
+- **WHEN** writing the selected destination fails
 - **THEN** the extension reports the failure through existing error handling and
   does not write the other candidate instead
 

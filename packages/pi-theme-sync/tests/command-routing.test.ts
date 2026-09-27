@@ -87,7 +87,7 @@ test("unknown arguments report punctuated usage without opening an overlay", asy
 
   expect(custom).not.toHaveBeenCalled();
   expect(notify).toHaveBeenCalledWith(
-    "Usage: /theme-sync or /theme-sync status.",
+    'Theme Sync: 1 warning\n- Unknown subcommand "unknown". Try /theme-sync or /theme-sync status.',
     "warning",
   );
 });

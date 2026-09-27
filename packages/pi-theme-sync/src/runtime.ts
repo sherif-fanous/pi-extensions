@@ -24,6 +24,7 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
+import { notifyWarnings } from "@sherif-fanous/pi-extensions-core";
 
 type ScheduleRecurringCycle = (
   cycle: () => void,
@@ -38,7 +39,7 @@ const DETECTOR_LABELS: Record<PollingDetector | SubscriptionDetector, string> =
     system: "System Appearance",
   };
 const RECURRING_CYCLE_FAILURE_WARNING =
-  "A recurring appearance update failed; theme sync will retry.";
+  "A recurring appearance update failed. Retrying on the next cycle.";
 const scheduleRecurringCycle: ScheduleRecurringCycle = (cycle, intervalMs) => {
   const timer = setInterval(cycle, intervalMs);
 
@@ -80,6 +81,9 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
   let isColorSchemeSubscriptionDemoted = false;
   let hasUnreportedAppearanceChange = false;
   let isShutDown = false;
+  // Counts cleanups, so a setup can tell that a later cleanup overtook it
+  // even after a newer setup cleared `isShutDown` again.
+  let cleanupCount = 0;
 
   const applyMappedTheme = (
     ctx: ExtensionContext,
@@ -115,7 +119,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
   const reportDetectorFailure = (
     detector: PollingDetector | SubscriptionDetector,
   ) => {
-    const warning = `${DETECTOR_LABELS[detector]} query failed. Other available detectors will be used.`;
+    const warning = `${DETECTOR_LABELS[detector]} query failed. Using the other available detectors.`;
 
     if (!isShutDown && !warnings.includes(warning)) {
       warnings.push(warning);
@@ -191,15 +195,13 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     hasUnreportedAppearanceChange = false;
     isRecurringCycleRunning = false;
     isShutDown = true;
+    cleanupCount += 1;
   };
 
-  const setupAppearanceMonitoring = async (
+  const startAppearanceMonitoring = async (
     ctx: ExtensionContext,
-    schedule: ScheduleRecurringCycle = scheduleRecurringCycle,
+    schedule: ScheduleRecurringCycle,
   ) => {
-    cleanup();
-    isShutDown = false;
-
     const loadedConfig = await loadConfig(ctx);
 
     if (isShutDown) {
@@ -214,7 +216,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
 
     if (ctx.hasUI && !hasColorSchemeApi(tui)) {
       warnings.push(
-        `Terminal color-scheme API is unavailable in Pi ${VERSION}; falling back to other detectors.`,
+        `Terminal color-scheme API is unavailable in Pi ${VERSION}. Using other detectors.`,
       );
     }
 
@@ -278,12 +280,12 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
       availablePollingDetectors.length === 0 &&
       availableSubscriptionDetectors.length === 0
     ) {
-      warnings.push("No appearance detectors available on this terminal");
+      warnings.push("No appearance detectors are available on this terminal.");
     }
 
     if (currentAppearance === "unknown" && runtimeConfig.isSyncActive) {
       warnings.push(
-        "Sync is active but appearance is unknown — no theme applied",
+        "Sync is active but the appearance is unknown. Did not apply a theme.",
       );
     }
 
@@ -302,7 +304,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
 
       // Silence does not reveal whether the terminal or Pi stopped reports.
       warnings.push(
-        "Terminal color-scheme notifications stopped arriving, so theme sync switched to polling.",
+        "Terminal color-scheme notifications stopped arriving. Switched to polling.",
       );
 
       markEvent("Switched to polling after notifications stopped arriving");
@@ -433,6 +435,26 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     }
 
     detectionStrategy = "No available detectors";
+  };
+
+  // Setup warnings are notified once. Warnings the recurring cycle adds
+  // later appear only in the status report.
+  const setupAppearanceMonitoring = async (
+    ctx: ExtensionContext,
+    schedule: ScheduleRecurringCycle = scheduleRecurringCycle,
+  ) => {
+    cleanup();
+    isShutDown = false;
+
+    const setupCleanupCount = cleanupCount;
+
+    await startAppearanceMonitoring(ctx, schedule);
+
+    // Any cleanup since, from shutdown or a newer setup, means this
+    // session is gone and its warnings are no longer current.
+    if (cleanupCount === setupCleanupCount) {
+      notifyWarnings(ctx, "Theme Sync", warnings);
+    }
   };
 
   const getStatus = (ctx: ExtensionContext): RuntimeStatus => {

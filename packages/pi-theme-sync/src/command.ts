@@ -8,7 +8,10 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-import { isInteractiveTui } from "@sherif-fanous/pi-extensions-core";
+import {
+  isInteractiveTui,
+  notifyWarnings,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** Opens the interactive theme sync configuration overlay for a TUI session. */
 export async function openThemeSyncOverlay(
@@ -80,7 +83,9 @@ export async function runThemeSyncCommand(
     return;
   }
 
-  ctx.ui.notify("Usage: /theme-sync or /theme-sync status.", "warning");
+  notifyWarnings(ctx, "Theme Sync", [
+    `Unknown subcommand "${argument}". Try /theme-sync or /theme-sync status.`,
+  ]);
 }
 
 function requireUI(ctx: ExtensionCommandContext, commandName: string): boolean {

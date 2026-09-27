@@ -133,8 +133,8 @@ test("startup survives polling and subscription probe failures", async () => {
       currentAppearance: "dark",
       detectionStrategy: "OSC 11",
       warnings: [
-        "Terminal Color Scheme query failed. Other available detectors will be used.",
-        "Terminal Color Scheme (subscription) query failed. Other available detectors will be used.",
+        "Terminal Color Scheme query failed. Using the other available detectors.",
+        "Terminal Color Scheme (subscription) query failed. Using the other available detectors.",
       ],
     });
   } finally {
@@ -169,8 +169,46 @@ test("a detector failing after discovery falls back and reports only one warning
     );
 
     expect(runtime.getStatus(ctx).warnings).toEqual([
-      "Terminal Color Scheme query failed. Other available detectors will be used.",
+      "Terminal Color Scheme query failed. Using the other available detectors.",
     ]);
+  } finally {
+    runtime.cleanup();
+  }
+});
+
+test("setup notifies its warnings once and leaves later cycle warnings to status", async () => {
+  vi.mocked(detectAppearanceViaColorScheme).mockRejectedValue(
+    new Error("query failed"),
+  );
+
+  const ctx = createContext();
+  const notify = vi.spyOn(ctx.ui, "notify");
+  const runtime = createThemeSyncRuntime();
+  let cycle = () => {};
+
+  try {
+    await runtime.setupAppearanceMonitoring(ctx, (callback) => {
+      cycle = callback;
+
+      return () => {};
+    });
+
+    expect(notify).toHaveBeenCalledExactlyOnceWith(
+      "Theme Sync: 1 warning\n- Terminal Color Scheme query failed. Using the other available detectors.",
+      "warning",
+    );
+
+    vi.mocked(detectAppearanceViaOsc11Background).mockRejectedValue(
+      new Error("query failed"),
+    );
+    cycle();
+    await vi.waitFor(() =>
+      expect(runtime.getStatus(ctx).warnings).toContain(
+        "OSC 11 query failed. Using the other available detectors.",
+      ),
+    );
+
+    expect(notify).toHaveBeenCalledOnce();
   } finally {
     runtime.cleanup();
   }
@@ -196,6 +234,7 @@ test.each(["reject", "unknown", "light"] as const)(
     const runtime = createThemeSyncRuntime();
     const schedule = vi.fn(() => vi.fn());
     const setTheme = vi.spyOn(ctx.ui, "setTheme");
+    const notify = vi.spyOn(ctx.ui, "notify");
     const setup = runtime.setupAppearanceMonitoring(ctx, schedule);
 
     try {
@@ -213,6 +252,7 @@ test.each(["reject", "unknown", "light"] as const)(
       expect(schedule).not.toHaveBeenCalled();
       expect(setTheme).not.toHaveBeenCalled();
       expect(runtime.getStatus(ctx).warnings).toEqual([]);
+      expect(notify).not.toHaveBeenCalled();
     } finally {
       runtime.cleanup();
       finishProbe();
@@ -260,6 +300,7 @@ function createContext(): ExtensionContext {
     mode: "tui",
     ui: {
       getAllThemes: () => [{ name: "light" }, { name: "dark" }],
+      notify: vi.fn(),
       setTheme: vi.fn(),
       setWidget: vi.fn(),
       theme: { name: "initial" },

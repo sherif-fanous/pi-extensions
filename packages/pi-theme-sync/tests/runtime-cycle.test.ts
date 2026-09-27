@@ -160,7 +160,7 @@ for (const mode of ["polling", "subscription"] as const) {
       slowFailure.reject(new Error("expected recurring failure"));
       await flushPromises();
       assert.deepEqual(runtime.getStatus(harness.ctx).warnings, [
-        "Terminal Color Scheme query failed. Other available detectors will be used.",
+        "Terminal Color Scheme query failed. Using the other available detectors.",
       ]);
 
       runCycle();
@@ -243,7 +243,7 @@ void test("recurring non-detector failures still release the cycle guard", async
     });
 
     assert.deepEqual(runtime.getStatus(harness.ctx).warnings, [
-      "A recurring appearance update failed; theme sync will retry.",
+      "A recurring appearance update failed. Retrying on the next cycle.",
     ]);
 
     runCycle();

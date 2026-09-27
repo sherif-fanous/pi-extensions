@@ -15,8 +15,10 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   extensionConfigPath,
   isNotFoundError,
+  malformedConfigWarning,
   parseJsonObject,
   projectConfigPath,
+  unreadableConfigWarning,
   writeJsonFile,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -98,14 +100,28 @@ export async function loadConfig(
     ctx.ui.getAllThemes().map((theme) => theme.name),
   );
 
-  const projectIsSyncActive = validateIsSyncActive(
+  const projectIsSyncActive = validIsSyncActive(
     projectLoadedConfig?.isSyncActive,
-    "Project config",
+  );
+  const globalIsSyncActive = validIsSyncActive(
+    globalLoadedConfig?.isSyncActive,
+  );
+  const isSyncActiveSource = resolveSource(
+    projectIsSyncActive,
+    globalIsSyncActive,
+  );
+
+  warnInvalidIsSyncActive(
+    "project",
+    projectLoadedConfig?.isSyncActive,
+    isSyncActiveSource,
     warnings,
   );
-  const globalIsSyncActive = validateIsSyncActive(
+
+  warnInvalidIsSyncActive(
+    "global",
     globalLoadedConfig?.isSyncActive,
-    "Global config",
+    isSyncActiveSource,
     warnings,
   );
 
@@ -143,7 +159,7 @@ export async function loadConfig(
   );
 
   const runtimeConfigSources: RuntimeConfigSources = {
-    isSyncActive: resolveSource(projectIsSyncActive, globalIsSyncActive),
+    isSyncActive: isSyncActiveSource,
 
     themes: {
       light: lightTheme.source,
@@ -193,7 +209,7 @@ export async function writeConfigChanges(
   if (result.warning) {
     return {
       ok: false,
-      reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It must contain a valid JSON object. Fix the file and try again.`,
+      reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It must be readable and contain a valid JSON object. Fix the file and try again.`,
     };
   }
 
@@ -235,25 +251,16 @@ async function readJsonIfExists(filePath: string): Promise<ReadJsonResult> {
   try {
     content = await fs.readFile(filePath, "utf8");
   } catch (error) {
-    if (isNotFoundError(error)) {
-      return { missing: true };
-    }
-
-    throw error;
+    return isNotFoundError(error)
+      ? { missing: true }
+      : { warning: unreadableConfigWarning(filePath, error) };
   }
 
   const parsed = parseJsonObject(content);
 
-  if (parsed.ok) {
-    return { config: parsed.value };
-  }
-
-  return {
-    warning:
-      parsed.reason === "invalid-json"
-        ? `Invalid JSON in ${filePath} — file ignored`
-        : `Configuration in ${filePath} must be a JSON object. File ignored.`,
-  };
+  return parsed.ok
+    ? { config: parsed.value }
+    : { warning: malformedConfigWarning(filePath, parsed) };
 }
 
 async function readScopedConfig(
@@ -294,24 +301,9 @@ function resolveSource<T>(
   return "default";
 }
 
-function validateIsSyncActive(
-  value: unknown,
-  scope: string,
-  warnings: string[],
-): boolean | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value !== "boolean") {
-    warnings.push(
-      `${scope}: isSyncActive "${JSON.stringify(value)}" is not a boolean — ignored`,
-    );
-
-    return undefined;
-  }
-
-  return value;
+/** Label that starts a setting warning, naming the file's scope. */
+function scopeLabel(scope: ConfigScope): string {
+  return scope === "project" ? "Project" : "Global";
 }
 
 function validatePollingIntervalMs(
@@ -327,10 +319,10 @@ function validatePollingIntervalMs(
   }
 
   if (typeof value !== "number" || !isValidPollIntervalMs(value)) {
-    const scope = source === "project" ? "Project config" : "Global config";
+    const scope = scopeLabel(source === "project" ? "project" : "global");
 
     warnings.push(
-      `${scope}: pollIntervalMs "${String(value)}" must be a number between ${POLL_INTERVAL_MIN_MS} and ${POLL_INTERVAL_MAX_MS} milliseconds. Using default (${DEFAULT_CONFIG.detection.pollIntervalMs}ms).`,
+      `${scope} setting "pollIntervalMs" must be a number between ${POLL_INTERVAL_MIN_MS} and ${POLL_INTERVAL_MAX_MS} milliseconds, not ${JSON.stringify(value)}. Using the default value ${DEFAULT_CONFIG.detection.pollIntervalMs}.`,
     );
 
     return {
@@ -355,11 +347,38 @@ function validateTheme(
 
   if (!availableThemes.has(themeName)) {
     warnings.push(
-      `Theme "${themeName}" not found in Pi — using default "${DEFAULT_CONFIG.themes[fallback]}"`,
+      `Theme "${themeName}" was not found in Pi. Using the default theme "${DEFAULT_CONFIG.themes[fallback]}".`,
     );
 
     return { source: "default", value: DEFAULT_CONFIG.themes[fallback] };
   }
 
   return { source, value: themeName };
+}
+
+function validIsSyncActive(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+/**
+ * Warn about an `isSyncActive` value that is not a boolean. The warning
+ * names the default when no scope supplies a valid value, and otherwise
+ * says the value was ignored, since the other scope's value applies.
+ */
+function warnInvalidIsSyncActive(
+  scope: ConfigScope,
+  value: unknown,
+  effectiveSource: ConfigScope | "default",
+  warnings: string[],
+): void {
+  if (value === undefined || typeof value === "boolean") return;
+
+  const outcome =
+    effectiveSource === "default"
+      ? `Using the default value ${String(DEFAULT_CONFIG.isSyncActive)}.`
+      : "Ignored it.";
+
+  warnings.push(
+    `${scopeLabel(scope)} setting "isSyncActive" must be a boolean, not ${JSON.stringify(value)}. ${outcome}`,
+  );
 }
