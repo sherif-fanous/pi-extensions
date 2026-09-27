@@ -4,7 +4,11 @@ import { runThemeSyncCommand } from "./command.js";
 import { createThemeSyncRuntime } from "./runtime.js";
 import { registerStatusReportRenderer } from "./ui/status-report.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { describeError } from "@sherif-fanous/pi-extensions-core";
+import {
+  guardCommand,
+  guardEvent,
+  subcommandCompletions,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** Registers theme sync with Pi's extension API. */
 export default function (pi: ExtensionAPI) {
@@ -13,36 +17,20 @@ export default function (pi: ExtensionAPI) {
   registerStatusReportRenderer(pi);
   pi.registerCommand("theme-sync", {
     description: "Configure theme sync or report its status",
-    getArgumentCompletions: (prefix) => {
-      const argument = prefix.trimStart();
-
-      return !argument.includes(" ") && "status".startsWith(argument)
-        ? [{ value: "status", label: "status: show theme sync status" }]
-        : null;
-    },
-
-    handler: async (args, ctx) => {
-      try {
-        await runThemeSyncCommand(args, runtime, ctx, pi);
-      } catch (err) {
-        ctx.ui.notify(
-          `Theme sync command failed: ${describeError(err)}.`,
-          "error",
-        );
-      }
-    },
+    getArgumentCompletions: subcommandCompletions([
+      { name: "status", description: "show theme sync status" },
+    ]),
+    handler: guardCommand("Theme Sync", (args, ctx) =>
+      runThemeSyncCommand(args, runtime, ctx, pi),
+    ),
   });
 
-  pi.on("session_start", async (_event, ctx) => {
-    try {
-      await runtime.setupAppearanceMonitoring(ctx);
-    } catch (err) {
-      ctx.ui.notify(
-        `pi-theme-sync session_start failed: ${describeError(err)}.`,
-        "error",
-      );
-    }
-  });
+  pi.on(
+    "session_start",
+    guardEvent("Theme Sync", "session_start", (_event, ctx) =>
+      runtime.setupAppearanceMonitoring(ctx),
+    ),
+  );
 
   pi.on("session_shutdown", () => {
     try {

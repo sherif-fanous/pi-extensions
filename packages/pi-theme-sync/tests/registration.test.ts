@@ -77,7 +77,7 @@ test("reports status delivery failures through the command lifecycle guard", asy
   await handler?.("status", ctx);
 
   expect(notify).toHaveBeenCalledWith(
-    "Theme sync command failed: append failed.",
+    "Theme Sync command failed: append failed.",
     "error",
   );
 });

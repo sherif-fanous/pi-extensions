@@ -8,6 +8,7 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
+import { isInteractiveTui } from "@sherif-fanous/pi-extensions-core";
 
 /** Opens the interactive theme sync configuration overlay for a TUI session. */
 export async function openThemeSyncOverlay(
@@ -83,7 +84,7 @@ export async function runThemeSyncCommand(
 }
 
 function requireUI(ctx: ExtensionCommandContext, commandName: string): boolean {
-  if (ctx.mode === "tui") return true;
+  if (isInteractiveTui(ctx)) return true;
 
   ctx.ui.notify(
     `Interactive TUI mode is required for ${commandName}.`,

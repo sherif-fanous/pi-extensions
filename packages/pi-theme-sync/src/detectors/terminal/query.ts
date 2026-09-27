@@ -4,6 +4,7 @@ import type {
   ExtensionContext,
   TerminalInputHandler,
 } from "@earendil-works/pi-coding-agent";
+import { isInteractiveTui } from "@sherif-fanous/pi-extensions-core";
 
 /** Default time to wait for a terminal query response. */
 export const DEFAULT_TERMINAL_QUERY_TIMEOUT_MS = 300;
@@ -16,7 +17,7 @@ export async function queryWithTerminalListener<T>(
   timeoutMs = DEFAULT_TERMINAL_QUERY_TIMEOUT_MS,
 ): Promise<T | undefined> {
   // Writing control sequences to stdout would corrupt RPC output.
-  if (ctx.mode !== "tui") {
+  if (!isInteractiveTui(ctx)) {
     return undefined;
   }
 

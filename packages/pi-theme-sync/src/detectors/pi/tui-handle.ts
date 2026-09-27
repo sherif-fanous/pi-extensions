@@ -2,6 +2,7 @@
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
+import { isInteractiveTui } from "@sherif-fanous/pi-extensions-core";
 
 const TUI_HANDLE_WIDGET_KEY = "pi-theme-sync-tui-handle";
 
@@ -9,7 +10,7 @@ const TUI_HANDLE_WIDGET_KEY = "pi-theme-sync-tui-handle";
 export function getTuiHandle(
   ctx: Pick<ExtensionContext, "mode" | "ui">,
 ): TUI | undefined {
-  if (ctx.mode !== "tui") {
+  if (!isInteractiveTui(ctx)) {
     return undefined;
   }
 
