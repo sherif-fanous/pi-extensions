@@ -60,7 +60,7 @@ export function formatPolicy(
   const { matchedRules } = resolvedDefault;
 
   if (matchedRules.length === 0) {
-    return `No preset policy applies to ${cwd}.`;
+    return `${POLICY_DIALOG_TITLE}\n  No preset policy applies to ${cwd}.`;
   }
 
   const usablePresets = presets.filter(

@@ -205,7 +205,7 @@ describe("formatPolicy", () => {
 
   it("states when no rules match", () => {
     expect(formatPolicy("/personal", presets, rules)).toBe(
-      "No preset policy applies to /personal.",
+      "Preset Policy\n  No preset policy applies to /personal.",
     );
   });
 });

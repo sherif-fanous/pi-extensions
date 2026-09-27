@@ -58,7 +58,9 @@ describe("runStatus", () => {
       new ActivePresetSession(),
     );
 
-    expect(notifications).toEqual([["No preset is active.", "info"]]);
+    expect(notifications).toEqual([
+      ["Preset Status\n  No preset is active.", "info"],
+    ]);
   });
 
   it("delivers the active-preset diagnostic via ctx.ui.notify", async () => {
@@ -92,7 +94,7 @@ describe("runStatus", () => {
 
     expect(notifications).toHaveLength(1);
     expect(notifications[0]?.[0]).toContain("Preset Status");
-    expect(notifications[0]?.[0]).toContain("Preset:                  plan");
+    expect(notifications[0]?.[0]).toContain("Preset:                 plan");
     expect(notifications[0]?.[1]).toBe("info");
   });
 });
@@ -227,10 +229,10 @@ describe("formatStatus", () => {
     );
 
     expect(out).toContain(
-      "Restore:                 No saved baseline. Clear will only turn the preset off.",
+      "Restore:                No saved baseline. Clear will only turn the preset off.",
     );
     expect(out).not.toContain("Baseline model");
     expect(out).not.toContain("Preset model:");
-    expect(out).toContain("Current model:           anthropic/claude");
+    expect(out).toContain("Current model:          anthropic/claude");
   });
 });

@@ -10,7 +10,6 @@ import type { HotkeyRegistry } from "../hotkey-registry.js";
 import { removePreset, reorderWithinScope } from "../store/api.js";
 import type { LoadedPreset } from "../types.js";
 import { renderClearSummary } from "./clear-summary.js";
-import { styleReportText } from "./command-report.js";
 import { openConfirm } from "./confirm.js";
 import { openEditor } from "./editor.js";
 import { openInfoDialog } from "./info-dialog.js";
@@ -32,6 +31,7 @@ import type {
   ExtensionUIContext,
   Theme,
 } from "@earendil-works/pi-coding-agent";
+import { styleReport } from "@sherif-fanous/pi-extensions-core";
 
 /** One action key, its footer label, and the command it runs. */
 export interface PickerAction {
@@ -149,7 +149,7 @@ export class PickerCommands {
     if (result) {
       await this.host.runWithHiddenOverlay(() =>
         openInfoDialog(ctx, {
-          body: styleReportText(
+          body: styleReport(
             renderClearSummary(result.name, result.parts),
             theme,
           ),
@@ -304,7 +304,7 @@ export class PickerCommands {
 
     await this.host.runWithHiddenOverlay(() =>
       openInfoDialog(ctx, {
-        body: styleReportText(
+        body: styleReport(
           withWarnings(result.body, result.warnings),
           this.host.theme,
         ),

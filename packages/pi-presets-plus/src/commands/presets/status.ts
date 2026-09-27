@@ -28,8 +28,8 @@ import {
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
-  Theme,
 } from "@earendil-works/pi-coding-agent";
+import { alignLabelRows } from "@sherif-fanous/pi-extensions-core";
 
 /** Report text, its severity, and the warnings the preset load produced. */
 export interface StatusBodyResult {
@@ -37,37 +37,6 @@ export interface StatusBodyResult {
   readonly severity: "info" | "warning";
   readonly warnings: readonly string[];
 }
-
-/** The theme surface {@link formatStatus} needs to style its rows. */
-interface Styler {
-  bold(text: string): string;
-  fg(color: string, text: string): string;
-}
-
-/** Styler that returns text unchanged, for plain output and for tests. */
-const IDENTITY_STYLER: Styler = {
-  bold: (text) => text,
-  fg: (_color, text) => text,
-};
-/** Every label the report can render, in display order. */
-const STATUS_LABELS = [
-  `${PRESET_LABEL}:`,
-  `${SCOPE_LABEL}:`,
-  `${RESTORE_LABEL}:`,
-  `${BASELINE_MODEL_LABEL}:`,
-  `${BASELINE_THINKING_LABEL}:`,
-  `${BASELINE_TOOLS_LABEL}:`,
-  `${PRESET_MODEL_LABEL}:`,
-  `${PRESET_THINKING_LABEL}:`,
-  `${PRESET_TOOLS_LABEL}:`,
-  `${CURRENT_MODEL_LABEL}:`,
-  `${CURRENT_THINKING_LABEL}:`,
-  `${CURRENT_TOOLS_LABEL}:`,
-] as const;
-/** Width of the label column, so the values line up. */
-const STATUS_LABEL_WIDTH = Math.max(
-  ...STATUS_LABELS.map((label) => label.length),
-);
 
 /**
  * Render the status report for the active preset.
@@ -80,9 +49,8 @@ export function formatStatus(
   _preset: LoadedPreset,
   ctx: Pick<ExtensionCommandContext, "model">,
   pi: Pick<ExtensionAPI, "getActiveTools" | "getThinkingLevel">,
-  styler: Pick<Theme, "bold" | "fg"> = IDENTITY_STYLER,
 ): string {
-  if (!active) return "No preset is active.";
+  if (!active) return `${STATUS_DIALOG_TITLE}\n  No preset is active.`;
 
   const currentModel = ctx.model
     ? { provider: ctx.model.provider, id: ctx.model.id }
@@ -97,17 +65,18 @@ export function formatStatus(
 
   if (assessment.kind === "unknown") {
     return [
-      styler.bold(styler.fg("accent", STATUS_DIALOG_TITLE)),
-      row(`${PRESET_LABEL}:`, active.name, styler),
-      row(`${SCOPE_LABEL}:`, active.scope, styler),
-      row(
-        `${RESTORE_LABEL}:`,
-        "No saved baseline. Clear will only turn the preset off.",
-        styler,
-      ),
-      row(`${CURRENT_MODEL_LABEL}:`, formatModel(currentModel), styler),
-      row(`${CURRENT_THINKING_LABEL}:`, currentThinking, styler),
-      row(`${CURRENT_TOOLS_LABEL}:`, formatTools(currentTools), styler),
+      STATUS_DIALOG_TITLE,
+      ...alignLabelRows([
+        [`${PRESET_LABEL}:`, active.name],
+        [`${SCOPE_LABEL}:`, active.scope],
+        [
+          `${RESTORE_LABEL}:`,
+          "No saved baseline. Clear will only turn the preset off.",
+        ],
+        [`${CURRENT_MODEL_LABEL}:`, formatModel(currentModel)],
+        [`${CURRENT_THINKING_LABEL}:`, currentThinking],
+        [`${CURRENT_TOOLS_LABEL}:`, formatTools(currentTools)],
+      ]),
     ].join("\n");
   }
 
@@ -120,34 +89,29 @@ export function formatStatus(
       : statusLabel(assessment.tools);
 
   return [
-    styler.bold(styler.fg("accent", STATUS_DIALOG_TITLE)),
-    row(`${PRESET_LABEL}:`, active.name, styler),
-    row(`${SCOPE_LABEL}:`, active.scope, styler),
-    row(`${BASELINE_MODEL_LABEL}:`, formatModel(baseline.model), styler),
-    row(`${BASELINE_THINKING_LABEL}:`, baseline.thinkingLevel, styler),
-    row(`${BASELINE_TOOLS_LABEL}:`, formatTools(baseline.tools), styler),
-    row(`${PRESET_MODEL_LABEL}:`, formatModel(lastApplied.model), styler),
-    row(`${PRESET_THINKING_LABEL}:`, lastApplied.thinkingLevel, styler),
-    row(
-      `${PRESET_TOOLS_LABEL}:`,
-      lastApplied.tools ? formatTools(lastApplied.tools) : "none",
-      styler,
-    ),
-    row(
-      `${CURRENT_MODEL_LABEL}:`,
-      `${formatModel(currentModel)} (${modelClass})`,
-      styler,
-    ),
-    row(
-      `${CURRENT_THINKING_LABEL}:`,
-      `${currentThinking} (${thinkingClass})`,
-      styler,
-    ),
-    row(
-      `${CURRENT_TOOLS_LABEL}:`,
-      `${formatTools(currentTools)} (${toolsClass})`,
-      styler,
-    ),
+    STATUS_DIALOG_TITLE,
+    ...alignLabelRows([
+      [`${PRESET_LABEL}:`, active.name],
+      [`${SCOPE_LABEL}:`, active.scope],
+      [`${BASELINE_MODEL_LABEL}:`, formatModel(baseline.model)],
+      [`${BASELINE_THINKING_LABEL}:`, baseline.thinkingLevel],
+      [`${BASELINE_TOOLS_LABEL}:`, formatTools(baseline.tools)],
+      [`${PRESET_MODEL_LABEL}:`, formatModel(lastApplied.model)],
+      [`${PRESET_THINKING_LABEL}:`, lastApplied.thinkingLevel],
+      [
+        `${PRESET_TOOLS_LABEL}:`,
+        lastApplied.tools ? formatTools(lastApplied.tools) : "none",
+      ],
+      [
+        `${CURRENT_MODEL_LABEL}:`,
+        `${formatModel(currentModel)} (${modelClass})`,
+      ],
+      [`${CURRENT_THINKING_LABEL}:`, `${currentThinking} (${thinkingClass})`],
+      [
+        `${CURRENT_TOOLS_LABEL}:`,
+        `${formatTools(currentTools)} (${toolsClass})`,
+      ],
+    ]),
   ].join("\n");
 }
 
@@ -160,7 +124,11 @@ export async function formatStatusBody(
   const active = session.current();
 
   if (!active) {
-    return { body: "No preset is active.", severity: "info", warnings: [] };
+    return {
+      body: `${STATUS_DIALOG_TITLE}\n  No preset is active.`,
+      severity: "info",
+      warnings: [],
+    };
   }
 
   const { presets, warnings } = await loadAll(ctx);
@@ -168,7 +136,7 @@ export async function formatStatusBody(
 
   if (!preset) {
     return {
-      body: `Active preset "${active.name}" is no longer loaded.`,
+      body: `${STATUS_DIALOG_TITLE}\n  Active preset "${active.name}" is no longer loaded.`,
       severity: "warning",
       warnings,
     };
@@ -215,17 +183,6 @@ function formatModel(model: { provider: string; id: string } | null): string {
 
 function formatTools(tools: readonly string[]): string {
   return tools.length > 0 ? tools.join(", ") : "none";
-}
-
-/** Render one label and value pair padded to the label column. */
-function row(
-  label: (typeof STATUS_LABELS)[number],
-  value: string,
-  styler: Pick<Theme, "fg">,
-): string {
-  const padding = " ".repeat(STATUS_LABEL_WIDTH - label.length);
-
-  return `  ${styler.fg("muted", label)}${padding} ${value}`;
 }
 
 function statusLabel(classification: OverlayFieldClassification): string {

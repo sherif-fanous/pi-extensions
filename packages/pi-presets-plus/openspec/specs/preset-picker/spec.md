@@ -406,8 +406,9 @@ picker SHALL remain open with list focus restored.
 
 - **WHEN** the user opens the picker, no preset is active, and the user presses
   `s`
-- **THEN** an info-dialog overlay SHALL appear with the same "no preset is
-  active" body that `/presets status` emits today
+- **THEN** an info-dialog overlay SHALL appear with the same body that
+  `/presets status` emits: the `Preset Status` heading followed by
+  `No preset is active.` on its own line, indented two spaces
 - **AND** dismissing the dialog SHALL return list focus to the picker
 
 ### Requirement: Picker routes Clear and Status output through an info-dialog overlay

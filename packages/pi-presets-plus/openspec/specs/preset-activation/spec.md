@@ -733,7 +733,13 @@ introduced in change 2:
   invocation SHALL append a durable TUI-only report in the conversation without
   adding it to LLM context. The report SHALL apply its theme when rendered and
   SHALL NOT persist ANSI styling. In RPC mode, it SHALL use the RPC-compatible
-  notification path. JSON and print modes are out of scope.
+  notification path. JSON and print modes are out of scope. Row labels SHALL be
+  aligned to the longest label in the report. Warnings found while loading
+  presets SHALL follow the rows as a `Warnings:` line and one `- <warning>` line
+  per warning. The report SHALL be styled by the command-report rules: its first
+  line is a bold accent-colored heading, the `Warnings:` line and every line
+  after it are warning-colored, and on every other line the label up to and
+  including the first colon is muted.
 
 The picker provides additional in-overlay paths to `clear` and `status` whose
 textual content is identical but whose delivery surface is the shared
@@ -759,7 +765,8 @@ info-dialog overlay (see the picker capability for those scenarios).
 #### Scenario: Status with no active preset
 
 - **WHEN** the user runs `/presets status` and no preset is active
-- **THEN** the command report SHALL state that no preset is active
+- **THEN** the command report SHALL be the `Preset Status` heading followed by
+  `No preset is active.` on its own line, indented two spaces
 
 #### Scenario: Status with baseline-managed attachment from prompt
 

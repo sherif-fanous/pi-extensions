@@ -9,6 +9,7 @@ import {
   renderCommandReport,
 } from "../../src/ui/command-report.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it, vi } from "vitest";
 
 describe("command reports", () => {
@@ -34,7 +35,10 @@ describe("command reports", () => {
     const notify = vi.fn();
 
     deliverCommandReport(
-      { mode: "rpc", ui: { notify } } as unknown as ExtensionContext,
+      {
+        mode: "rpc",
+        ui: { notify, theme: createPlainTheme() },
+      } as unknown as ExtensionContext,
       { appendEntry },
       { body: "Preset Policy", severity: "warning" },
     );

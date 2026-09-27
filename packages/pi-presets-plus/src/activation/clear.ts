@@ -8,13 +8,13 @@ import {
   formatTools,
   renderClearSummary,
 } from "../ui/clear-summary.js";
-import { styleReportText } from "../ui/command-report.js";
 import { assessOverlay } from "./overlay-assessment.js";
 import type { ActivePresetSession } from "./session.js";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
+import { styleReport } from "@sherif-fanous/pi-extensions-core";
 
 /** What a clear will write to Pi and how it will report each field. */
 export interface ClearDecision {
@@ -92,10 +92,7 @@ export async function clear(
 
   ctx.ui.notify(
     result
-      ? styleReportText(
-          renderClearSummary(result.name, result.parts),
-          ctx.ui.theme,
-        )
+      ? styleReport(renderClearSummary(result.name, result.parts), ctx.ui.theme)
       : "No preset is active.",
     severity,
   );

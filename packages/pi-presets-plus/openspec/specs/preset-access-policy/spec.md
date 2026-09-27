@@ -436,7 +436,7 @@ default is the first default candidate in merged preset order.
 When one or more policy rules match the current directory, the report SHALL use
 the labeled-row presentation of `/presets status`:
 
-- An accent-colored bold title of `Preset Policy`.
+- A title of `Preset Policy`.
 - A `Directory:` row containing the current working directory.
 - An `Allowed presets:` row containing the comma-separated names of usable
   permitted presets, or `none` when there are none.
@@ -447,7 +447,7 @@ the labeled-row presentation of `/presets status`:
 - A `Default matches:` row, directly after the `Default preset:` row, containing
   the comma-separated names of every default candidate in merged preset order,
   only when there are two or more default candidates.
-- Aligned muted row labels, matching the visual treatment of `/presets status`.
+- Row labels aligned to the longest label in the report.
 
 The report SHALL end with its last row. It SHALL NOT append a footnote or note
 after the rows, including any explanation of the override flow for prohibited
@@ -469,7 +469,14 @@ the RPC-compatible notification path. JSON and print modes are out of scope.
 
 Warnings found while loading policy or presets SHALL be included in the command
 report where possible instead of appearing as a separate notification
-immediately before it.
+immediately before it, as a `Warnings:` line followed by one `- <warning>` line
+per warning.
+
+The report SHALL be styled by the same rules as every other command report,
+matching the visual treatment of `/presets status`: its first line is a bold
+accent-colored heading, the `Warnings:` line and every line after it are
+warning-colored, and on every other line the label up to and including the first
+colon is muted.
 
 #### Scenario: Policy view from the prompt
 
@@ -561,8 +568,9 @@ immediately before it.
 #### Scenario: Policy view with no matching rules
 
 - **WHEN** the cwd matches no policy rule
-- **THEN** the output SHALL be the sentence `No preset policy applies to <cwd>.`
-  with `<cwd>` replaced by the current working directory
+- **THEN** the output SHALL be the `Preset Policy` heading followed by the
+  sentence `No preset policy applies to <cwd>.` on its own line, indented two
+  spaces, with `<cwd>` replaced by the current working directory
 
 #### Scenario: Policy view hides policy-engine details
 
