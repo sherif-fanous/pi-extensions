@@ -16,8 +16,7 @@ export type HotkeyModifier = "alt" | "ctrl" | "shift";
 
 /** Parse outcome carrying either the parsed hotkey or a reason it failed. */
 export type ParseHotkeyResult =
-  | { ok: true; parsed: ParsedHotkey }
-  | { ok: false; reason: string };
+  { ok: true; parsed: ParsedHotkey } | { ok: false; reason: string };
 
 /**
  * Fixed modifier order used to build the `normalized` form of a hotkey.

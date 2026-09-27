@@ -13,8 +13,7 @@ export interface PromptEditorOptions {
 
 /** Edited text, or a marker that the user left the editor without saving. */
 export type PromptEditorResult =
-  | { confirmed: true; text: string }
-  | { confirmed: false };
+  { confirmed: true; text: string } | { confirmed: false };
 
 /** Edit the preset instructions and resolve with the user's choice. */
 export async function openPromptEditor(

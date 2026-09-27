@@ -13,9 +13,7 @@
  * clear leaves the user's value in place.
  */
 export type OverlayFieldClassification =
-  | "already-baseline"
-  | "matches-last-applied"
-  | "user-override";
+  "already-baseline" | "matches-last-applied" | "user-override";
 
 /** Classify `current` against the baseline and last-applied values. */
 export function classifyOverlayField<T>(

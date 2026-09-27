@@ -115,8 +115,7 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
    * between renders.
    */
   private driftReasonsCache:
-    | { reasons: readonly string[]; signature: string }
-    | undefined;
+    { reasons: readonly string[]; signature: string } | undefined;
 
   constructor(
     private allPresets: LoadedPreset[],

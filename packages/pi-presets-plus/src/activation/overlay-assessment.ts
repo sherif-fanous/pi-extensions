@@ -37,8 +37,7 @@ export interface CurrentOverlayState {
  * `unknown` and callers cannot restore any field.
  */
 export type OverlayAssessment =
-  | BaselineOverlayAssessment
-  | { readonly kind: "unknown" };
+  BaselineOverlayAssessment | { readonly kind: "unknown" };
 
 /** Classify each current Pi value under an active preset overlay. */
 export function assessOverlay(

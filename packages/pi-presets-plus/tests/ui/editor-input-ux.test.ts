@@ -297,9 +297,10 @@ describe("preset editor input UX", () => {
     await result;
 
     expect(updatePreset).toHaveBeenCalledOnce();
-    expect((updatePreset.mock.calls[0]?.[2] as Preset).instructions).toBe(
-      initial.instructions,
-    );
+
+    const saved = updatePreset.mock.calls[0]?.[2] as Preset | undefined;
+
+    expect(saved?.instructions).toBe(initial.instructions);
   });
 
   it("surfaces all required Save validation errors inline from Ctrl+S", async () => {
