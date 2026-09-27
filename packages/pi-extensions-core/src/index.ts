@@ -6,3 +6,4 @@
  */
 
 export { describeError } from "./errors.js";
+export { isNotFoundError, isRecord } from "./guards.js";
