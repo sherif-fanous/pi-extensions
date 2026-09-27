@@ -65,8 +65,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",
-    "@earendil-works/pi-coding-agent": "^0.84.4",
-    "@earendil-works/pi-tui": "^0.84.4",
+    "@earendil-works/pi-coding-agent": "catalog:",
+    "@earendil-works/pi-tui": "catalog:",
     "@eslint/js": "^10.0.1",
     "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
     "@sherif-fanous/pi-extensions-testing": "workspace:*",

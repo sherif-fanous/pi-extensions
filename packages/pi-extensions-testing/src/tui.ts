@@ -86,6 +86,7 @@ export function createFakeTui(columns = 120, rows = 40): FakeTui {
         focus: () => {
           state.focusCalls += 1;
         },
+        getBounds: () => undefined,
         hide: () => {
           overlay.hideCalls += 1;
         },
