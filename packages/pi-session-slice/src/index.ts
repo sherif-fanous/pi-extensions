@@ -11,7 +11,11 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-import { describeError, guardCommand } from "@sherif-fanous/pi-extensions-core";
+import {
+  describeError,
+  guardCommand,
+  notifyWarnings,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** Run the interactive session-slice flow. */
 export async function handleSliceCommand(
@@ -22,16 +26,17 @@ export async function handleSliceCommand(
   const sourcePath = ctx.sessionManager.getSessionFile();
 
   if (!sourcePath) {
-    ctx.ui.notify(
-      "Slice needs a session file to switch to. Pi was started with --no-session.",
-      "warning",
-    );
+    notifyWarnings(ctx, "Session Slice", [
+      "Slicing needs a session file to switch to, but Pi was started with --no-session.",
+    ]);
 
     return;
   }
 
   if (!ctx.isIdle()) {
-    ctx.ui.notify("Wait for the agent to finish before slicing.", "warning");
+    notifyWarnings(ctx, "Session Slice", [
+      "The agent is still running. Wait for it to finish before slicing.",
+    ]);
 
     return;
   }
@@ -39,10 +44,9 @@ export async function handleSliceCommand(
   const header = ctx.sessionManager.getHeader();
 
   if (header?.version !== SUPPORTED_SESSION_VERSION) {
-    ctx.ui.notify(
+    notifyWarnings(ctx, "Session Slice", [
       `This session uses unsupported format version ${String(header?.version ?? "unknown")}.`,
-      "warning",
-    );
+    ]);
 
     return;
   }
@@ -50,10 +54,9 @@ export async function handleSliceCommand(
   const candidates = listCandidates(ctx.sessionManager);
 
   if (candidates.length === 0) {
-    ctx.ui.notify(
+    notifyWarnings(ctx, "Session Slice", [
       "This session has no user messages yet, so there is nothing to slice.",
-      "warning",
-    );
+    ]);
 
     return;
   }
@@ -67,10 +70,9 @@ export async function handleSliceCommand(
   );
 
   if (!startCandidate) {
-    ctx.ui.notify(
+    notifyWarnings(ctx, "Session Slice", [
       "The selected start message is no longer available.",
-      "warning",
-    );
+    ]);
 
     return;
   }
@@ -87,7 +89,7 @@ export async function handleSliceCommand(
   const result = buildSlice(ctx.sessionManager.getBranch(), start.id, endId);
 
   if ("reason" in result) {
-    ctx.ui.notify(result.reason, "warning");
+    notifyWarnings(ctx, "Session Slice", [result.reason]);
 
     return;
   }
@@ -127,10 +129,9 @@ export async function handleSliceCommand(
   });
 
   if (switched.cancelled) {
-    ctx.ui.notify(
+    notifyWarnings(ctx, "Session Slice", [
       `The sliced session was saved at ${destination}, but Pi did not switch to it.`,
-      "warning",
-    );
+    ]);
 
     return;
   }

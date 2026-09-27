@@ -166,7 +166,7 @@ describe("sessionSlice", () => {
   it.each([
     [
       { sessionFile: undefined },
-      "Slice needs a session file to switch to. Pi was started with --no-session.",
+      "Session Slice: 1 warning\n- Slicing needs a session file to switch to, but Pi was started with --no-session.",
     ],
     [
       // Pi defers the first write until the assistant replies; an assigned
@@ -175,12 +175,15 @@ describe("sessionSlice", () => {
         sessionFile: "/a/session/path/that/does/not/exist.jsonl",
         contextEntries: [],
       },
-      "This session has no user messages yet, so there is nothing to slice.",
+      "Session Slice: 1 warning\n- This session has no user messages yet, so there is nothing to slice.",
     ],
-    [{ idle: false }, "Wait for the agent to finish before slicing."],
+    [
+      { idle: false },
+      "Session Slice: 1 warning\n- The agent is still running. Wait for it to finish before slicing.",
+    ],
     [
       { header: { version: 2 } },
-      "This session uses unsupported format version 2.",
+      "Session Slice: 1 warning\n- This session uses unsupported format version 2.",
     ],
   ])("refuses an unsupported state", async (overrides, message) => {
     const command = registeredCommand();
@@ -200,7 +203,7 @@ describe("sessionSlice", () => {
     await command.handler("", ctx);
 
     expect(notify).toHaveBeenCalledWith(
-      "This session has no user messages yet, so there is nothing to slice.",
+      "Session Slice: 1 warning\n- This session has no user messages yet, so there is nothing to slice.",
       "warning",
     );
     expect(mocks.showStartPicker).not.toHaveBeenCalled();
@@ -303,7 +306,7 @@ describe("sessionSlice", () => {
     await command.handler("", ctx);
 
     expect(notify).toHaveBeenCalledWith(
-      "The sliced session was saved at /sessions/slice.jsonl, but Pi did not switch to it.",
+      "Session Slice: 1 warning\n- The sliced session was saved at /sessions/slice.jsonl, but Pi did not switch to it.",
       "warning",
     );
   });
