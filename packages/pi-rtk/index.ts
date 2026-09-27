@@ -24,6 +24,9 @@ import {
 import {
   alignLabelRows,
   createCommandReport,
+  guardCommand,
+  guardEvent,
+  subcommandCompletions,
 } from "@sherif-fanous/pi-extensions-core";
 
 const REWRITE_TIMEOUT_MS = 5000;
@@ -212,14 +215,10 @@ export default function (pi: ExtensionAPI) {
   STATUS_REPORT.register(pi);
   pi.registerCommand("rtk", {
     description: "Control pi-rtk shell command rewriting",
-    getArgumentCompletions: (prefix) => {
-      const completions = VALID_RTK_SUBCOMMANDS.filter((subcommand) =>
-        subcommand.startsWith(prefix),
-      ).map((subcommand) => ({ label: subcommand, value: subcommand }));
-
-      return completions.length > 0 ? completions : null;
-    },
-    handler: async (args, ctx) => {
+    getArgumentCompletions: subcommandCompletions(
+      VALID_RTK_SUBCOMMANDS.map((name) => ({ name })),
+    ),
+    handler: guardCommand("RTK", async (args, ctx) => {
       const subcommand = args.trim();
 
       if (subcommand.length === 0) {
@@ -238,47 +237,54 @@ export default function (pi: ExtensionAPI) {
       }
 
       handleRtkSubcommand(subcommand, ctx, pi);
-    },
+    }),
   });
 
-  pi.on("session_start", (_event, ctx) => {
-    cacheNotify((message, level) => ctx.ui.notify(message, level));
-    updateFooterStatus(ctx);
+  pi.on(
+    "session_start",
+    guardEvent("RTK", "session_start", (_event, ctx) => {
+      cacheNotify((message, level) => ctx.ui.notify(message, level));
+      updateFooterStatus(ctx);
 
-    const result = spawnSync("rtk", ["--version"], {
-      timeout: REWRITE_TIMEOUT_MS,
-    });
+      const result = spawnSync("rtk", ["--version"], {
+        timeout: REWRITE_TIMEOUT_MS,
+      });
 
-    if (!result.error) return;
+      if (!result.error) return;
 
-    const reason = classifySpawnError(result.error);
+      const reason = classifySpawnError(result.error);
 
-    if (reason !== "other") alertRtkUnavailable(reason);
-  });
+      if (reason !== "other") alertRtkUnavailable(reason);
+    }),
+  );
 
-  pi.on("user_bash", (event, ctx) => {
-    cacheNotify((message, level) => ctx.ui.notify(message, level));
+  // A failure here resolves to no result, so Pi runs the command itself.
+  pi.on(
+    "user_bash",
+    guardEvent("RTK", "user_bash", (event, ctx) => {
+      cacheNotify((message, level) => ctx.ui.notify(message, level));
 
-    if (event.excludeFromContext) {
-      return;
-    }
+      if (event.excludeFromContext) {
+        return;
+      }
 
-    if (!isSessionEnabled()) {
-      return;
-    }
+      if (!isSessionEnabled()) {
+        return;
+      }
 
-    const rewritten = rtkRewriteCommand(event.command);
+      const rewritten = rtkRewriteCommand(event.command);
 
-    if (rewritten === undefined) {
-      return;
-    }
+      if (rewritten === undefined) {
+        return;
+      }
 
-    return {
-      operations: {
-        exec: (_command, cwd, options) => {
-          return localBashOperations.exec(rewritten, cwd, options);
+      return {
+        operations: {
+          exec: (_command, cwd, options) => {
+            return localBashOperations.exec(rewritten, cwd, options);
+          },
         },
-      },
-    };
-  });
+      };
+    }),
+  );
 }
