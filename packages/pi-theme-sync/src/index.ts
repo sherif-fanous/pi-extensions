@@ -4,6 +4,7 @@ import { runThemeSyncCommand } from "./command.js";
 import { createThemeSyncRuntime } from "./runtime.js";
 import { registerStatusReportRenderer } from "./ui/status-report.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { describeError } from "@sherif-fanous/pi-extensions-core";
 
 /** Registers theme sync with Pi's extension API. */
 export default function (pi: ExtensionAPI) {
@@ -25,7 +26,7 @@ export default function (pi: ExtensionAPI) {
         await runThemeSyncCommand(args, runtime, ctx, pi);
       } catch (err) {
         ctx.ui.notify(
-          `Theme sync command failed: ${err instanceof Error ? err.message : String(err)}.`,
+          `Theme sync command failed: ${describeError(err)}.`,
           "error",
         );
       }
@@ -37,7 +38,7 @@ export default function (pi: ExtensionAPI) {
       await runtime.setupAppearanceMonitoring(ctx);
     } catch (err) {
       ctx.ui.notify(
-        `pi-theme-sync session_start failed: ${err instanceof Error ? err.message : String(err)}.`,
+        `pi-theme-sync session_start failed: ${describeError(err)}.`,
         "error",
       );
     }

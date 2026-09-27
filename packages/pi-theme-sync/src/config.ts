@@ -15,6 +15,7 @@ import {
   getAgentDir,
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { isNotFoundError, isRecord } from "@sherif-fanous/pi-extensions-core";
 
 /** Paths used for the current global and project configuration files. */
 export const CONFIG_PATHS = {
@@ -228,7 +229,7 @@ async function readJsonIfExists(filePath: string): Promise<ReadJsonResult> {
   try {
     content = await fs.readFile(filePath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    if (isNotFoundError(error)) {
       return { missing: true };
     }
 
@@ -238,11 +239,7 @@ async function readJsonIfExists(filePath: string): Promise<ReadJsonResult> {
   try {
     const parsed: unknown = JSON.parse(content);
 
-    if (
-      parsed === null ||
-      typeof parsed !== "object" ||
-      Array.isArray(parsed)
-    ) {
+    if (!isRecord(parsed)) {
       return {
         warning: `Configuration in ${filePath} must be a JSON object. File ignored.`,
       };
