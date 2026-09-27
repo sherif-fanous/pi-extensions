@@ -151,15 +151,45 @@ per-command `!RTK_DISABLED=1 <cmd>` bypass. The tip MUST be plain documentation
 text — the extension MUST NOT read environment variables when producing the
 status report.
 
+The report MUST be a command report whose first line is the heading
+`RTK Status`, followed by three rows whose values are aligned to the longest
+label:
+
+- `Session toggle:` with `enabled` or `disabled`
+- `Binary:` with the detected `rtk` version and path, or
+  `rtk not detected on PATH`
+- `Tip:` with `bypass rtk for one command with !RTK_DISABLED=1 <cmd>.`
+
+In TUI mode the report MUST appear as a transcript entry that does not enter LLM
+context and that still renders after the session is reloaded. In every other
+mode the report MUST be delivered as one info-level notification. In both cases
+the heading MUST render bold and accent-colored and each row label MUST render
+muted; the toggle value MUST NOT carry its own color.
+
 #### Scenario: status reports current state
 
 - **WHEN** the user invokes `/rtk status`
-- **THEN** the output MUST identify the current session toggle state (`enabled`
-  or `disabled`)
-- **AND** the output MUST identify the detected `rtk` binary version and path,
-  or MUST clearly indicate when `rtk` is not on PATH
-- **AND** the output MUST include a one-line tip mentioning the per-command
-  `!RTK_DISABLED=1 <cmd>` bypass
+- **THEN** the report MUST start with the `RTK Status` heading
+- **AND** the `Session toggle:` row MUST identify the current session toggle
+  state (`enabled` or `disabled`)
+- **AND** the `Binary:` row MUST identify the detected `rtk` binary version and
+  path, or MUST clearly indicate when `rtk` is not on PATH
+- **AND** the `Tip:` row MUST mention the per-command `!RTK_DISABLED=1 <cmd>`
+  bypass
+
+#### Scenario: status in TUI mode
+
+- **WHEN** the user invokes `/rtk status` in TUI mode
+- **THEN** the report MUST appear as a transcript entry instead of a
+  notification
+- **AND** the entry MUST NOT be sent to the LLM
+- **AND** the entry MUST still render, styled with the current theme, after the
+  session is reloaded
+
+#### Scenario: status outside TUI mode
+
+- **WHEN** the user invokes `/rtk status` in a mode other than TUI
+- **THEN** the report MUST be delivered as one info-level notification
 
 #### Scenario: status does not inspect process environment
 

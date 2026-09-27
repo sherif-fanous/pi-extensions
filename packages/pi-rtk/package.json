@@ -55,9 +55,13 @@
       "@ianvs/prettier-plugin-sort-imports"
     ]
   },
+  "dependencies": {
+    "@sherif-fanous/pi-extensions-core": "workspace:*"
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.4.15",
     "@earendil-works/pi-coding-agent": "catalog:",
+    "@earendil-works/pi-tui": "catalog:",
     "@eslint/js": "^10.0.1",
     "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
     "@stylistic/eslint-plugin": "^5.10.0",
@@ -73,7 +77,8 @@
     "typescript-eslint": "^8.57.1"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
   },
   "pi": {
     "extensions": [
