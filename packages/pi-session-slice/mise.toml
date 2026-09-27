@@ -35,7 +35,7 @@ depends = ["pack-check"]
 # pnpm 12 stopped expanding `${NPM_ACCESS_TOKEN}` from .npmrc, so the token
 # goes straight to pnpm as npm-style config instead.
 run = '''
-: "${NPM_ACCESS_TOKEN:?Set NPM_ACCESS_TOKEN in .env to an npm token with publish rights for @sherif-fanous/pi-session-slice}"
+: "${NPM_ACCESS_TOKEN:?Set NPM_ACCESS_TOKEN in .env to an npm token with publish rights for @sherif-fanous}"
 exec env "npm_config_//registry.npmjs.org/:_authToken=$NPM_ACCESS_TOKEN" pnpm publish --access public
 '''
 

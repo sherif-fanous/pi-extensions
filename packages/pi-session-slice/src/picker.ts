@@ -84,10 +84,10 @@ class MessageList implements Component {
       const selected = index === this.selectedIndex;
       const cursor = selected ? this.theme.fg("accent", "› ") : "  ";
       const normalized = item.text.replaceAll("\n", " ").trim();
-      const text = truncateToWidth(normalized, Math.max(0, width - 2));
+      const text = truncateToWidth(normalized, Math.max(0, width - 2), "…");
 
       lines.push(cursor + (selected ? this.theme.bold(text) : text));
-      lines.push(this.renderMetadata(item));
+      lines.push(this.renderMetadata(item, width));
       lines.push("");
     }
 
@@ -97,26 +97,21 @@ class MessageList implements Component {
           ? ` · from message ${this.startOrdinal}`
           : "";
 
-      lines.push(
-        this.theme.fg(
-          "muted",
-          `  (${this.selectedIndex + 1}/${this.items.length})${from}`,
-        ),
-      );
+      const position = `  (${this.selectedIndex + 1}/${this.items.length})${from}`;
+
+      lines.push(this.theme.fg("muted", truncateToWidth(position, width, "…")));
     }
 
     return lines;
   }
 
-  private renderMetadata(item: PickerItem): string {
-    if (!item.candidate) {
-      return this.theme.fg("muted", "  No end boundary selected");
-    }
-
+  private renderMetadata(item: PickerItem, width: number): string {
     const editorHint = this.mode === "end" ? " · goes to your editor" : "";
-    const metadata = `  Message ${item.candidate.ordinal} of ${item.candidate.total} · ${formatAgo(item.candidate.timestamp)}${editorHint}`;
+    const metadata = item.candidate
+      ? `  Message ${item.candidate.ordinal} of ${item.candidate.total} · ${formatAgo(item.candidate.timestamp)}${editorHint}`
+      : "  No end boundary selected";
 
-    return this.theme.fg("muted", metadata);
+    return this.theme.fg("muted", truncateToWidth(metadata, width, "…"));
   }
 }
 

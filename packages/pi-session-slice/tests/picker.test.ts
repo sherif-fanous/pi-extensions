@@ -10,6 +10,7 @@ import type {
   ExtensionUIContext,
   Theme,
 } from "@earendil-works/pi-coding-agent";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import {
   createFakeCustom,
   createFakeKeybindings,
@@ -41,7 +42,7 @@ const KEYBINDINGS = createFakeKeybindings({
 });
 
 const THEME = {
-  bold: (text: string) => `<b>${text}</b>`,
+  bold: (text: string) => `\x1b[1m${text}\x1b[22m`,
   fg: (_color: string, text: string) => text,
 } as Theme;
 
@@ -127,7 +128,7 @@ describe("slice picker rendering", () => {
     });
 
     const selectedIndex = lines.findIndex((line) =>
-      line.includes("<b>second</b>"),
+      line.includes("\x1b[1msecond\x1b[22m"),
     );
 
     expect(selectedIndex).toBeGreaterThanOrEqual(0);
@@ -216,5 +217,56 @@ describe("slice picker rendering", () => {
 
     expect(lines.some((line) => line.includes("2h ago"))).toBe(true);
     expect(lines.some((line) => line.includes(expectedDate))).toBe(true);
+  });
+
+  describe.each([20, 30])("at width %i", (width) => {
+    const candidates: SliceCandidate[] = Array.from(
+      { length: 12 },
+      (_, index) => ({
+        id: `u${index + 1}`,
+        ordinal: index + 1,
+        text: `a long message that cannot fit on one narrow line ${index + 1}`,
+        timestamp: new Date().toISOString(),
+        total: 12,
+      }),
+    );
+
+    it("fits every start picker line", async () => {
+      const lines: string[] = [];
+
+      await drivePicker(["escape"], (ui) => showStartPicker(ui, candidates), {
+        lines,
+        width,
+      });
+
+      expect(lines.some((line) => line.includes("(12/12)"))).toBe(true);
+      for (const line of lines)
+        expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+    });
+
+    it("fits every end picker line", async () => {
+      const lines: string[] = [];
+
+      await drivePicker(["escape"], (ui) => showEndPicker(ui, candidates, 1), {
+        lines,
+        width,
+      });
+
+      expect(lines.some((line) => line.includes("(1/12)"))).toBe(true);
+      for (const line of lines)
+        expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+    });
+
+    it("truncates with a single-character ellipsis", async () => {
+      const lines: string[] = [];
+
+      await drivePicker(["escape"], (ui) => showEndPicker(ui, candidates, 1), {
+        lines,
+        width,
+      });
+
+      expect(lines.some((line) => line.includes("…"))).toBe(true);
+      expect(lines.some((line) => line.includes("..."))).toBe(false);
+    });
   });
 });

@@ -15,12 +15,16 @@ import {
   describeError,
   guardCommand,
   notifyWarnings,
+  requireInteractiveTui,
 } from "@sherif-fanous/pi-extensions-core";
 
 /** Run the interactive session-slice flow. */
 export async function handleSliceCommand(
   ctx: ExtensionCommandContext,
 ): Promise<void> {
+  // Outside the TUI, ui.custom resolves undefined and no picker can open.
+  if (!requireInteractiveTui(ctx, "Session Slice", "/slice")) return;
+
   // Pi assigns the path at session creation and defers the first write; like
   // /fork, slicing only records the path as parentSession and never reads it.
   const sourcePath = ctx.sessionManager.getSessionFile();

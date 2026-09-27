@@ -64,6 +64,7 @@ function makeContext(
   overrides: Partial<{
     header: { version?: number } | null;
     idle: boolean;
+    mode: ExtensionCommandContext["mode"];
     contextEntries: typeof CANDIDATE_ENTRIES | [];
     sessionFile: string | undefined;
   }> = {},
@@ -97,6 +98,7 @@ function makeContext(
   );
   const ctx = {
     isIdle: () => overrides.idle ?? true,
+    mode: overrides.mode ?? "tui",
     sessionManager: {
       getSessionFile: () =>
         "sessionFile" in overrides ? overrides.sessionFile : SOURCE_PATH,
@@ -195,6 +197,23 @@ describe("sessionSlice", () => {
     expect(mocks.showStartPicker).not.toHaveBeenCalled();
     expect(mocks.writeSliceFile).not.toHaveBeenCalled();
   });
+
+  it.each(["rpc", "json", "print"] as const)(
+    "warns instead of opening the picker in %s mode",
+    async (mode) => {
+      const command = registeredCommand();
+      const { ctx, notify } = makeContext({ mode });
+
+      await command.handler("", ctx);
+
+      expect(notify).toHaveBeenCalledExactlyOnceWith(
+        "Session Slice: 1 warning\n- /slice needs Pi's interactive terminal UI. Run it from the TUI.",
+        "warning",
+      );
+      expect(mocks.showStartPicker).not.toHaveBeenCalled();
+      expect(mocks.writeSliceFile).not.toHaveBeenCalled();
+    },
+  );
 
   it("refuses a context with no user messages", async () => {
     const command = registeredCommand();

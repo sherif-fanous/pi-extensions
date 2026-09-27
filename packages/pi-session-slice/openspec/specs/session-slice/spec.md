@@ -24,6 +24,12 @@ starts the slicing flow.
 The command SHALL refuse to start, display a notification explaining why, and
 write nothing when preconditions are not met.
 
+#### Scenario: Not in the interactive terminal UI
+
+- **WHEN** `/slice` is run in Pi's print, JSON, or RPC mode
+- **THEN** a warning notification states that `/slice` needs Pi's interactive
+  terminal UI and no picker is shown
+
 #### Scenario: Session has no file path
 
 - **WHEN** `/slice` is run in a session started with `--no-session`, so no
@@ -122,7 +128,9 @@ Each picker row SHALL show the message text truncated to one line and a
 secondary line containing the message's ordinal among listed user messages, the
 total count, and how long ago the message was sent. Relative times SHALL round
 to the coarsest applicable unit of seconds, minutes, hours, or days, and SHALL
-show a short calendar date for messages older than seven days.
+show a short calendar date for messages older than seven days. Every line the
+picker renders SHALL fit the terminal width, and text that does not fit SHALL be
+cut with a single-character ellipsis (`…`).
 
 #### Scenario: Recent message
 
@@ -140,6 +148,13 @@ show a short calendar date for messages older than seven days.
 - **WHEN** a user message is listed in the end-boundary picker
 - **THEN** its secondary line indicates that its text will be placed in the
   editor if selected
+
+#### Scenario: Narrow terminal
+
+- **WHEN** either picker is rendered narrower than a row's message text,
+  secondary line, or scroll position line
+- **THEN** each of those lines is cut to the terminal width and ends in `…`,
+  and no rendered line is wider than the terminal
 
 ### Requirement: Cancellation writes nothing
 
