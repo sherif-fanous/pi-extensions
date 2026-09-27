@@ -11,7 +11,13 @@ import { loadAll } from "../store/api.js";
 import type { LoadedPreset } from "../types.js";
 import { formatActionError } from "./action-error.js";
 import type { ScopeFilter } from "./filter.js";
-import { centerText, frameLine, frameSegment, padToWidth } from "./frame.js";
+import {
+  centerText,
+  frameLine,
+  frameSegment,
+  padToWidth,
+  wrapKeyHints,
+} from "./frame.js";
 import { openInfoDialog } from "./info-dialog.js";
 import {
   ACTIVATE_LABEL,
@@ -21,7 +27,9 @@ import {
   FILTER_LABEL,
   LIST_LABEL,
   MOVE_LABEL,
+  PAGE_LABEL,
   REORDER_LABEL,
+  SCOPE_LABEL,
 } from "./labels.js";
 import { withHiddenOverlay } from "./overlay-host.js";
 import {
@@ -47,6 +55,7 @@ import {
   type PickerFocusMode,
   type PickerState,
 } from "./picker-state.js";
+import { matchesSelectKey } from "./select-keys.js";
 import { formatScopeName, presetCard } from "./widgets.js";
 import type {
   ExtensionAPI,
@@ -64,6 +73,7 @@ import {
   visibleWidth,
   type Component,
   type Focusable,
+  type KeybindingsManager,
   type OverlayHandle,
   type Terminal,
 } from "@earendil-works/pi-tui";
@@ -123,6 +133,7 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
     readonly pi: ExtensionAPI | undefined,
     readonly ui: Pick<ExtensionUIContext, "notify">,
     readonly theme: Theme,
+    private readonly keybindings: KeybindingsManager,
     private readonly terminal: Pick<Terminal, "rows">,
     private inheritedTools: readonly string[],
     readonly hotkeys: HotkeyRegistry,
@@ -176,21 +187,23 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
       return;
     }
 
-    if (matchesKey(input, Key.up)) {
+    const { keybindings } = this;
+
+    if (matchesSelectKey(keybindings, input, "up")) {
       this.moveSelection(-1);
-    } else if (matchesKey(input, Key.down)) {
+    } else if (matchesSelectKey(keybindings, input, "down")) {
       this.moveSelection(1);
-    } else if (matchesKey(input, Key.pageUp)) {
+    } else if (matchesSelectKey(keybindings, input, "pageUp")) {
       this.moveSelection(-this.pageSize);
-    } else if (matchesKey(input, Key.pageDown)) {
+    } else if (matchesSelectKey(keybindings, input, "pageDown")) {
       this.moveSelection(this.pageSize);
     } else if (matchesKey(input, Key.left)) {
       this.cycleScope(-1);
     } else if (matchesKey(input, Key.right)) {
       this.cycleScope(1);
-    } else if (matchesKey(input, Key.enter)) {
+    } else if (matchesSelectKey(keybindings, input, "confirm")) {
       this.runAction(() => this.activateSelection());
-    } else if (matchesKey(input, Key.escape)) {
+    } else if (matchesSelectKey(keybindings, input, "cancel")) {
       this.finish(undefined);
     } else if (matchesKey(input, Key.ctrl(Key.up))) {
       this.runAction(() => this.commands.reorder(-1));
@@ -233,7 +246,8 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
   render(width: number): string[] {
     const frameWidth = Math.max(2, width);
 
-    const list = this.renderList(frameWidth);
+    const footerLines = wrapKeyHints(this.footerHints(), frameWidth - 2);
+    const list = this.renderList(frameWidth, footerLines.length);
 
     this.renderedPageSize = list.pageSize > 0 ? list.pageSize : undefined;
 
@@ -248,7 +262,9 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
       this.renderRule(frameWidth),
       ...list.lines,
       this.renderRule(frameWidth),
-      frameLine(this.renderFooterContent(), frameWidth),
+      ...footerLines.map((line) =>
+        frameLine(this.theme.fg("dim", line), frameWidth),
+      ),
       this.renderBottomBorder(frameWidth),
     ];
   }
@@ -370,13 +386,12 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
   }
 
   private handleFilterInput(input: string): void {
-    if (matchesKey(input, Key.escape)) {
-      this.setFocusMode("list");
+    const { keybindings } = this;
 
-      return;
-    }
-
-    if (matchesKey(input, Key.enter)) {
+    if (
+      matchesSelectKey(keybindings, input, "cancel") ||
+      matchesSelectKey(keybindings, input, "confirm")
+    ) {
       this.setFocusMode("list");
 
       return;
@@ -384,25 +399,25 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
 
     // Navigation keys stay live in filter mode so the user can type and
     // then arrow without escaping back to the list first.
-    if (matchesKey(input, Key.up)) {
+    if (matchesSelectKey(keybindings, input, "up")) {
       this.moveSelection(-1);
 
       return;
     }
 
-    if (matchesKey(input, Key.down)) {
+    if (matchesSelectKey(keybindings, input, "down")) {
       this.moveSelection(1);
 
       return;
     }
 
-    if (matchesKey(input, Key.pageUp)) {
+    if (matchesSelectKey(keybindings, input, "pageUp")) {
       this.moveSelection(-this.pageSize);
 
       return;
     }
 
-    if (matchesKey(input, Key.pageDown)) {
+    if (matchesSelectKey(keybindings, input, "pageDown")) {
       this.moveSelection(this.pageSize);
 
       return;
@@ -498,23 +513,36 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
     return `${label}${name}${this.theme.fg("dim", scopeSuffix)}`;
   }
 
-  private renderFooterContent(): string {
+  /** Key hints for the current focus mode, in footer order. */
+  private footerHints(): string[] {
     const noMatches = this.visiblePresets().length === 0;
     const activateHint = noMatches
       ? `⏎ ${ACTIVATE_LABEL} (no matches)`
       : `⏎ ${ACTIVATE_LABEL}`;
-    const actionHints = PICKER_ACTIONS.map(
-      (action) => `${action.key} ${action.label}`,
-    ).join(" · ");
-    const footer =
-      this.state.focusMode === "filter"
-        ? `${activateHint} · Esc ${LIST_LABEL} · ←/→ ${CURSOR_LABEL} · ↑/↓ ${MOVE_LABEL} · PgUp/PgDn`
-        : `${activateHint} · ${actionHints} · Ctrl+↑/↓ ${REORDER_LABEL} · / ${FILTER_LABEL} · Esc ${CLOSE_LABEL}`;
 
-    return this.theme.fg("dim", ` ${footer}`);
+    if (this.state.focusMode === "filter") {
+      return [
+        activateHint,
+        `Esc ${LIST_LABEL}`,
+        `←/→ ${CURSOR_LABEL}`,
+        `↑/↓ ${MOVE_LABEL}`,
+        "PgUp/PgDn",
+      ];
+    }
+
+    return [
+      activateHint,
+      ...PICKER_ACTIONS.map((action) => `${action.key} ${action.label}`),
+      `↑/↓ ${MOVE_LABEL}`,
+      `PgUp/PgDn ${PAGE_LABEL}`,
+      `←/→ ${SCOPE_LABEL}`,
+      `Ctrl+↑/↓ ${REORDER_LABEL}`,
+      `/ ${FILTER_LABEL}`,
+      `Esc ${CLOSE_LABEL}`,
+    ];
   }
 
-  private renderList(width: number): RenderListResult {
+  private renderList(width: number, footerLineCount: number): RenderListResult {
     const visiblePresets = this.visiblePresets();
     // Consume the opening hint before any early return, so a first frame
     // with no matches cannot leave it armed for a later render.
@@ -574,7 +602,7 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
       visiblePresets.length,
       this.state.selectedIndex,
       this.state.scrollOffset,
-      pickerListLineBudget(this.terminal.rows),
+      pickerListLineBudget(this.terminal.rows, footerLineCount),
       cardHeightAt,
       balanced,
     );
@@ -673,13 +701,14 @@ export async function openPicker(
   let currentPicker: PresetPickerComponent | undefined;
 
   return ctx.ui.custom<PickerResult | undefined>(
-    (tui, theme, _keybindings, done) => {
+    (tui, theme, keybindings, done) => {
       const picker = new PresetPickerComponent(
         presets,
         ctx,
         options.pi,
         ctx.ui,
         theme,
+        keybindings,
         tui.terminal,
         inheritedTools,
         options.hotkeys,

@@ -5,8 +5,8 @@
 
 /** Average card height used until the picker has measured a rendered page. */
 const FALLBACK_AVERAGE_CARD_LINES = 7;
-/** Lines used by borders, status, filter, rules, and footer. */
-const PICKER_CHROME_LINES = 7;
+/** Lines used by borders, status, filter, and rules, before the footer. */
+const PICKER_CHROME_LINES = 6;
 /** Smallest page the picker reports, so navigation always has a step. */
 const MINIMUM_PAGE_SIZE = 1;
 /** Blank line drawn between two cards. */
@@ -102,11 +102,17 @@ export function pickerFallbackPageSize(terminalRows: number): number {
   );
 }
 
-/** Return the card-line budget inside the picker's 80% height overlay. */
-export function pickerListLineBudget(terminalRows: number): number {
+/**
+ * Return the card-line budget inside the picker's 80% height overlay once
+ * the chrome and `footerLineCount` wrapped footer lines are reserved.
+ */
+export function pickerListLineBudget(
+  terminalRows: number,
+  footerLineCount = 1,
+): number {
   return Math.max(
     MINIMUM_PAGE_SIZE,
-    Math.floor(terminalRows * 0.8) - PICKER_CHROME_LINES,
+    Math.floor(terminalRows * 0.8) - PICKER_CHROME_LINES - footerLineCount,
   );
 }
 

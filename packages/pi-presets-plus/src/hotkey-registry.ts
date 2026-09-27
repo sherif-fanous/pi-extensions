@@ -59,7 +59,11 @@ export class HotkeyRegistry {
     string,
     string | undefined
   >();
-  private readonly runtimeHotkeys = new Map<string, string | undefined>();
+  /** Hotkeys bound at session start, keyed by preset identity. */
+  private readonly runtimeHotkeys = new Map<
+    string,
+    { readonly hotkey: string | undefined; readonly name: string }
+  >();
 
   /**
    * Bind session-start shortcuts and capture the runtime hotkey baseline.
@@ -148,6 +152,29 @@ export class HotkeyRegistry {
     reportWarnings(ctx, hotkeyWarnings, warnings);
   }
 
+  /**
+   * Name the presets whose hotkey in `presets` differs from the one bound
+   * at session start, including bound presets that no longer exist. Pi
+   * reads extension shortcuts only while it binds a session, so these
+   * changes need `/reload`.
+   */
+  changedHotkeyNames(presets: readonly LoadedPreset[]): string[] {
+    const names = new Set<string>();
+    const current = new Set(presets.map((preset) => presetKey(preset)));
+
+    for (const preset of presets) {
+      if (!this.runtimeMatches(preset, preset.hotkey)) names.add(preset.name);
+    }
+
+    for (const [key, runtime] of this.runtimeHotkeys) {
+      if (!current.has(key) && hotkeyChanged(runtime.hotkey, undefined)) {
+        names.add(runtime.name);
+      }
+    }
+
+    return [...names];
+  }
+
   /** Return whether deleting `identity` leaves runtime bindings out of date. */
   deleteNeedsReload(identity: PresetIdentity): boolean {
     return this.commitNeedsHotkeyReload(identity, undefined);
@@ -208,7 +235,7 @@ export class HotkeyRegistry {
   ): string | undefined {
     if (!identity) return undefined;
 
-    return this.runtimeHotkeys.get(presetKey(identity));
+    return this.runtimeHotkeys.get(presetKey(identity))?.hotkey;
   }
 
   private runtimeMatches(
@@ -223,7 +250,10 @@ export class HotkeyRegistry {
     this.runtimeHotkeys.clear();
 
     for (const preset of presets) {
-      this.runtimeHotkeys.set(presetKey(preset), preset.hotkey);
+      this.runtimeHotkeys.set(presetKey(preset), {
+        hotkey: preset.hotkey,
+        name: preset.name,
+      });
     }
   }
 }

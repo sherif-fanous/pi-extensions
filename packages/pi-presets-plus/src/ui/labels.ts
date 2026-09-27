@@ -55,6 +55,7 @@ export const CLOSE_LABEL = "Close";
 export const LIST_LABEL = "List";
 export const CURSOR_LABEL = "Cursor";
 export const MOVE_LABEL = "Move";
+export const PAGE_LABEL = "Page";
 export const SAVE_LABEL = "Save";
 export const CANCEL_LABEL = "Cancel";
 export const TEST_LABEL = "Test (apply temporarily)";

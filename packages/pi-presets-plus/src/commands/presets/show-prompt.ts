@@ -97,19 +97,20 @@ export function formatShowPromptBody(
 
 /**
  * Run `/presets show-prompt`, using a dialog under the TUI and a plain
- * notification everywhere else.
+ * notification everywhere else. The arguments after the subcommand form one
+ * preset name, because names may contain spaces.
  */
 export async function runShowPrompt(
   ctx: ExtensionCommandContext,
   args: readonly string[],
-  pi: ExtensionAPI | undefined,
+  pi: ExtensionAPI,
   session: ActivePresetSession,
   hotkeys: HotkeyRegistry,
 ): Promise<void> {
   void pi;
   void hotkeys;
 
-  const name = args[0];
+  const name = args.length > 0 ? args.join(" ") : undefined;
   const { presets } = await loadAll(ctx);
   const result = findPresetForShowPrompt(name, session.current(), presets);
   const notification = formatShowPromptBody(result, ctx.ui.theme);

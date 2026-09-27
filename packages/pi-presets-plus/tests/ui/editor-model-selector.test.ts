@@ -2,6 +2,7 @@
 import { ActivePresetSession } from "../../src/activation/session.js";
 import type { LoadedPreset } from "../../src/types.js";
 import { openEditor } from "../../src/ui/editor.js";
+import { piKeybindings } from "../helpers/keybindings.js";
 import type { Component, Focusable } from "@earendil-works/pi-tui";
 import {
   createFakeTui,
@@ -47,7 +48,7 @@ async function harness(initial: LoadedPreset | null = seed) {
         const component = factory(
           createFakeTui(120, 24).tui,
           createPlainTheme(),
-          {},
+          piKeybindings(),
           resolve,
         );
 

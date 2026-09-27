@@ -20,6 +20,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import {
   notifyWarnings,
+  requireInteractiveTui,
   subcommandCompletions,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -33,7 +34,7 @@ interface Subcommand {
   run(
     ctx: ExtensionCommandContext,
     args: readonly string[],
-    pi: ExtensionAPI | undefined,
+    pi: ExtensionAPI,
     session: ActivePresetSession,
     hotkeys: HotkeyRegistry,
   ): Promise<void>;
@@ -74,6 +75,9 @@ const completeSubcommand = subcommandCompletions(SUBCOMMANDS);
 /**
  * Complete the argument after `/presets`: preset names once the user has
  * typed `show-prompt `, subcommand tokens otherwise.
+ *
+ * Pi replaces the whole argument with the completion value, so a name
+ * completion carries the `show-prompt ` subcommand in front of the name.
  */
 export async function getArgumentCompletions(
   prefix: string,
@@ -88,7 +92,7 @@ export async function getArgumentCompletions(
 
     return names
       .filter((name) => name.startsWith(namePrefix))
-      .map((name) => ({ label: name, value: name }));
+      .map((name) => ({ label: name, value: `${showPromptPrefix}${name}` }));
   }
 
   return completeSubcommand(prefix) ?? [];
@@ -102,7 +106,7 @@ export async function getArgumentCompletions(
 export async function handlePresetsCommand(
   args: string,
   ctx: ExtensionCommandContext,
-  pi: ExtensionAPI | undefined,
+  pi: ExtensionAPI,
   session: ActivePresetSession,
   hotkeys: HotkeyRegistry,
 ): Promise<void> {
@@ -135,7 +139,7 @@ export async function handlePresetsCommand(
     return;
   }
 
-  if (pi && (await activateNamedPreset(trimmedArgs, ctx, pi, session))) return;
+  if (await activateNamedPreset(trimmedArgs, ctx, pi, session)) return;
 
   notifyWarnings(ctx, "Presets Plus", [
     `Unknown subcommand "${subCommand ?? ""}". Try ${formatSupportedCommandHint()}.`,
@@ -183,28 +187,21 @@ function formatSupportedCommandHint(): string {
 async function runClearWrapper(
   ctx: ExtensionCommandContext,
   _args: readonly string[],
-  pi: ExtensionAPI | undefined,
+  pi: ExtensionAPI,
   session: ActivePresetSession,
-  hotkeys: HotkeyRegistry,
 ): Promise<void> {
-  void hotkeys;
-  if (!pi) return;
   await clear(ctx, pi, session);
 }
 
 async function runPicker(
   ctx: ExtensionCommandContext,
-  pi: ExtensionAPI | undefined,
+  pi: ExtensionAPI,
   session: ActivePresetSession,
   hotkeys: HotkeyRegistry,
 ): Promise<void> {
-  if (!pi) {
-    notifyWarnings(ctx, "Presets Plus", [
-      "Preset picker is only available in interactive mode.",
-    ]);
-
-    return;
-  }
+  // Outside the TUI, ui.custom resolves undefined and no picker can open.
+  // The preset editor opens only from the picker, so this gates it too.
+  if (!requireInteractiveTui(ctx, "Presets Plus", "/presets")) return;
 
   await openPicker(ctx, {
     hotkeys,
@@ -224,29 +221,26 @@ async function runPicker(
 async function runPolicyWrapper(
   ctx: ExtensionCommandContext,
   _args: readonly string[],
-  pi: ExtensionAPI | undefined,
-  _session: ActivePresetSession,
-  _hotkeys: HotkeyRegistry,
+  pi: ExtensionAPI,
 ): Promise<void> {
-  void _session;
-  void _hotkeys;
-
-  if (!pi) return;
   await runPolicy(ctx, pi);
 }
 
-async function runReloadWrapper(ctx: ExtensionCommandContext): Promise<void> {
-  await runReload(ctx);
+async function runReloadWrapper(
+  ctx: ExtensionCommandContext,
+  _args: readonly string[],
+  _pi: ExtensionAPI,
+  session: ActivePresetSession,
+  hotkeys: HotkeyRegistry,
+): Promise<void> {
+  await runReload(ctx, session, hotkeys);
 }
 
 async function runStatusWrapper(
   ctx: ExtensionCommandContext,
   _args: readonly string[],
-  pi: ExtensionAPI | undefined,
+  pi: ExtensionAPI,
   session: ActivePresetSession,
-  hotkeys: HotkeyRegistry,
 ): Promise<void> {
-  void hotkeys;
-  if (!pi) return;
   await runStatus(ctx, pi, session);
 }

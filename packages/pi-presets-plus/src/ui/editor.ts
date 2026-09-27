@@ -34,7 +34,16 @@ import { makeProviderRow } from "./editor/rows/provider.js";
 import { makeScopeRow } from "./editor/rows/scope.js";
 import { makeThinkingRow } from "./editor/rows/thinking.js";
 import { makeToolsRow } from "./editor/rows/tools.js";
-import { centerText, frameLine, frameSegment, padToWidth } from "./frame.js";
+import {
+  centerText,
+  frameLine,
+  frameSegment,
+  padToWidth,
+  resolveOverlayHeight,
+  scrollBody,
+  scrollOffsetShowing,
+  wrapKeyHints,
+} from "./frame.js";
 import {
   findConflictingPreset,
   isPiBuiltin,
@@ -47,6 +56,7 @@ import { openModelSelector } from "./model-selector.js";
 import { withHiddenOverlay } from "./overlay-host.js";
 import { openPromptEditor } from "./prompt-editor.js";
 import { confirmReload, reloadAfterOverlayClose } from "./reload-prompt.js";
+import { matchesSelectKey } from "./select-keys.js";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
@@ -60,7 +70,9 @@ import {
   truncateToWidth,
   type Component,
   type Focusable,
+  type KeybindingsManager,
   type OverlayHandle,
+  type Terminal,
 } from "@earendil-works/pi-tui";
 
 export { EDITOR_ROWS };
@@ -123,12 +135,19 @@ type ValidationResult =
       ok: false;
     };
 
+/** Share of the terminal height the editor may use, in percent. */
+const EDITOR_MAX_HEIGHT_PERCENT = 90;
+/** Rows kept free above and below the editor. */
+const EDITOR_MARGIN = 1;
+
 /** Interactive overlay component that edits a single preset. */
 class PresetEditorComponent implements Component, Focusable, EditorRowHost {
   private actionInFlight = false;
   private fieldDiagnostics: Map<EditorRowId, FieldDiagnostic> = new Map();
   private flowError: string | undefined;
   private focusedRowIndex = 0;
+  /** First value-row line shown when the form is taller than the overlay. */
+  private scrollOffset = 0;
   private overlayHandle: OverlayHandle | undefined;
   readonly nameInput = new Input();
   readonly hotkeyInput = new Input();
@@ -163,6 +182,8 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
     readonly allTools: readonly string[],
     private readonly openOptions: EditorOpenOptions,
     private readonly options: EditorOptions,
+    private readonly keybindings: KeybindingsManager,
+    private readonly terminal: Pick<Terminal, "rows">,
     private readonly done: (result: EditorResult | undefined) => void,
     private readonly requestRender: () => void,
     private state: EditorFormState = initialState(
@@ -197,7 +218,7 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
   handleInput(input: string): void {
     if (this.actionInFlight) return;
 
-    if (matchesKey(input, Key.escape)) {
+    if (matchesSelectKey(this.keybindings, input, "cancel")) {
       this.finish(undefined);
 
       return;
@@ -223,13 +244,19 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
       return;
     }
 
-    if (matchesKey(input, Key.tab) || matchesKey(input, Key.down)) {
+    if (
+      matchesKey(input, Key.tab) ||
+      matchesSelectKey(this.keybindings, input, "down")
+    ) {
       this.moveFocus(1);
 
       return;
     }
 
-    if (matchesKey(input, Key.shift(Key.tab)) || matchesKey(input, Key.up)) {
+    if (
+      matchesKey(input, Key.shift(Key.tab)) ||
+      matchesSelectKey(this.keybindings, input, "up")
+    ) {
       this.moveFocus(-1);
 
       return;
@@ -248,6 +275,16 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
     const frameWidth = Math.max(2, width);
     const bodyWidth = Math.max(1, frameWidth - 2);
     const title = editorTitle(this.openOptions);
+    const footerLines = wrapKeyHints(this.footerHints(), bodyWidth);
+    // Top border, title, blank, blank above the footer, and bottom border.
+    const bodyHeight =
+      resolveOverlayHeight(
+        this.terminal.rows,
+        EDITOR_MAX_HEIGHT_PERCENT,
+        EDITOR_MARGIN,
+      ) -
+      5 -
+      footerLines.length;
     const lines = [
       frameSegment("┌", "─", "┐", frameWidth),
       frameLine(
@@ -255,9 +292,13 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
         frameWidth,
       ),
       frameLine("", frameWidth),
-      ...this.renderRows(bodyWidth).map((line) => frameLine(line, frameWidth)),
+      ...this.renderBody(bodyWidth, bodyHeight).map((line) =>
+        frameLine(line, frameWidth),
+      ),
       frameLine("", frameWidth),
-      frameLine(this.theme.fg("dim", this.renderFooterHint()), frameWidth),
+      ...footerLines.map((line) =>
+        frameLine(this.theme.fg("dim", line), frameWidth),
+      ),
       frameSegment("└", "─", "┘", frameWidth),
     ];
 
@@ -425,7 +466,7 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
     return [...new Set(this.models.map((item) => item.provider))];
   }
 
-  private renderFooterHint(): string {
+  private footerHints(): string[] {
     const tokens = [
       `⇥/↑/↓ ${MOVE_LABEL}`,
       "←/→ Change",
@@ -443,23 +484,68 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
 
     tokens.push("Esc Cancel");
 
-    return ` ${tokens.join(" · ")}`;
+    return tokens;
   }
 
-  private renderRows(width: number): string[] {
-    const rows: string[] = [];
+  /**
+   * Render the form in at most `height` lines. The messages and the
+   * buttons row always show; when the value rows do not fit above them,
+   * they scroll to keep the focused row in view, with edge markers.
+   */
+  private renderBody(width: number, height: number): string[] {
+    const valueLines: string[] = [];
+    let focusStart = 0;
+    let focusEnd = 0;
 
     for (const id of EDITOR_ROWS) {
-      // The hotkey reload notice and the flow error belong to the form as a
-      // whole, so they render between the last value row and the buttons.
-      if (id === "buttons") rows.push(...this.renderMessages());
+      if (id === "buttons") continue;
 
-      const row = this.rowsById.get(id);
+      const start = valueLines.length;
 
-      if (row) rows.push(...row.renderLines(width));
+      valueLines.push(...(this.rowsById.get(id)?.renderLines(width) ?? []));
+
+      if (id === this.currentRow()) {
+        focusStart = start;
+        focusEnd = valueLines.length;
+      }
     }
 
-    return rows.map((line) => padToWidth(line, width));
+    // The hotkey reload notice and the flow error belong to the form as a
+    // whole, so they render between the last value row and the buttons.
+    const pinnedLines = [
+      ...this.renderMessages(),
+      ...(this.rowsById.get("buttons")?.renderLines(width) ?? []),
+    ];
+    const valueRows = Math.max(1, height - pinnedLines.length);
+    let visibleValueLines = valueLines;
+
+    if (valueLines.length > valueRows) {
+      if (this.currentRow() !== "buttons") {
+        this.scrollOffset = scrollOffsetShowing(
+          this.scrollOffset,
+          valueRows,
+          focusStart,
+          focusEnd,
+        );
+      }
+
+      const scrolled = scrollBody(
+        valueLines.map((line) => padToWidth(line, width)),
+        valueRows,
+        this.scrollOffset,
+        width,
+        (marker) => this.theme.fg("dim", marker),
+      );
+
+      this.scrollOffset = scrolled.scrollOffset;
+      visibleValueLines = scrolled.lines;
+    } else {
+      this.scrollOffset = 0;
+    }
+
+    return [...visibleValueLines, ...pinnedLines].map((line) =>
+      padToWidth(line, width),
+    );
   }
 
   /** Build this instance's rows, each bound to the editor as its host. */
@@ -831,7 +917,7 @@ export async function openEditor(
   let currentEditor: PresetEditorComponent | undefined;
 
   return ctx.ui.custom<EditorResult | undefined>(
-    (tui, theme, _keybindings, done) => {
+    (tui, theme, keybindings, done) => {
       const editor = new PresetEditorComponent(
         ctx,
         theme,
@@ -840,6 +926,8 @@ export async function openEditor(
         allTools,
         openOptions,
         options,
+        keybindings,
+        tui.terminal,
         done,
         () => tui.requestRender(),
       );
@@ -853,8 +941,8 @@ export async function openEditor(
       overlay: true,
       overlayOptions: {
         anchor: "center",
-        margin: 1,
-        maxHeight: "90%",
+        margin: EDITOR_MARGIN,
+        maxHeight: `${EDITOR_MAX_HEIGHT_PERCENT}%`,
         minWidth: 72,
         width: "90%",
       },

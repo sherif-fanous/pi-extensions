@@ -373,11 +373,22 @@ labels and showing at minimum: activate (`⏎`), filter (`/`), movement (`↑/�
 page movement (`PgUp/PgDn`), scope cycle (`←/→`), status (`s`), and exit
 (`Esc`).
 
+When the hints do not fit the picker's width on one line, the footer SHALL wrap
+onto as many lines as needed, breaking only between hints, so no hint is cut
+off. The card list SHALL give up the lines the wrapped footer takes, so the
+picker stays within its overlay's maximum height.
+
 #### Scenario: Footer present
 
 - **WHEN** the picker is open
 - **THEN** a footer hint row SHALL be visible at the bottom of the picker
   showing the keybindings above
+
+#### Scenario: Footer wraps instead of truncating
+
+- **WHEN** the picker is 80 columns wide
+- **THEN** the footer SHALL span more than one line
+- **AND** every required hint, including `Esc Close`, SHALL appear whole
 
 #### Scenario: Status hint listed
 
@@ -510,14 +521,26 @@ external edits between opens are reflected without requiring `/reload`.
 
 ### Requirement: /presets opens the picker
 
-The `/presets` command (with no arguments) SHALL open the picker.
-`/presets list`, `/presets list --text`, and `/presets <preset-name>` exact-name
-activation SHALL NOT be part of this change's user-facing command surface.
+The `/presets` command (with no arguments) SHALL open the picker in Pi's
+interactive terminal UI. In print, JSON, and RPC mode it SHALL NOT open the
+picker and SHALL instead show the warning
+`/presets needs Pi's interactive terminal UI. Run it from the TUI.` under the
+`Presets Plus` heading. The preset editor opens only from the picker, so it is
+unreachable outside the TUI as well. `/presets list`, `/presets list --text`,
+and `/presets <preset-name>` exact-name activation SHALL NOT be part of this
+change's user-facing command surface.
 
 #### Scenario: Bare /presets opens picker
 
-- **WHEN** the user runs `/presets`
+- **WHEN** the user runs `/presets` in Pi's interactive terminal UI
 - **THEN** the picker SHALL open
+
+#### Scenario: Bare /presets outside the TUI
+
+- **WHEN** the user runs `/presets` in print, JSON, or RPC mode
+- **THEN** the package SHALL NOT open the picker
+- **AND** the package SHALL show one warning notification stating that
+  `/presets` needs Pi's interactive terminal UI
 
 #### Scenario: /presets list is not supported
 

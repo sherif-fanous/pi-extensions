@@ -434,3 +434,38 @@ describe("HotkeyRegistry reload decisions", () => {
     ).toBe(true);
   });
 });
+
+describe("HotkeyRegistry.changedHotkeyNames", () => {
+  it("returns nothing when the file matches the bound hotkeys", () => {
+    const registry = new HotkeyRegistry();
+
+    bind(registry, [preset("plan", "ctrl+1"), preset("notes", undefined)]);
+
+    expect(
+      registry.changedHotkeyNames([
+        preset("plan", "Ctrl+1"),
+        preset("notes", undefined),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("names added, changed, and removed hotkeys, and deleted bound presets", () => {
+    const registry = new HotkeyRegistry();
+
+    bind(registry, [
+      preset("plan", "ctrl+1"),
+      preset("review", "ctrl+2"),
+      preset("draft", "ctrl+3"),
+      preset("gone", "ctrl+4"),
+    ]);
+
+    expect(
+      registry.changedHotkeyNames([
+        preset("plan", "ctrl+5"),
+        preset("review", undefined),
+        preset("draft", "ctrl+3"),
+        preset("fresh", "ctrl+6"),
+      ]),
+    ).toEqual(["plan", "review", "fresh", "gone"]);
+  });
+});

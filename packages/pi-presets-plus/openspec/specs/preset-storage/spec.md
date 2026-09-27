@@ -213,8 +213,16 @@ destination contents before reporting the failure.
 
 The package SHALL re-read both scoped configuration files during `session_start`
 and whenever the extension is reloaded through `/reload`. The `/presets reload`
-command SHALL re-read the `presets` sections without being required to apply
-changed `showInactiveStatus` or policy values.
+command SHALL re-read both files and apply every setting that can change without
+Pi rebinding the session: the `presets` sections and the effective
+`showInactiveStatus` value. Policy rules are read on every activation and need
+no reload.
+
+Pi reads extension shortcuts only while it binds a session, so a hotkey
+registered later never fires. `/presets reload` SHALL therefore not register
+hotkeys. It SHALL instead name every preset whose hotkey differs from the one
+bound at session start, including a bound preset that no longer exists, and say
+that those changes take effect after `/reload`.
 
 #### Scenario: External configuration edit then /reload
 
@@ -223,13 +231,23 @@ changed `showInactiveStatus` or policy values.
   reloaded extension session
 - **AND** the footer SHALL reflect the effective inactive-status preference
 
-#### Scenario: Presets reload does not reload extension configuration
+#### Scenario: Presets reload applies the inactive-status preference
 
-- **WHEN** the user edits `presets` and another section in `config.json` and
-  runs `/presets reload`
-- **THEN** the command SHALL load and report the edited presets
-- **AND** the other section SHALL not be required to take effect until `/reload`
-  or a new session
+- **WHEN** the user edits `showInactiveStatus` in `config.json` and runs
+  `/presets reload`
+- **THEN** the footer SHALL reflect the new inactive-status preference
+
+#### Scenario: Presets reload names hotkey changes that need /reload
+
+- **WHEN** the user adds, changes, or removes a preset hotkey in `config.json`
+  and runs `/presets reload`
+- **THEN** the reload notification SHALL name that preset and state that its
+  hotkey change takes effect after `/reload`
+
+#### Scenario: Presets reload without hotkey changes
+
+- **WHEN** every preset hotkey matches the one bound at session start
+- **THEN** the reload notification SHALL NOT mention `/reload`
 
 ### Requirement: Reload on session_start and on /reload
 
@@ -264,10 +282,10 @@ shadowed indicator if `shadowed`.
 
 ### Requirement: /presets reload subcommand
 
-The `/presets` command SHALL accept a `reload` subcommand that re-reads the
-`presets` sections from the user and project configuration files and reports the
-resulting count and any warnings. It SHALL NOT be required to apply changes from
-other configuration sections.
+The `/presets` command SHALL accept a `reload` subcommand that re-reads the user
+and project configuration files, applies them as described in "Configuration
+reloads with the extension", and reports the resulting preset count, any hotkey
+changes that need `/reload`, and any warnings.
 
 #### Scenario: Reload after external edit
 

@@ -1202,9 +1202,15 @@ The token for the Tab key SHALL be the symbol `⇥` (U+21E5 RIGHTWARDS ARROW TO
 BAR), matching the arrow-symbol convention already used by the up/down and
 left/right movement tokens.
 
-The footer SHALL render the hint as a single line. Terminals narrower than the
-rendered line MAY visually wrap it; pi-tui's frame handling preserves the
-content in that case.
+The footer SHALL render the hint as a single line when it fits the editor's
+width. When it does not fit, the footer SHALL wrap onto as many lines as needed,
+breaking only between tokens, so no token is cut off.
+
+The editor SHALL lay itself out for the height its overlay requests. When the
+form is taller, the Actions row, any form messages above it, and the footer
+SHALL stay visible, and the value rows above them SHALL scroll to keep the
+focused row in view, with `↑` and `↓` markers at the right edge when rows are
+hidden above or below.
 
 The on-screen Save / Cancel / Test buttons remain reachable via Tab-cycling
 regardless of the footer hint; the shortcuts and the buttons are independent
@@ -1235,12 +1241,27 @@ paths to the same actions.
 
 #### Scenario: Footer renders on a single line
 
-- **GIVEN** the editor was opened with a test callback in a terminal at least 90
-  columns wide
+- **GIVEN** the editor was opened with a test callback and is wide enough to
+  hold every footer token on one line
 - **WHEN** the editor is rendered
-- **THEN** the footer SHALL emit one framed line containing all seven tokens
+- **THEN** the footer SHALL emit one framed line containing every token
 - **AND** the footer SHALL NOT split the navigation tokens and the shortcut
   tokens onto separate framed lines
+
+#### Scenario: Footer wraps between tokens when narrow
+
+- **GIVEN** the editor was opened with a test callback at 72 columns
+- **WHEN** the editor is rendered
+- **THEN** the footer SHALL span more than one framed line
+- **AND** every token, including `^T Test` and `Esc Cancel`, SHALL appear whole
+
+#### Scenario: Form taller than the overlay
+
+- **GIVEN** a terminal too short for the whole form
+- **WHEN** the editor is rendered
+- **THEN** it SHALL be no taller than its overlay's maximum height
+- **AND** the Actions row, the footer, and the bottom border SHALL be visible
+- **AND** moving focus to a hidden row SHALL scroll that row into view
 
 ### Requirement: Editor accepts F1 to open contextual help
 

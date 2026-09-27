@@ -4,15 +4,13 @@ import {
   rankModelSelectorItems,
   type ModelSelectorItem,
 } from "../../src/ui/model-selector.js";
+import { piKeybindings } from "../helpers/keybindings.js";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
-  getKeybindings,
-  KeybindingsManager,
-  setKeybindings,
-  TUI_KEYBINDINGS,
   visibleWidth,
   type Component,
   type Focusable,
+  type KeybindingsManager,
 } from "@earendil-works/pi-tui";
 import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it, vi } from "vitest";
@@ -30,6 +28,7 @@ const items: ModelSelectorItem[] = [
 function harness(
   options = { title: "Select model", current: "internal", items },
   rows = 24,
+  keybindings: KeybindingsManager = piKeybindings(),
 ) {
   let component: (Component & Focusable) | undefined;
   const terminal = { rows };
@@ -45,7 +44,12 @@ function harness(
         ) => Component & Focusable,
       ) =>
         new Promise<string | undefined>((resolve) => {
-          component = factory({ terminal, requestRender }, theme, {}, resolve);
+          component = factory(
+            { terminal, requestRender },
+            theme,
+            keybindings,
+            resolve,
+          );
           component.focused = true;
         }),
     },
@@ -117,29 +121,41 @@ describe("openModelSelector", () => {
     expect(requestRender).toHaveBeenCalled();
   });
 
-  it("keeps arrows and confirmation working with remapped list bindings", async () => {
-    const previous = getKeybindings();
-
-    setKeybindings(
-      new KeybindingsManager(TUI_KEYBINDINGS, {
+  it("follows remapped list bindings and keeps arrows and Enter working", async () => {
+    const { component, result } = harness(
+      undefined,
+      24,
+      piKeybindings({
         "tui.select.up": "ctrl+p",
         "tui.select.down": "ctrl+n",
       }),
     );
 
-    try {
-      const { component, result } = harness();
+    component.handleInput?.("\u000E");
+    expect(component.render(80).join("\n")).toContain("→ claude-5-opus");
+    component.handleInput?.("\u0010");
+    expect(component.render(80).join("\n")).toContain("→ internal");
+    component.handleInput?.("\u001b[B");
+    expect(component.render(80).join("\n")).toContain("→ claude-5-opus");
+    component.handleInput?.("\u001b[A");
+    component.handleInput?.("\u001b[A");
+    component.handleInput?.("\r");
+    await expect(result).resolves.toBe("opus-50");
+  });
 
-      component.handleInput?.("\u001b[B");
-      expect(component.render(80).join("\n")).toContain("→ claude-5-opus");
-      component.handleInput?.("\u001b[A");
-      expect(component.render(80).join("\n")).toContain("→ internal");
-      component.handleInput?.("\u001b[A");
-      component.handleInput?.("\r");
-      await expect(result).resolves.toBe("opus-50");
-    } finally {
-      setKeybindings(previous);
-    }
+  it("cancels on Ctrl+C, which Pi binds to cancel", async () => {
+    const { component, result } = harness();
+
+    component.handleInput?.("\u0003");
+    await expect(result).resolves.toBeUndefined();
+  });
+
+  it("wraps the footer instead of cutting off Esc Cancel", () => {
+    const { component } = harness();
+    const lines = component.render(40).join("\n");
+
+    expect(lines).toContain("Enter Select");
+    expect(lines).toContain("Esc Cancel");
   });
 
   it("clears query to current selection and discards search on reopening", async () => {

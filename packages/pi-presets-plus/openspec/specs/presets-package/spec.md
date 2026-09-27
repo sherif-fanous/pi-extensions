@@ -827,6 +827,54 @@ Concretely:
 - **AND** the entry written to the `presets-plus:active` channel SHALL carry the
   same payload shape
 
+### Requirement: Overlays follow Pi's list keybindings
+
+The picker, the preset editor, the provider and model selector, the confirmation
+dialog, and the info dialog SHALL read list movement, confirm, and cancel from
+the keybindings manager Pi passes to `ctx.ui.custom`, using `tui.select.up`,
+`tui.select.down`, `tui.select.pageUp`, `tui.select.pageDown`,
+`tui.select.confirm`, and `tui.select.cancel`. A key the user binds to one of
+these actions SHALL perform it, and Pi's default `Ctrl+C` cancel SHALL close or
+cancel like `Esc`. The built-in `↑`, `↓`, `PgUp`, `PgDn`, `Enter`, and `Esc`
+keys SHALL keep working as well, because no overlay uses them for anything else.
+Keys the package owns (`Tab`, `←/→`, `Space`, `y`/`n`, `Ctrl+S`, `Ctrl+T`, `F1`,
+`Ctrl+↑/↓`, and the picker's action letters) SHALL stay as they are.
+
+#### Scenario: Ctrl+C cancels an overlay
+
+- **WHEN** the picker, editor, selector, confirmation dialog, or info dialog is
+  open and the user presses `Ctrl+C`
+- **THEN** that overlay SHALL close as if the user pressed `Esc`
+
+#### Scenario: Remapped cancel key
+
+- **GIVEN** the user bound `tui.select.cancel` to another key
+- **WHEN** the user presses that key in one of these overlays
+- **THEN** the overlay SHALL close as if the user pressed `Esc`
+
+### Requirement: Dialogs fit their overlay height
+
+The confirmation and info dialogs SHALL lay themselves out for the maximum
+height their overlay requests. When the body does not fit, the body SHALL scroll
+with `↑`/`↓` and `PgUp`/`PgDn`, the right edge of the first and last visible
+body rows SHALL show `↑` and `↓` markers when content is hidden that way, and
+the footer SHALL add `↑/↓ Scroll` and `PgUp/PgDn Page` hints. The title, the
+confirmation choices, the footer, and the bottom border SHALL always stay
+visible. Footer hints SHALL wrap between hints rather than being cut off.
+
+#### Scenario: Long prompt in the info dialog
+
+- **WHEN** `/presets show-prompt` opens a prompt taller than the dialog
+- **THEN** the dialog SHALL be no taller than its overlay's maximum height
+- **AND** the footer and bottom border SHALL be visible
+- **AND** pressing `↓` or `PgDn` SHALL reveal later lines of the prompt
+
+#### Scenario: Long confirmation message
+
+- **WHEN** a confirmation message is taller than the dialog
+- **THEN** the Yes/No choices, the footer, and the bottom border SHALL be
+  visible
+
 ### Requirement: `/presets show-prompt` subcommand
 
 The `/presets` command SHALL accept a `show-prompt` subcommand that emits the
@@ -839,7 +887,13 @@ autocomplete SHALL offer known preset names from `loadAll()` when the cursor is
 past the `show-prompt` token; an empty prefix SHALL offer every loaded preset,
 and a non-empty prefix SHALL filter to names that start with the prefix
 (case-sensitive, matching the existing autocomplete style elsewhere in the
-router).
+router). Pi replaces the whole `/presets` argument with the chosen completion's
+`value`, so each name completion SHALL carry the value `show-prompt <name>` and
+the label `<name>`. Applying one SHALL leave `/presets show-prompt <name>` in
+the editor, never `/presets <name>`.
+
+Everything after the `show-prompt` token SHALL be read as one preset name, with
+the words joined by single spaces, because preset names may contain spaces.
 
 The runtime behavior of the subcommand SHALL follow the matrix below. Lookup by
 name SHALL use the same scope-precedence rules as `findPreset` (project shadows
@@ -942,8 +996,24 @@ UI calls.
   requests autocomplete
 - **THEN** the completion list SHALL contain the name of every preset returned
   by `loadAll`
-- **AND** the completion entries' `value` fields SHALL equal the preset names
-  verbatim
+- **AND** each completion entry's `label` SHALL equal the preset name verbatim
+- **AND** each completion entry's `value` SHALL be `show-prompt ` followed by
+  the preset name
+
+#### Scenario: Applying a `show-prompt` name completion keeps the subcommand
+
+- **WHEN** the user types `/presets show-prompt pl` and accepts the completion
+  for `plan`
+- **THEN** the editor line SHALL read `/presets show-prompt plan`
+- **AND** submitting it SHALL show the prompt of `plan` without activating it
+
+#### Scenario: `show-prompt <name>` accepts a name with spaces
+
+- **WHEN** `/presets show-prompt Deep Work` is invoked
+- **AND** a preset named `Deep Work` exists with a non-empty `instructions`
+  value
+- **THEN** the user SHALL receive the `Deep Work` preset's prompt
+- **AND** the package SHALL NOT report `No preset named "Deep".`
 
 #### Scenario: `show-prompt` autocomplete filters by prefix
 

@@ -1,7 +1,13 @@
 /**
  * Yes/no confirmation overlay shared by the preset TUI surfaces.
  */
-import { centerText, renderDialogFrame, wrapBody } from "./frame.js";
+import {
+  centerText,
+  renderDialogFrame,
+  resolveOverlayHeight,
+  wrapBody,
+} from "./frame.js";
+import { matchesSelectKey } from "./select-keys.js";
 import type {
   ExtensionCommandContext,
   Theme,
@@ -11,7 +17,14 @@ import {
   matchesKey,
   type Component,
   type Focusable,
+  type KeybindingsManager,
+  type Terminal,
 } from "@earendil-works/pi-tui";
+
+/** Share of the terminal height the dialog may use, in percent. */
+const CONFIRM_MAX_HEIGHT_PERCENT = 50;
+/** Rows kept free above and below the dialog. */
+const CONFIRM_MARGIN = 2;
 
 /** Button text for the two choices, defaulting to `Yes` and `No`. */
 interface ConfirmLabels {
@@ -23,11 +36,15 @@ class ConfirmComponent implements Component, Focusable {
   private selected: "no" | "yes" = "no";
   private resolved = false;
   private _focused = false;
+  private scrollOffset = 0;
+  private pageRows = 1;
 
   constructor(
     private readonly title: string,
     private readonly message: string,
     private readonly theme: Theme,
+    private readonly keybindings: KeybindingsManager,
+    private readonly terminal: Pick<Terminal, "rows">,
     private readonly done: (result: boolean) => void,
     private readonly labels: ConfirmLabels,
   ) {}
@@ -41,8 +58,40 @@ class ConfirmComponent implements Component, Focusable {
   }
 
   handleInput(input: string): void {
-    if (matchesKey(input, Key.escape)) {
+    const { keybindings } = this;
+
+    if (matchesSelectKey(keybindings, input, "cancel")) {
       this.finish(false);
+
+      return;
+    }
+
+    if (matchesSelectKey(keybindings, input, "confirm") || input === " ") {
+      this.finish(this.selected === "yes");
+
+      return;
+    }
+
+    if (matchesSelectKey(keybindings, input, "up")) {
+      this.scrollOffset = Math.max(0, this.scrollOffset - 1);
+
+      return;
+    }
+
+    if (matchesSelectKey(keybindings, input, "down")) {
+      this.scrollOffset += 1;
+
+      return;
+    }
+
+    if (matchesSelectKey(keybindings, input, "pageUp")) {
+      this.scrollOffset = Math.max(0, this.scrollOffset - this.pageRows);
+
+      return;
+    }
+
+    if (matchesSelectKey(keybindings, input, "pageDown")) {
+      this.scrollOffset += this.pageRows;
 
       return;
     }
@@ -61,12 +110,6 @@ class ConfirmComponent implements Component, Focusable {
 
     if (input.toLowerCase() === "n") {
       this.finish(false);
-
-      return;
-    }
-
-    if (matchesKey(input, Key.enter) || input === " ") {
-      this.finish(this.selected === "yes");
     }
   }
 
@@ -83,16 +126,25 @@ class ConfirmComponent implements Component, Focusable {
       this.renderButton("no", this.labels.no),
     ].join("   ");
 
-    return renderDialogFrame({
-      bodyLines: [
-        ...messageLines.map((line) => `  ${line}`),
-        "",
-        centerText(buttons, bodyWidth),
-      ],
-      footer: this.theme.fg("dim", " ←/→ choose · Enter confirm · Esc cancel "),
+    const frame = renderDialogFrame({
+      bodyLines: messageLines.map((line) => `  ${line}`),
+      footerHints: ["←/→ choose", "Enter confirm", "Esc cancel"],
+      maxHeight: resolveOverlayHeight(
+        this.terminal.rows,
+        CONFIRM_MAX_HEIGHT_PERCENT,
+        CONFIRM_MARGIN,
+      ),
+      pinnedLines: ["", centerText(buttons, bodyWidth)],
+      scrollOffset: this.scrollOffset,
+      theme: this.theme,
       title: this.theme.fg("accent", this.theme.bold(this.title)),
       width: frameWidth,
     });
+
+    this.scrollOffset = frame.scrollOffset;
+    this.pageRows = Math.max(1, frame.bodyRows);
+
+    return frame.lines;
   }
 
   private finish(result: boolean): void {
@@ -116,14 +168,22 @@ export async function openConfirm(
   labels: ConfirmLabels = { no: "No", yes: "Yes" },
 ): Promise<boolean> {
   return ctx.ui.custom<boolean>(
-    (_tui, theme, _keybindings, done) =>
-      new ConfirmComponent(title, message, theme, done, labels),
+    (tui, theme, keybindings, done) =>
+      new ConfirmComponent(
+        title,
+        message,
+        theme,
+        keybindings,
+        tui.terminal,
+        done,
+        labels,
+      ),
     {
       overlay: true,
       overlayOptions: {
         anchor: "center",
-        margin: 2,
-        maxHeight: "50%",
+        margin: CONFIRM_MARGIN,
+        maxHeight: `${CONFIRM_MAX_HEIGHT_PERCENT}%`,
         minWidth: 48,
         width: "50%",
       },

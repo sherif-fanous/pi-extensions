@@ -1,17 +1,17 @@
 /** Searches provider and model options and opens a keyboard-driven selection overlay. */
-import { frameLine, frameSegment } from "./frame.js";
+import { frameLine, frameSegment, wrapKeyHints } from "./frame.js";
+import { matchesSelectKey } from "./select-keys.js";
 import type {
   ExtensionCommandContext,
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import {
   Input,
-  Key,
-  matchesKey,
   SelectList,
   truncateToWidth,
   type Component,
   type Focusable,
+  type KeybindingsManager,
   type Terminal,
 } from "@earendil-works/pi-tui";
 
@@ -34,10 +34,13 @@ class ModelSelectorComponent implements Component, Focusable {
   private results: ModelSelectorItem[];
   private list: SelectList;
   private resolved = false;
+  /** Footer lines from the last render, which the list height leaves room for. */
+  private footerLineCount = 1;
 
   constructor(
     private readonly options: ModelSelectorOptions,
     private readonly theme: Theme,
+    private readonly keybindings: KeybindingsManager,
     private readonly terminal: Pick<Terminal, "rows">,
     private readonly done: (result: string | undefined) => void,
     private readonly requestRender: () => void,
@@ -60,19 +63,23 @@ class ModelSelectorComponent implements Component, Focusable {
   handleInput(data: string): void {
     if (this.resolved) return;
 
-    if (matchesKey(data, Key.escape)) this.finish(undefined);
-    else if (matchesKey(data, Key.enter)) {
+    const { keybindings } = this;
+    const up = matchesSelectKey(keybindings, data, "up");
+    const down = !up && matchesSelectKey(keybindings, data, "down");
+
+    if (matchesSelectKey(keybindings, data, "cancel")) this.finish(undefined);
+    else if (matchesSelectKey(keybindings, data, "confirm")) {
       const selected = this.list.getSelectedItem();
 
       if (selected) this.finish(selected.value);
-    } else if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) {
+    } else if (up || down) {
       const count = this.results.length;
 
       if (count > 0) {
         const current = this.results.findIndex(
           (item) => item.id === this.list.getSelectedItem()?.value,
         );
-        const direction = matchesKey(data, Key.down) ? 1 : -1;
+        const direction = down ? 1 : -1;
 
         this.list.setSelectedIndex((current + direction + count) % count);
       }
@@ -98,10 +105,15 @@ class ModelSelectorComponent implements Component, Focusable {
 
   render(width: number): string[] {
     const height = Math.max(1, this.terminal.rows - 2);
+    const bodyWidth = Math.max(1, width - 2);
+    const footerLines = wrapKeyHints(
+      ["Type to Filter", "↑/↓ Move", "Enter Select", "Esc Cancel"],
+      bodyWidth,
+    );
 
+    this.footerLineCount = footerLines.length;
     this.list = this.buildList(this.list.getSelectedItem()?.value);
 
-    const bodyWidth = Math.max(1, width - 2);
     const results =
       this.results.length > 0
         ? this.list.render(bodyWidth)
@@ -111,30 +123,31 @@ class ModelSelectorComponent implements Component, Focusable {
       this.theme.fg("accent", this.theme.bold(this.options.title)),
       search,
       ...results,
-      this.theme.fg(
-        "dim",
-        "Type to Filter · ↑/↓ Move · Enter Select · Esc Cancel",
-      ),
+      // The rows above the footer start at the border, so the hints do too.
+      ...footerLines.map((line) => this.theme.fg("dim", line.trimStart())),
     ];
     // Very short terminals reserve their remaining lines for the selection.
-    const lines =
-      height < 7
-        ? [...(height > results.length ? [search] : []), ...results].slice(
-            0,
-            height,
-          )
-        : [
-            frameSegment("┌", "─", "┐", width),
-            ...body.map((line) => frameLine(line, width)),
-            frameSegment("└", "─", "┘", width),
-          ];
+    const lines = this.isCompact(height)
+      ? [...(height > results.length ? [search] : []), ...results].slice(
+          0,
+          height,
+        )
+      : [
+          frameSegment("┌", "─", "┐", width),
+          ...body.map((line) => frameLine(line, width)),
+          frameSegment("└", "─", "┘", width),
+        ];
 
     return lines.map((line) => truncateToWidth(line, Math.max(0, width), ""));
   }
 
   private buildList(current?: string): SelectList {
     const height = Math.max(1, this.terminal.rows - 2);
-    const maxVisible = Math.max(1, height - (height < 7 ? 2 : 6));
+    // Borders, title, search, and the list's scroll line surround the rows.
+    const maxVisible = Math.max(
+      1,
+      height - (this.isCompact(height) ? 2 : 5 + this.footerLineCount),
+    );
     const list = new SelectList(
       this.results.map((item) => ({
         value: item.id,
@@ -160,6 +173,11 @@ class ModelSelectorComponent implements Component, Focusable {
     return list;
   }
 
+  /** Whether `height` is too short for the framed layout with one list row. */
+  private isCompact(height: number): boolean {
+    return height < 6 + this.footerLineCount;
+  }
+
   private finish(result: string | undefined): void {
     this.resolved = true;
     this.done(result);
@@ -172,9 +190,14 @@ export async function openModelSelector(
   options: ModelSelectorOptions,
 ): Promise<string | undefined> {
   return ctx.ui.custom<string | undefined>(
-    (tui, theme, _keybindings, done) =>
-      new ModelSelectorComponent(options, theme, tui.terminal, done, () =>
-        tui.requestRender(),
+    (tui, theme, keybindings, done) =>
+      new ModelSelectorComponent(
+        options,
+        theme,
+        keybindings,
+        tui.terminal,
+        done,
+        () => tui.requestRender(),
       ),
     {
       overlay: true,
