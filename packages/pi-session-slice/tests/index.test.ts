@@ -282,6 +282,19 @@ describe("sessionSlice", () => {
     expect(switchSession).not.toHaveBeenCalled();
   });
 
+  it("reports an unexpected failure as an error notification", async () => {
+    const command = registeredCommand();
+    const { ctx, notify } = makeContext();
+
+    mocks.showStartPicker.mockRejectedValueOnce(new Error("overlay closed"));
+    await command.handler("", ctx);
+
+    expect(notify).toHaveBeenCalledWith(
+      "Session Slice command failed: overlay closed.",
+      "error",
+    );
+  });
+
   it("reports the path when another extension cancels the switch", async () => {
     const command = registeredCommand();
     const { ctx, notify, switchSession } = makeContext();

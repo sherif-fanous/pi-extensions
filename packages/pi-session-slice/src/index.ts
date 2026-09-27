@@ -11,7 +11,7 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-import { describeError } from "@sherif-fanous/pi-extensions-core";
+import { describeError, guardCommand } from "@sherif-fanous/pi-extensions-core";
 
 /** Run the interactive session-slice flow. */
 export async function handleSliceCommand(
@@ -145,6 +145,8 @@ export async function handleSliceCommand(
 export default function sessionSlice(pi: ExtensionAPI): void {
   pi.registerCommand("slice", {
     description: "Start a new session from a range of this one",
-    handler: async (_args, ctx) => handleSliceCommand(ctx),
+    handler: guardCommand("Session Slice", (_args, ctx) =>
+      handleSliceCommand(ctx),
+    ),
   });
 }
