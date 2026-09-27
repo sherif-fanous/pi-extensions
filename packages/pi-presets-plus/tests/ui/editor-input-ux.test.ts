@@ -5,7 +5,16 @@
  */
 import { ActivePresetSession } from "../../src/activation/session.js";
 import type { LoadedPreset, Preset } from "../../src/types.js";
-import { Input, type Component } from "@earendil-works/pi-tui";
+import type { Theme } from "@earendil-works/pi-coding-agent";
+import {
+  Input,
+  type Component,
+  type OverlayHandle,
+} from "@earendil-works/pi-tui";
+import {
+  createFakeCustom,
+  createPlainTheme,
+} from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const addPreset = vi.fn();
@@ -50,17 +59,11 @@ interface EditorHarness extends Component {
 
 const f1Input = "\u001bOP";
 
-/** Theme that returns text unchanged so assertions can match plain text. */
-const passthroughTheme = {
-  bold: (text: string) => text,
-  fg: (_name: string, text: string) => text,
-};
-
 /** Theme that wraps colored text in tags so tests can assert severity. */
 const colorTagTheme = {
   bold: (text: string) => text,
   fg: (name: string, text: string) => `<${name}>${text}</${name}>`,
-};
+} as Theme;
 
 const model = { id: "claude-opus-4.5", provider: "anthropic" };
 
@@ -106,12 +109,9 @@ function lineContaining(editor: EditorHarness, text: string): string {
 /** Builds an extension context whose overlay hands back the mounted editor. */
 function makeCtx(
   capture: (editor: EditorHarness) => void,
-  overlayHandle: {
-    readonly focus: ReturnType<typeof vi.fn>;
-    readonly setHidden: ReturnType<typeof vi.fn>;
-  },
+  overlayHandle: OverlayHandle,
   models: readonly (typeof model)[] = [model],
-  theme: typeof passthroughTheme = passthroughTheme,
+  theme: Theme = createPlainTheme(),
 ) {
   return {
     modelRegistry: {
@@ -119,28 +119,11 @@ function makeCtx(
       hasConfiguredAuth: () => true,
     },
     ui: {
-      custom: vi.fn(
-        async (
-          factory: (
-            tui: { requestRender(): void },
-            theme: unknown,
-            keybindings: unknown,
-            done: (result: unknown) => void,
-          ) => Component,
-          options?: { onHandle?(handle: typeof overlayHandle): void },
-        ) =>
-          new Promise((resolve) => {
-            const editor = factory(
-              { requestRender: vi.fn() },
-              theme,
-              {},
-              resolve,
-            ) as EditorHarness;
-
-            capture(editor);
-            options?.onHandle?.(overlayHandle);
-          }),
-      ),
+      custom: createFakeCustom({
+        handle: overlayHandle,
+        onMount: (editor) => capture(editor as EditorHarness),
+        theme,
+      }),
     },
   };
 }
@@ -159,7 +142,7 @@ async function openHarness(
     readonly models?: readonly (typeof model)[];
     readonly onTest?: (preset: LoadedPreset) => Promise<{ ok: boolean }>;
     readonly presets?: readonly LoadedPreset[];
-    readonly theme?: typeof passthroughTheme;
+    readonly theme?: Theme;
   } = {},
 ): Promise<{
   readonly editor: EditorHarness;
@@ -170,7 +153,15 @@ async function openHarness(
   readonly result: Promise<unknown>;
 }> {
   let editor: EditorHarness | undefined;
-  const overlayHandle = { focus: vi.fn(), setHidden: vi.fn() };
+  const overlayHandle = {
+    focus: vi.fn(),
+    getBounds: vi.fn(),
+    hide: vi.fn(),
+    isFocused: vi.fn(),
+    isHidden: vi.fn(),
+    setHidden: vi.fn(),
+    unfocus: vi.fn(),
+  };
   const ctx = makeCtx(
     (nextEditor) => {
       editor = nextEditor;

@@ -5,13 +5,10 @@
  */
 import type { ActivePresetState } from "../../src/types.js";
 import { renderStatusBadge } from "../../src/ui/status.js";
-import type { Theme } from "@earendil-works/pi-coding-agent";
+import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it } from "vitest";
 
-const theme = { fg: (_color: string, text: string) => text } as Pick<
-  Theme,
-  "fg"
-> as Theme;
+const theme = createPlainTheme();
 
 /** Builds active preset state, clean or dirty. */
 function active(dirty: boolean): ActivePresetState {

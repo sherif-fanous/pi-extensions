@@ -17,6 +17,7 @@ import {
 } from "../../src/ui/editor/draft.js";
 import { renderThinkingRowsForState } from "../../src/ui/editor/rows/thinking.js";
 import type { Api, Model } from "@earendil-works/pi-ai";
+import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it } from "vitest";
 
 interface ModelItem {
@@ -45,11 +46,6 @@ const fakeModels: readonly ModelItem[] = [
   reasoningModelItem,
   nonReasoningModelItem,
 ];
-
-/** Theme that returns text unchanged so assertions can match plain text. */
-const passthroughTheme = {
-  fg: (_color: string, text: string) => text,
-};
 
 const existingPreset: LoadedPreset = {
   hotkey: "ctrl+shift+1",
@@ -295,7 +291,7 @@ describe("renderThinkingRowsForState", () => {
     );
 
     const lines = renderThinkingRowsForState(
-      passthroughTheme,
+      createPlainTheme(),
       snapped,
       nonReasoningModel,
       false,
@@ -319,7 +315,7 @@ describe("renderThinkingRowsForState", () => {
     if (!reasoningModelWithoutMap) throw new Error("Missing fake model.");
 
     const lines = renderThinkingRowsForState(
-      passthroughTheme,
+      createPlainTheme(),
       state,
       reasoningModelWithoutMap,
       false,
@@ -343,13 +339,13 @@ describe("renderThinkingRowsForState", () => {
     } as Model<Api>;
 
     const mapped = renderThinkingRowsForState(
-      passthroughTheme,
+      createPlainTheme(),
       state,
       maxModel,
       false,
     ).join("\n");
     const unmapped = renderThinkingRowsForState(
-      passthroughTheme,
+      createPlainTheme(),
       state,
       { ...maxModel, thinkingLevelMap: {} },
       false,
@@ -370,7 +366,7 @@ describe("renderThinkingRowsForState", () => {
     } as Model<Api>;
 
     const lines = renderThinkingRowsForState(
-      passthroughTheme,
+      createPlainTheme(),
       { ...state, model: "claude-sonnet-4.5", thinkingLevel: "off" },
       partialReasoningModel,
       false,

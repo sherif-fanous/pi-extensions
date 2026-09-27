@@ -14,6 +14,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { loadAllMock, maybeApplyPolicyDefaultMock } = vi.hoisted(() => ({
@@ -62,7 +63,7 @@ function makeContext(
       setStatus: (key: string, value: string | undefined) => {
         status[key] = value;
       },
-      theme: { fg: (_color: string, text: string) => text },
+      theme: createPlainTheme(),
     },
   } as unknown as ExtensionContext;
 

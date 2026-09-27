@@ -14,6 +14,7 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
+import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it } from "vitest";
 
 interface FakeHarness {
@@ -734,10 +735,7 @@ function makeHarness(
       setStatus(key: string, value: string | undefined) {
         status[key] = value;
       },
-      theme: {
-        bold: (text: string) => text,
-        fg: (_color: string, text: string) => text,
-      },
+      theme: createPlainTheme(),
     },
   } as ExtensionCommandContext;
   const session = new ActivePresetSession();

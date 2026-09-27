@@ -14,6 +14,7 @@ import {
   presetCard,
 } from "../../src/ui/widgets.js";
 import type { Theme } from "@earendil-works/pi-coding-agent";
+import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it } from "vitest";
 
 /** Preset the card tests start from before overriding single fields. */
@@ -22,12 +23,6 @@ const basePreset: LoadedPreset = {
   name: "plan",
   provider: "anthropic",
   scope: "user",
-};
-
-/** Theme that returns text unchanged so assertions can match plain text. */
-const identityTheme: Pick<Theme, "fg" | "bold"> = {
-  bold: (text) => text,
-  fg: (_color, text) => text,
 };
 
 describe("preset widget formatting", () => {
@@ -177,7 +172,7 @@ describe("preset widget formatting", () => {
         hotkeyConflict: true,
         unavailable: "no-key",
       },
-      identityTheme,
+      createPlainTheme(),
       {
         active: true,
         dirty: true,
@@ -204,7 +199,7 @@ describe("preset widget formatting", () => {
   it("renders the Pi built-in shadow Status row", () => {
     const lines = presetCard(
       { ...basePreset, hotkeyShadowsBuiltin: true },
-      identityTheme,
+      createPlainTheme(),
       {
         active: false,
         selected: false,
@@ -225,7 +220,7 @@ describe("preset widget formatting", () => {
         hotkeyShadowsBuiltin: true,
         unavailable: "no-key",
       },
-      identityTheme,
+      createPlainTheme(),
       {
         active: false,
         selected: false,

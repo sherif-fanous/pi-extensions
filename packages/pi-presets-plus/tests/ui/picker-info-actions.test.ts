@@ -8,7 +8,12 @@ import { ActivePresetSession } from "../../src/activation/session.js";
 import { HotkeyRegistry } from "../../src/hotkey-registry.js";
 import type { LoadedPreset } from "../../src/types.js";
 import type { PickerCommandHost } from "../../src/ui/picker-commands.js";
-import type { Component } from "@earendil-works/pi-tui";
+import type { Component, OverlayHandle } from "@earendil-works/pi-tui";
+import {
+  createFakeCustom,
+  createFakeTui,
+  createPlainTheme,
+} from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const clearReturning = vi.fn();
@@ -69,7 +74,6 @@ interface PickerHarness {
   readonly focus: ReturnType<typeof vi.fn>;
   readonly handleInput: (input: string) => void;
   readonly notify: ReturnType<typeof vi.fn>;
-  readonly requestRender: ReturnType<typeof vi.fn>;
   readonly setHidden: ReturnType<typeof vi.fn>;
 }
 
@@ -90,53 +94,43 @@ function makeCtx(
   const done = vi.fn();
   const focus = vi.fn();
   const notify = vi.fn();
-  const requestRender = vi.fn();
   const setHidden = vi.fn();
+  const handle: OverlayHandle = {
+    focus,
+    getBounds: vi.fn(),
+    hide: vi.fn(),
+    isFocused: vi.fn(),
+    isHidden: vi.fn(),
+    setHidden,
+    unfocus: vi.fn(),
+  };
+  /** Closes the overlay without the picker choosing a result. */
+  const release = Symbol("release");
   let picker: Component | undefined;
 
   return {
     getActiveTools: () => [],
     ui: {
-      custom: vi.fn(
-        async (
-          factory: (
-            tui: { requestRender(): void; terminal: { rows: number } },
-            theme: unknown,
-            keybindings: unknown,
-            done: (result: unknown) => void,
-          ) => Component,
-          options: { onHandle?(handle: unknown): void },
-        ) =>
-          new Promise((resolve) => {
-            picker = factory(
-              { requestRender, terminal: { rows: 24 } },
-              {
-                bold: (text: string) => text,
-                fg: (_name: string, text: string) => text,
-              },
-              {},
-              (result: unknown) => {
-                done(result);
-                resolve(result);
-              },
-            );
-
-            options.onHandle?.({ focus, setHidden });
-            picker.handleInput?.(input);
-            setTimeout(() => resolve(undefined), 10);
-          }),
-      ),
+      custom: createFakeCustom({
+        handle,
+        keys: [input],
+        onDone: (result) => {
+          if (result !== release) done(result);
+        },
+        onMount: (mounted, finish) => {
+          picker = mounted;
+          setTimeout(() => finish(release), 10);
+        },
+        tui: createFakeTui(120, 24).tui,
+      }),
       notify,
       setStatus: vi.fn(),
-      theme: {
-        fg: (_color: string, text: string) => text,
-      },
+      theme: createPlainTheme(),
     },
     done,
     focus,
     handleInput: (nextInput: string) => picker?.handleInput?.(nextInput),
     notify,
-    requestRender,
     setHidden,
   } as unknown as PickerHarness & Parameters<typeof openPicker>[0];
 }

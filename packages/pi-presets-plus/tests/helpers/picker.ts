@@ -8,20 +8,14 @@ import { HotkeyRegistry } from "../../src/hotkey-registry.js";
 import type { LoadedPreset } from "../../src/types.js";
 import type { openPicker as openPickerType } from "../../src/ui/picker.js";
 import { stripAnsi } from "./ansi.js";
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
+import {
+  createFakeCustom,
+  createFakeTui,
+  createPlainTheme,
+} from "@sherif-fanous/pi-extensions-testing";
 import { vi, type Mock } from "vitest";
-
-/** Theme surface the picker reads when it renders. */
-export interface PickerTheme {
-  bold(value: string): string;
-  fg(name: string, value: string): string;
-}
-
-/** Theme that returns text unchanged so assertions can match plain text. */
-export const plainTheme: PickerTheme = {
-  bold: (value) => value,
-  fg: (_name, value) => value,
-};
 
 /** A mounted picker and the activation callback it was opened with. */
 export interface MountedPicker {
@@ -37,7 +31,7 @@ export interface MountPickerOptions {
   readonly dirty?: boolean;
   readonly presets: readonly LoadedPreset[];
   readonly terminalRows?: number;
-  readonly theme?: PickerTheme;
+  readonly theme?: Theme;
 }
 
 /** Builds a minimal loaded preset with a fixed provider and model. */
@@ -71,31 +65,18 @@ export function pickerMounter(
     const ctx = {
       getActiveTools: () => [],
       ui: {
-        custom: vi.fn(
-          (
-            factory: (
-              tui: { requestRender(): void; terminal: { rows: number } },
-              theme: unknown,
-              keybindings: unknown,
-              done: (result: unknown) => void,
-            ) => Component,
-          ) => {
-            component = factory(
-              {
-                requestRender: vi.fn(),
-                terminal: { rows: options.terminalRows ?? 24 },
-              },
-              options.theme ?? plainTheme,
-              {},
-              vi.fn(),
-            );
-
-            return undefined;
+        custom: createFakeCustom({
+          // Hand the picker back without closing it, so tests keep driving it.
+          onMount: (mounted, done) => {
+            component = mounted;
+            done(undefined);
           },
-        ),
+          theme: options.theme,
+          tui: createFakeTui(120, options.terminalRows ?? 24).tui,
+        }),
         notify: vi.fn(),
         setStatus: vi.fn(),
-        theme: { fg: (_color: string, value: string) => value },
+        theme: createPlainTheme(),
       },
     } as unknown as Parameters<typeof openPickerType>[0];
 

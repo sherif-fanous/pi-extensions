@@ -6,7 +6,10 @@
 import { ActivePresetSession } from "../../src/activation/session.js";
 import { analyzeHotkeys, HotkeyRegistry } from "../../src/hotkey-registry.js";
 import type { LoadedPreset } from "../../src/types.js";
-import type { Component } from "@earendil-works/pi-tui";
+import {
+  createFakeCustom,
+  createFakeTui,
+} from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const loadAll = vi.fn();
@@ -41,30 +44,13 @@ function makeCtx() {
     getActiveTools: () => [],
     reload,
     ui: {
-      custom: vi.fn(
-        async (
-          factory: (
-            tui: { requestRender(): void; terminal: { rows: number } },
-            theme: unknown,
-            keybindings: unknown,
-            done: (result: unknown) => void,
-          ) => Component,
-        ) =>
-          new Promise((resolve) => {
-            const component = factory(
-              { requestRender: vi.fn(), terminal: { rows: 24 } },
-              {
-                bold: (text: string) => text,
-                fg: (_name: string, text: string) => text,
-              },
-              {},
-              resolve,
-            );
-
-            component.handleInput?.("x");
-            setTimeout(() => resolve(undefined), 10);
-          }),
-      ),
+      custom: createFakeCustom({
+        keys: ["x"],
+        onMount: (_picker, done) => {
+          setTimeout(() => done(undefined), 10);
+        },
+        tui: createFakeTui(120, 24).tui,
+      }),
       notify,
     },
   };

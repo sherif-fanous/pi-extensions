@@ -6,6 +6,7 @@
 import { ActivePresetSession } from "../../src/activation/session.js";
 import type { ActivePresetState, LoadedPreset } from "../../src/types.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it, vi } from "vitest";
 
 const baselineActive: ActivePresetState = {
@@ -45,10 +46,7 @@ function harness() {
       setStatus(key: string, value: string | undefined) {
         status[key] = value;
       },
-      theme: {
-        bold: (text: string) => text,
-        fg: (_color: string, text: string) => text,
-      },
+      theme: createPlainTheme(),
     },
   } as Pick<ExtensionContext, "ui">;
   const pi = {

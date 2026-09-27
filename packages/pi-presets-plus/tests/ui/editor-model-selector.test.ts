@@ -3,6 +3,10 @@ import { ActivePresetSession } from "../../src/activation/session.js";
 import type { LoadedPreset } from "../../src/types.js";
 import { openEditor } from "../../src/ui/editor.js";
 import type { Component, Focusable } from "@earendil-works/pi-tui";
+import {
+  createFakeTui,
+  createPlainTheme,
+} from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it, vi } from "vitest";
 
 const models = [
@@ -41,11 +45,8 @@ async function harness(initial: LoadedPreset | null = seed) {
     ) =>
       new Promise((resolve) => {
         const component = factory(
-          { terminal: { rows: 24 }, requestRender: vi.fn() },
-          {
-            fg: (_color: string, text: string) => text,
-            bold: (text: string) => text,
-          },
+          createFakeTui(120, 24).tui,
+          createPlainTheme(),
           {},
           resolve,
         );

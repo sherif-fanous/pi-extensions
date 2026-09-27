@@ -11,6 +11,7 @@ import { ActivePresetSession } from "../../src/activation/session.js";
 import type { LoadedPreset, ThinkingLevel } from "../../src/types.js";
 import { makeStubModelRegistry } from "../helpers/model-registry.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it } from "vitest";
 
 describe("handleModelSelectDrift", () => {
@@ -191,10 +192,7 @@ function makeHarness(options: HarnessOptions = {}): {
       }),
       ui: {
         setStatus: () => undefined,
-        theme: {
-          bold: (text: string) => text,
-          fg: (_color: string, text: string) => text,
-        },
+        theme: createPlainTheme(),
       },
     } as unknown as Pick<ExtensionContext, "model" | "modelRegistry" | "ui">,
     pi: {

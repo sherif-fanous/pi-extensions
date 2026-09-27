@@ -9,11 +9,16 @@ import {
   createPlainTheme,
 } from "./tui.js";
 import type {
+  KeybindingsManager as AgentKeybindingsManager,
   ExtensionUIContext,
-  KeybindingsManager,
   Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { Component, OverlayHandle, TUI } from "@earendil-works/pi-tui";
+import type {
+  Component,
+  KeybindingsManager,
+  OverlayHandle,
+  TUI,
+} from "@earendil-works/pi-tui";
 
 /** How the fake `ctx.ui.custom` mounts and drives the component. */
 export interface FakeCustomOptions {
@@ -72,8 +77,9 @@ export function createFakeCustom(
     const component = await factory(
       options.tui ?? createFakeTui().tui,
       options.theme ?? createPlainTheme(),
-      options.keybindings ??
-        (createFakeKeybindings() as unknown as KeybindingsManager),
+      // Components only call the pi-tui subset that the fakes implement.
+      (options.keybindings ??
+        createFakeKeybindings()) as unknown as AgentKeybindingsManager,
       finish,
     );
 

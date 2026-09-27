@@ -13,6 +13,7 @@ import {
   handlePresetsCommand,
 } from "../../../src/commands/presets/router.js";
 import { HotkeyRegistry } from "../../../src/hotkey-registry.js";
+import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { openPickerMock, requestActivationMock } = vi.hoisted(() => ({
@@ -47,10 +48,7 @@ function makeStubCtx() {
       ui: {
         notify,
         setStatus,
-        theme: {
-          fg: (_color: string, text: string) => text,
-          bold: (text: string) => text,
-        },
+        theme: createPlainTheme(),
       },
       modelRegistry: {
         find: () => undefined,

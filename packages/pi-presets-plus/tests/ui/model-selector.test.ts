@@ -14,12 +14,10 @@ import {
   type Component,
   type Focusable,
 } from "@earendil-works/pi-tui";
+import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it, vi } from "vitest";
 
-const theme = {
-  fg: (_color: string, text: string) => text,
-  bold: (text: string) => text,
-} as Theme;
+const theme = createPlainTheme();
 const items: ModelSelectorItem[] = [
   { id: "claude-5-opus", available: false },
   { id: "opus-5-thinking" },

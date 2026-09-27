@@ -3,14 +3,8 @@
  * the frame, prompt, choices, and footer hint.
  */
 import { openConfirm } from "../../src/ui/confirm.js";
-import { fakeOverlayCustom } from "../helpers/overlay.js";
-import type { Theme } from "@earendil-works/pi-coding-agent";
+import { createFakeCustom } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it } from "vitest";
-
-const theme = {
-  bold: (text: string) => text,
-  fg: (_name: string, text: string) => text,
-} as Theme;
 
 interface ConfirmHarness {
   readonly ctx: Parameters<typeof openConfirm>[0];
@@ -21,7 +15,7 @@ interface ConfirmHarness {
 function makeConfirmHarness(input = "n", width = 48): ConfirmHarness {
   const rendered: string[] = [];
   const ctx = {
-    ui: { custom: fakeOverlayCustom({ input, rendered, theme, width }) },
+    ui: { custom: createFakeCustom({ keys: [input], rendered, width }) },
   } as unknown as Parameters<typeof openConfirm>[0];
 
   return { ctx, rendered };

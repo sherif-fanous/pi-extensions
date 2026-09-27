@@ -8,11 +8,11 @@ import { stripAnsi } from "../helpers/ansi.js";
 import {
   makeLoadedPreset,
   pickerMounter,
-  plainTheme,
   renderLines,
-  type PickerTheme,
 } from "../helpers/picker.js";
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import { Key, type Component } from "@earendil-works/pi-tui";
+import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const loadAll = vi.fn();
@@ -47,10 +47,10 @@ interface MountOptions {
  * Theme that wraps every fragment in a real SGR sequence, so width math
  * runs against the escapes a production theme emits.
  */
-const ansiTheme: PickerTheme = {
+const ansiTheme = {
   bold: (value: string) => `\u001B[1m${value}\u001B[22m`,
   fg: (_name: string, value: string) => `\u001B[38;5;42m${value}\u001B[39m`,
-};
+} as Theme;
 
 /** Builds the state of an active preset, clean or dirty. */
 function activeState(
@@ -73,7 +73,7 @@ async function mountAnsiPicker(options: MountOptions = {}): Promise<Component> {
 
 /** Mounts the picker with the plain theme. */
 async function mountPicker(options: MountOptions = {}): Promise<Component> {
-  return mountPickerWithTheme(plainTheme, options);
+  return mountPickerWithTheme(createPlainTheme(), options);
 }
 
 /**
@@ -81,7 +81,7 @@ async function mountPicker(options: MountOptions = {}): Promise<Component> {
  * restoring the session to the requested active preset first.
  */
 async function mountPickerWithTheme(
-  theme: PickerTheme,
+  theme: Theme,
   options: MountOptions = {},
 ): Promise<Component> {
   const presets = options.presets ?? [];
