@@ -1,0 +1,62 @@
+/**
+ * Covers the helpers that identify a preset by name and scope together:
+ * looking one up in a list and comparing two identities.
+ */
+import { findPreset, samePresetIdentity } from "../src/preset-identity.js";
+import type { LoadedPreset } from "../src/types.js";
+import { describe, expect, it } from "vitest";
+
+const presets: LoadedPreset[] = [
+  {
+    model: "claude-opus-4.5",
+    name: "plan",
+    provider: "anthropic",
+    scope: "user",
+  },
+  { model: "gpt-5.5", name: "ship", provider: "openai", scope: "project" },
+];
+
+describe("findPreset", () => {
+  it("returns undefined for a missing preset", () => {
+    expect(
+      findPreset(presets, { name: "missing", scope: "user" }),
+    ).toBeUndefined();
+  });
+
+  it("returns the right entry when name and scope both match", () => {
+    expect(findPreset(presets, { name: "ship", scope: "project" })).toBe(
+      presets[1],
+    );
+  });
+
+  it("does not match when only the name matches", () => {
+    expect(
+      findPreset(presets, { name: "plan", scope: "project" }),
+    ).toBeUndefined();
+  });
+});
+
+describe("samePresetIdentity", () => {
+  it.each([
+    [undefined, undefined, false],
+    [{ name: "plan", scope: "user" } as const, undefined, false],
+    [undefined, { name: "plan", scope: "user" } as const, false],
+    [
+      { name: "plan", scope: "user" } as const,
+      { name: "plan", scope: "user" } as const,
+      true,
+    ],
+    [
+      { name: "plan", scope: "user" } as const,
+      { name: "plan", scope: "project" } as const,
+      false,
+    ],
+    [
+      { name: "plan", scope: "user" } as const,
+      { name: "ship", scope: "user" } as const,
+      false,
+    ],
+  ])("compares optional identities", (first, second, expected) => {
+    expect(samePresetIdentity(first, second)).toBe(expected);
+  });
+});

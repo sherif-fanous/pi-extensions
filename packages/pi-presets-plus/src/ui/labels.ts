@@ -1,0 +1,60 @@
+/**
+ * Holds the field labels, dialog titles, and action labels that the
+ * preset surfaces share, so one spelling reaches every surface.
+ */
+
+// Field labels shared by status, clear, editor rows, and picker cards.
+export const MODEL_LABEL = "Model";
+export const THINKING_LABEL = "Thinking level";
+export const TOOLS_LABEL = "Tools";
+export const PRESET_LABEL = "Preset";
+export const SCOPE_LABEL = "Scope";
+export const STATUS_LABEL = "Status";
+
+// Per-surface composed labels used by status, policy, and related summaries.
+export const BASELINE_MODEL_LABEL = "Baseline model";
+export const BASELINE_THINKING_LABEL = "Baseline thinking level";
+export const BASELINE_TOOLS_LABEL = "Baseline tools";
+export const PRESET_MODEL_LABEL = "Preset model";
+export const PRESET_THINKING_LABEL = "Preset thinking level";
+export const PRESET_TOOLS_LABEL = "Preset tools";
+export const CURRENT_MODEL_LABEL = "Current model";
+export const CURRENT_THINKING_LABEL = "Current thinking level";
+export const CURRENT_TOOLS_LABEL = "Current tools";
+export const RESTORE_LABEL = "Restore";
+export const DIRECTORY_LABEL = "Directory";
+export const ALLOWED_PRESETS_LABEL = "Allowed presets";
+export const PROHIBITED_PRESETS_LABEL = "Prohibited presets";
+export const DEFAULT_PRESET_LABEL = "Default preset";
+/** Label for the ordered presets that match the default pattern. */
+export const DEFAULT_MATCHES_LABEL = "Default matches";
+
+// Dialog titles shared by overlays and formatter headings.
+export const STATUS_DIALOG_TITLE = "Preset Status";
+export const POLICY_DIALOG_TITLE = "Preset Policy";
+export const CLEAR_DIALOG_TITLE = "Preset cleared";
+export const ACTIVATION_FAILED_TITLE = "Activation failed";
+export const RELOAD_PROMPT_TITLE = "Reload Pi?";
+export const MOVE_PRESET_TITLE = "Move preset?";
+export const PROMPT_EDITOR_TITLE = "Edit prompt";
+export const PROMPT_EDITOR_TITLE_PREFIX = "Edit prompt: ";
+export const PROMPT_DIALOG_TITLE = "Preset Prompt";
+
+// Action labels, including the single-use footer labels, kept together so
+// the vocabulary stays reviewable in one place.
+export const ACTIVATE_LABEL = "Activate";
+export const FILTER_LABEL = "Filter";
+export const STATUS_ACTION_LABEL = "Status";
+export const NEW_LABEL = "New";
+export const EDIT_LABEL = "Edit";
+export const DUPLICATE_LABEL = "Duplicate";
+export const DELETE_LABEL = "Delete";
+export const CLEAR_LABEL = "Clear";
+export const REORDER_LABEL = "Reorder";
+export const CLOSE_LABEL = "Close";
+export const LIST_LABEL = "List";
+export const CURSOR_LABEL = "Cursor";
+export const MOVE_LABEL = "Move";
+export const SAVE_LABEL = "Save";
+export const CANCEL_LABEL = "Cancel";
+export const TEST_LABEL = "Test (apply temporarily)";

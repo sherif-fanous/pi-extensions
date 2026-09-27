@@ -1,0 +1,317 @@
+/**
+ * Covers the in-session active-preset state: starting and clearing it,
+ * flipping dirty while keeping restore data, persisting active markers,
+ * and restoring from a session branch.
+ */
+import { ActivePresetSession } from "../../src/activation/session.js";
+import type { ActivePresetState, LoadedPreset } from "../../src/types.js";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { describe, expect, it, vi } from "vitest";
+
+const baselineActive: ActivePresetState = {
+  declared: {
+    model: "claude",
+    provider: "anthropic",
+    thinkingLevel: "high",
+  },
+  dirty: false,
+  name: "plan",
+  restore: {
+    applyCount: 1,
+    baseline: { model: null, thinkingLevel: "off", tools: [] },
+    kind: "baseline",
+    lastApplied: {
+      model: { id: "claude", provider: "anthropic" },
+      thinkingLevel: "off",
+    },
+    owned: { model: true, thinkingLevel: true, tools: false },
+  },
+  scope: "project",
+};
+
+const loadedPreset: LoadedPreset = {
+  model: "claude",
+  name: "plan",
+  provider: "anthropic",
+  scope: "project",
+  thinkingLevel: "high",
+};
+
+function harness() {
+  const entries: unknown[] = [];
+  const status: Record<string, string | undefined> = {};
+  const ctx = {
+    ui: {
+      setStatus(key: string, value: string | undefined) {
+        status[key] = value;
+      },
+      theme: {
+        bold: (text: string) => text,
+        fg: (_color: string, text: string) => text,
+      },
+    },
+  } as Pick<ExtensionContext, "ui">;
+  const pi = {
+    appendEntry(type: string, data: unknown) {
+      entries.push({ data, type });
+    },
+  };
+
+  return { ctx, entries, pi, session: new ActivePresetSession(), status };
+}
+
+function restoreUnknown(
+  session: ActivePresetSession,
+  ctx: ReturnType<typeof harness>["ctx"],
+): void {
+  const branch = [
+    {
+      customType: "presets-plus:active",
+      data: { name: "plan", scope: "project" },
+      type: "custom",
+    },
+  ] as ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
+
+  session.restoreFromBranch(branch, [loadedPreset], ctx);
+}
+
+function startBaseline(
+  session: ActivePresetSession,
+  ctx: ReturnType<typeof harness>["ctx"],
+  pi: ReturnType<typeof harness>["pi"],
+): void {
+  const restore = baselineActive.restore;
+
+  if (restore.kind !== "baseline") throw new Error("Expected a baseline.");
+
+  session.start({ ...restore, preset: loadedPreset }, ctx, pi);
+}
+
+describe("ActivePresetSession", () => {
+  it("no-ops dirty transitions when no preset is active", () => {
+    const { ctx, session } = harness();
+
+    session.markDirty(ctx);
+    session.markClean(ctx);
+
+    expect(session.current()).toBeUndefined();
+  });
+
+  it("clears the footer when inactive status is disabled", () => {
+    const { ctx, pi, session, status } = harness();
+
+    session.setShowInactiveStatus(false, ctx);
+
+    expect(status["presets-plus"]).toBeUndefined();
+
+    startBaseline(session, ctx, pi);
+    expect(status["presets-plus"]).toBe("Preset: plan");
+
+    session.clear(ctx, pi);
+    expect(status["presets-plus"]).toBeUndefined();
+  });
+
+  it("starts and clears active state with persisted markers", () => {
+    const { ctx, entries, pi, session, status } = harness();
+
+    session.start(
+      {
+        applyCount: 1,
+        baseline: { model: null, thinkingLevel: "off", tools: [] },
+        lastApplied: {
+          model: { id: "claude", provider: "anthropic" },
+          thinkingLevel: "high",
+        },
+        owned: { model: true, thinkingLevel: true, tools: false },
+        preset: loadedPreset,
+      },
+      ctx,
+      pi,
+    );
+
+    expect(session.current()).toMatchObject({ dirty: false, name: "plan" });
+    expect(entries).toContainEqual({
+      data: { name: "plan", scope: "project" },
+      type: "presets-plus:active",
+    });
+    expect(status["presets-plus"]).toBe("Preset: plan");
+
+    session.clear(ctx, pi);
+
+    expect(session.current()).toBeUndefined();
+    expect(entries).toContainEqual({
+      data: { name: null },
+      type: "presets-plus:active",
+    });
+    expect(status["presets-plus"]).toBe("Preset: none");
+  });
+
+  it("marks baseline state dirty while preserving restore", () => {
+    const { ctx, pi, session } = harness();
+
+    startBaseline(session, ctx, pi);
+    session.markDirty(ctx);
+
+    expect(session.current()).toEqual({ ...baselineActive, dirty: true });
+    expect(session.current()?.restore.kind).toBe("baseline");
+  });
+
+  it("marks unknown state clean while preserving restore", () => {
+    const { ctx, session } = harness();
+
+    restoreUnknown(session, ctx);
+    session.markDirty(ctx);
+    session.markClean(ctx);
+
+    expect(session.current()).toEqual({
+      declared: {
+        model: "claude",
+        provider: "anthropic",
+        thinkingLevel: "high",
+      },
+      dirty: false,
+      name: "plan",
+      restore: { kind: "unknown" },
+      scope: "project",
+    });
+  });
+
+  it("restores without consulting an activation overlay", () => {
+    const { ctx, session } = harness();
+    const custom = vi.fn();
+    const restoreCtx = {
+      ...ctx,
+      ui: { ...ctx.ui, custom },
+    } as Pick<ExtensionContext, "ui">;
+    const branch = [
+      {
+        customType: "presets-plus:active",
+        data: { name: "plan", scope: "project" },
+        type: "custom",
+      },
+    ] as ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
+
+    session.restoreFromBranch(branch, [loadedPreset], restoreCtx);
+
+    expect(custom).not.toHaveBeenCalled();
+    expect(session.current()?.name).toBe("plan");
+  });
+
+  it("restores active state from a branch", () => {
+    const { ctx, session } = harness();
+    const branch = [
+      {
+        customType: "presets-plus:active",
+        data: { name: "plan", scope: "project" },
+        type: "custom",
+      },
+    ] as ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
+
+    const result = session.restoreFromBranch(branch, [loadedPreset], ctx);
+
+    expect(result.warnings).toEqual([]);
+    expect(result.state).toMatchObject({ name: "plan", scope: "project" });
+    expect(session.current()).toEqual(result.state);
+  });
+
+  it("refreshes the status badge after a successful restore", () => {
+    // The session_start handler leaves badge updates to restoreFromBranch,
+    // so every path through it has to write the status itself.
+    const { ctx, session, status } = harness();
+    const branch = [
+      {
+        customType: "presets-plus:active",
+        data: { name: "plan", scope: "project" },
+        type: "custom",
+      },
+    ] as ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
+
+    session.restoreFromBranch(branch, [loadedPreset], ctx);
+
+    expect(status["presets-plus"]).toBe("Preset: plan");
+  });
+
+  it("refreshes the status badge to none when restore finds no entry", () => {
+    const { ctx, session, status } = harness();
+    const branch = [] as ReturnType<
+      ExtensionContext["sessionManager"]["getBranch"]
+    >;
+
+    session.restoreFromBranch(branch, [loadedPreset], ctx);
+
+    expect(status["presets-plus"]).toBe("Preset: none");
+  });
+
+  it("refreshes the status badge to none when restored preset is missing", () => {
+    const { ctx, session, status } = harness();
+    const branch = [
+      {
+        customType: "presets-plus:active",
+        data: { name: "missing", scope: "project" },
+        type: "custom",
+      },
+    ] as ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
+
+    session.restoreFromBranch(branch, [loadedPreset], ctx);
+
+    expect(status["presets-plus"]).toBe("Preset: none");
+  });
+
+  it("clears disabled footer when restored preset is missing", () => {
+    const { ctx, session, status } = harness();
+
+    session.setShowInactiveStatus(false, ctx);
+
+    const branch = [
+      {
+        customType: "presets-plus:active",
+        data: { name: "missing", scope: "project" },
+        type: "custom",
+      },
+    ] as ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
+
+    session.restoreFromBranch(branch, [loadedPreset], ctx);
+
+    expect(status["presets-plus"]).toBeUndefined();
+  });
+
+  it("warns when restored preset is not loaded", () => {
+    const { ctx, session } = harness();
+    const branch = [
+      {
+        customType: "presets-plus:active",
+        data: { name: "missing", scope: "project" },
+        type: "custom",
+      },
+    ] as ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
+
+    const result = session.restoreFromBranch(branch, [loadedPreset], ctx);
+
+    expect(result.state).toBeUndefined();
+    expect(result.warnings).toEqual([
+      'The restored session references preset "missing", which is not loaded. The extension did not attach it.',
+    ]);
+  });
+
+  it("warns when restored preset is unavailable", () => {
+    const { ctx, session } = harness();
+    const branch = [
+      {
+        customType: "presets-plus:active",
+        data: { name: "plan", scope: "project" },
+        type: "custom",
+      },
+    ] as ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
+
+    const result = session.restoreFromBranch(
+      branch,
+      [{ ...loadedPreset, unavailable: "no-key" }],
+      ctx,
+    );
+
+    expect(result.state).toBeUndefined();
+    expect(result.warnings).toEqual([
+      'The restored session references preset "plan", which is unavailable (no-key). The extension did not attach it.',
+    ]);
+  });
+});

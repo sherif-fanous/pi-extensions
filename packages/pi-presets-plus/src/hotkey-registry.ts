@@ -1,0 +1,318 @@
+/**
+ * Analyzes the hotkeys declared by loaded presets, registers the usable
+ * ones as session shortcuts, and tracks which bindings are live so the
+ * editor can tell when a preset change needs a reload to take effect.
+ */
+import { requestActivation } from "./activation/request.js";
+import type { ActivePresetSession } from "./activation/session.js";
+import { findPreset, type PresetIdentity } from "./preset-identity.js";
+import type { LoadedPreset } from "./types.js";
+import { notifyApplyResult } from "./ui/apply-result.js";
+import {
+  isPiBuiltin,
+  parseHotkey,
+  type ParsedHotkey,
+} from "./ui/hotkey-input.js";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
+import type { KeyId } from "@earendil-works/pi-tui";
+
+export type { PresetIdentity } from "./preset-identity.js";
+
+/** Conflicts, invalid entries, and parsed hotkeys from one analysis pass. */
+export interface HotkeyAnalysis {
+  readonly conflicts: HotkeyConflict[];
+  readonly invalid: HotkeyDiagnostic[];
+  readonly parsed: ReadonlyMap<LoadedPreset, ParsedHotkey>;
+}
+
+/** A preset whose hotkey was already claimed by another preset. */
+export interface HotkeyConflict {
+  readonly loser: LoadedPreset & { hotkey: string };
+  readonly winner: PresetIdentity;
+}
+
+/** A preset whose hotkey could not be parsed, with the parser's reason. */
+export interface HotkeyDiagnostic {
+  readonly preset: LoadedPreset & { hotkey: string };
+  readonly reason: string;
+}
+
+/** Re-reads the presets from disk when a shortcut fires. */
+export type CurrentPresetsLoader = (
+  ctx: ExtensionContext,
+) => Promise<LoadedPreset[]>;
+
+/**
+ * Tracks the hotkeys bound in the running session and the pending hotkey
+ * changes the user already declined to reload for.
+ */
+export class HotkeyRegistry {
+  private readonly acknowledgedPendingHotkeys = new Map<
+    string,
+    string | undefined
+  >();
+  private readonly runtimeHotkeys = new Map<string, string | undefined>();
+
+  /** Bind session-start shortcuts and capture the runtime hotkey baseline. */
+  bindForSession(
+    presets: LoadedPreset[],
+    hotkeyAnalysis: HotkeyAnalysis,
+    ctx: Pick<ExtensionContext, "ui">,
+    pi: ExtensionAPI,
+    loadCurrentPresets: CurrentPresetsLoader,
+    session: ActivePresetSession,
+  ): void {
+    this.setRuntimeHotkeyBaseline(presets);
+
+    for (const conflict of hotkeyAnalysis.conflicts) {
+      ctx.ui.notify(
+        `${formatPresetSubject(conflict.loser)} hotkey "${conflict.loser.hotkey}" conflicts with preset ${formatPresetIdentity(conflict.winner)}. The first registered wins.`,
+        "warning",
+      );
+    }
+
+    for (const invalid of hotkeyAnalysis.invalid) {
+      ctx.ui.notify(
+        `${formatPresetSubject(invalid.preset)} has invalid hotkey "${invalid.preset.hotkey}" (${invalid.reason}). The extension ignored it and will not register it or check it for conflicts until fixed.`,
+        "warning",
+      );
+    }
+
+    for (const preset of presets) {
+      const parsed = hotkeyAnalysis.parsed.get(preset);
+
+      if (!parsed) continue;
+      if (preset.shadowed || preset.hotkeyConflict === true) continue;
+
+      if (isPiBuiltin(parsed)) {
+        ctx.ui.notify(
+          `${formatPresetSubject(preset)} hotkey "${preset.hotkey}" shadows a Pi built-in. The preset binding will take precedence.`,
+          "warning",
+        );
+      }
+
+      const registeredName = preset.name;
+      const registeredScope = preset.scope;
+
+      pi.registerShortcut(parsed.normalized as KeyId, {
+        description: `Activate preset "${registeredName}"`,
+        handler: async (handlerCtx) => {
+          try {
+            const currentPresets = await loadCurrentPresets(handlerCtx);
+            const current = findPreset(currentPresets, {
+              name: registeredName,
+              scope: registeredScope,
+            });
+
+            if (!current) {
+              handlerCtx.ui.notify(
+                `Preset "${registeredName}" no longer exists.`,
+                "warning",
+              );
+
+              return;
+            }
+
+            const result = await requestActivation(
+              current,
+              handlerCtx,
+              pi,
+              session,
+            );
+
+            if (!result.ok && result.kind === "cancelled") return;
+
+            notifyApplyResult(handlerCtx, current, result);
+          } catch (err) {
+            handlerCtx.ui.notify(
+              `pi-presets-plus failed to activate preset "${registeredName}" from hotkey: ${err instanceof Error ? err.message : String(err)}.`,
+              "error",
+            );
+          }
+        },
+      });
+    }
+  }
+
+  /** Return whether deleting `identity` leaves runtime bindings out of date. */
+  deleteNeedsReload(identity: PresetIdentity): boolean {
+    return this.commitNeedsHotkeyReload(identity, undefined);
+  }
+
+  /** Remember a declined prompt so the same pending state is not re-prompted. */
+  recordReloadPromptDeclined(
+    identity: PresetIdentity & { readonly hotkey?: string | undefined },
+    hotkey = identity.hotkey,
+  ): void {
+    this.acknowledgedPendingHotkeys.set(presetKey(identity), hotkey);
+  }
+
+  /** Return whether saving `saved` leaves runtime bindings out of date. */
+  saveNeedsReload(
+    initial: PresetIdentity | undefined,
+    saved: PresetIdentity & { readonly hotkey?: string | undefined },
+  ): boolean {
+    if (!this.commitNeedsHotkeyReload(saved, saved.hotkey)) return false;
+
+    const initialRuntimeHotkey = this.runtimeHotkeyFor(initial);
+
+    if (!hotkeyChanged(initialRuntimeHotkey, saved.hotkey)) {
+      return (
+        Boolean(initialRuntimeHotkey?.trim()) && identityChanged(initial, saved)
+      );
+    }
+
+    return true;
+  }
+
+  private acknowledgedPendingHotkeyMatches(
+    identity: PresetIdentity & { readonly hotkey?: string | undefined },
+  ): boolean {
+    if (!this.acknowledgedPendingHotkeys.has(presetKey(identity))) return false;
+
+    return !hotkeyChanged(
+      this.acknowledgedPendingHotkeys.get(presetKey(identity)),
+      identity.hotkey,
+    );
+  }
+
+  private commitNeedsHotkeyReload(
+    identity: PresetIdentity,
+    hotkey: string | undefined,
+  ): boolean {
+    if (this.runtimeMatches(identity, hotkey)) {
+      this.acknowledgedPendingHotkeys.delete(presetKey(identity));
+
+      return false;
+    }
+
+    return !this.acknowledgedPendingHotkeyMatches({ ...identity, hotkey });
+  }
+
+  private runtimeHotkeyFor(
+    identity: PresetIdentity | undefined,
+  ): string | undefined {
+    if (!identity) return undefined;
+
+    return this.runtimeHotkeys.get(presetKey(identity));
+  }
+
+  private runtimeMatches(
+    identity: PresetIdentity,
+    hotkey: string | undefined,
+  ): boolean {
+    return !hotkeyChanged(this.runtimeHotkeyFor(identity), hotkey);
+  }
+
+  private setRuntimeHotkeyBaseline(presets: readonly LoadedPreset[]): void {
+    this.acknowledgedPendingHotkeys.clear();
+    this.runtimeHotkeys.clear();
+
+    for (const preset of presets) {
+      this.runtimeHotkeys.set(presetKey(preset), preset.hotkey);
+    }
+  }
+}
+
+/**
+ * Report the hotkey conflicts, unparseable hotkeys, and parsed hotkeys
+ * across a loaded preset list.
+ *
+ * Rewrites the `hotkeyConflict` and `hotkeyShadowsBuiltin` annotations on
+ * every preset passed in, so values from an earlier call never survive.
+ */
+export function analyzeHotkeys(presets: LoadedPreset[]): HotkeyAnalysis {
+  const claimed = new Map<string, PresetIdentity>();
+  const conflicts: HotkeyConflict[] = [];
+  const invalid: HotkeyDiagnostic[] = [];
+  const parsedHotkeys = new Map<LoadedPreset, ParsedHotkey>();
+
+  for (const preset of presets) {
+    preset.hotkeyConflict = undefined;
+    preset.hotkeyShadowsBuiltin = undefined;
+
+    const { hotkey } = preset;
+
+    if (!hotkey) continue;
+
+    const presetWithHotkey: LoadedPreset & { hotkey: string } = {
+      ...preset,
+      hotkey,
+    };
+    const parsed = parseHotkey(hotkey);
+
+    if (!parsed.ok) {
+      invalid.push({ preset: presetWithHotkey, reason: parsed.reason });
+
+      continue;
+    }
+
+    parsedHotkeys.set(preset, parsed.parsed);
+
+    if (isPiBuiltin(parsed.parsed)) {
+      preset.hotkeyShadowsBuiltin = true;
+    }
+
+    if (preset.shadowed) continue;
+
+    const winner = claimed.get(parsed.parsed.normalized);
+
+    if (winner) {
+      preset.hotkeyConflict = true;
+      conflicts.push({ loser: presetWithHotkey, winner });
+
+      continue;
+    }
+
+    claimed.set(parsed.parsed.normalized, {
+      name: preset.name,
+      scope: preset.scope,
+    });
+  }
+
+  return { conflicts, invalid, parsed: parsedHotkeys };
+}
+
+/** Returns `"<name>" (<scope>)`, including the quotes around the name. */
+export function formatPresetIdentity(identity: PresetIdentity): string {
+  return `"${identity.name}" (${identity.scope})`;
+}
+
+/** Return whether two hotkey declarations differ after commit-time cleanup. */
+export function hotkeyChanged(
+  prev: string | undefined,
+  next: string | undefined,
+): boolean {
+  return normalizeHotkeyForChange(prev) !== normalizeHotkeyForChange(next);
+}
+
+function formatPresetSubject(preset: Pick<LoadedPreset, "name">): string {
+  return `Preset "${preset.name}"`;
+}
+
+function identityChanged(
+  prev: PresetIdentity | undefined,
+  next: PresetIdentity,
+): boolean {
+  if (!prev) return false;
+
+  return prev.name !== next.name || prev.scope !== next.scope;
+}
+
+/** Normalize a hotkey for comparison, falling back to the trimmed text. */
+function normalizeHotkeyForChange(hotkey: string | undefined): string {
+  const trimmed = hotkey?.trim() ?? "";
+
+  if (trimmed.length === 0) return "";
+
+  const parsed = parseHotkey(trimmed);
+
+  return parsed.ok ? parsed.parsed.normalized : trimmed;
+}
+
+function presetKey(identity: PresetIdentity): string {
+  return `${identity.scope}:${identity.name}`;
+}

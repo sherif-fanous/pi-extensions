@@ -1,0 +1,277 @@
+/**
+ * Covers the always-visible active row of the preset picker: the name and
+ * scope it shows, its place above the filter, and how it truncates long
+ * names while the filter, scope, and focus change around it.
+ */
+import type { ActivePresetState, LoadedPreset } from "../../src/types.js";
+import { stripAnsi } from "../helpers/ansi.js";
+import {
+  makeLoadedPreset,
+  pickerMounter,
+  plainTheme,
+  renderLines,
+  type PickerTheme,
+} from "../helpers/picker.js";
+import { Key, type Component } from "@earendil-works/pi-tui";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const loadAll = vi.fn();
+
+/** Raw terminal byte sequences for the arrow keys these tests drive. */
+const KEY_BYTES = {
+  [Key.left]: "\u001B[D",
+  [Key.right]: "\u001B[C",
+} as const satisfies Record<typeof Key.left | typeof Key.right, string>;
+
+vi.mock("../../src/store/api.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/store/api.js")>();
+
+  return {
+    ...actual,
+    addPreset: vi.fn(),
+    loadAll,
+    removePreset: vi.fn(),
+    reorderWithinScope: vi.fn().mockResolvedValue({ ok: true }),
+  };
+});
+
+const mount = pickerMounter(loadAll);
+
+interface MountOptions {
+  readonly active?: ActivePresetState;
+  readonly presets?: readonly LoadedPreset[];
+}
+
+/**
+ * Theme that wraps every fragment in a real SGR sequence, so width math
+ * runs against the escapes a production theme emits.
+ */
+const ansiTheme: PickerTheme = {
+  bold: (value: string) => `\u001B[1m${value}\u001B[22m`,
+  fg: (_name: string, value: string) => `\u001B[38;5;42m${value}\u001B[39m`,
+};
+
+/** Builds the state of an active preset, clean or dirty. */
+function activeState(
+  preset: LoadedPreset,
+  options: { readonly dirty?: true } = {},
+): ActivePresetState {
+  return {
+    declared: preset,
+    dirty: options.dirty ?? false,
+    name: preset.name,
+    restore: { kind: "unknown" },
+    scope: preset.scope,
+  };
+}
+
+/** Mounts the picker with the ANSI theme. */
+async function mountAnsiPicker(options: MountOptions = {}): Promise<Component> {
+  return mountPickerWithTheme(ansiTheme, options);
+}
+
+/** Mounts the picker with the plain theme. */
+async function mountPicker(options: MountOptions = {}): Promise<Component> {
+  return mountPickerWithTheme(plainTheme, options);
+}
+
+/**
+ * Opens the picker over fake presets and returns the mounted component,
+ * restoring the session to the requested active preset first.
+ */
+async function mountPickerWithTheme(
+  theme: PickerTheme,
+  options: MountOptions = {},
+): Promise<Component> {
+  const presets = options.presets ?? [];
+  const active = options.active
+    ? presets.find(
+        (candidate) =>
+          candidate.name === options.active?.name &&
+          candidate.scope === options.active.scope,
+      )
+    : undefined;
+
+  if (options.active && !active) {
+    throw new Error("Expected the active preset to be loaded.");
+  }
+
+  const { component } = await mount({
+    active,
+    dirty: options.active?.dirty,
+    presets,
+    theme,
+  });
+
+  return component;
+}
+
+function renderText(component: Component, width = 100): string {
+  return component.render(width).join("\n");
+}
+
+describe("picker active-preset status row", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders the active preset name and scope when a preset is active", async () => {
+    const preset = makeLoadedPreset("plan");
+    const component = await mountPicker({
+      active: activeState(preset),
+      presets: [preset],
+    });
+
+    const rendered = renderText(component);
+
+    expect(rendered).toContain("Active: plan (User)");
+    expect(rendered).toContain("●");
+  });
+
+  it("renders none when no preset is active", async () => {
+    const component = await mountPicker({
+      presets: [makeLoadedPreset("plan")],
+    });
+
+    expect(renderText(component)).toContain("Active: none");
+  });
+
+  it("renders none with an empty preset list and no active preset", async () => {
+    const component = await mountPicker({ presets: [] });
+
+    expect(renderText(component)).toContain("Active: none");
+  });
+
+  it("places the active row directly below the top border, above the filter", async () => {
+    const preset = makeLoadedPreset("plan");
+    const component = await mountPicker({
+      active: activeState(preset),
+      presets: [preset],
+    });
+
+    const lines = renderLines(component);
+    const activeIndex = lines.findIndex((line) => line.includes("Active:"));
+    const filterIndex = lines.findIndex((line) => line.includes("Filter:"));
+
+    expect(activeIndex).toBe(1);
+    expect(lines[0]).toContain("Presets Plus");
+    expect(filterIndex).toBe(activeIndex + 1);
+  });
+
+  it("appends scope to disambiguate same-named presets across scopes", async () => {
+    const userPlan = makeLoadedPreset("plan", "user");
+    const projectPlan = makeLoadedPreset("plan", "project");
+    const component = await mountPicker({
+      active: activeState(projectPlan),
+      presets: [userPlan, projectPlan],
+    });
+
+    expect(renderText(component)).toContain("Active: plan (Project)");
+  });
+
+  it("keeps the active name visible when the filter excludes it", async () => {
+    const activePreset = makeLoadedPreset("plan");
+    const component = await mountPicker({
+      active: activeState(activePreset),
+      presets: [activePreset, makeLoadedPreset("build")],
+    });
+
+    component.handleInput?.("/");
+    component.handleInput?.("z");
+
+    const rendered = renderText(component);
+
+    expect(rendered).toContain("Active: plan");
+    expect(rendered).toContain("No matching presets");
+  });
+
+  it("keeps the active name visible when scope excludes it", async () => {
+    const activePreset = makeLoadedPreset("plan", "user");
+    const component = await mountPicker({
+      active: activeState(activePreset),
+      presets: [activePreset, makeLoadedPreset("ship", "project")],
+    });
+
+    component.handleInput?.(KEY_BYTES[Key.left]);
+
+    const rendered = renderText(component);
+
+    expect(rendered).toContain("Scope: Project only");
+    expect(rendered).toContain("Active: plan");
+    expect(rendered).not.toContain("●");
+  });
+
+  it("keeps the active name visible across focus modes", async () => {
+    const preset = makeLoadedPreset("plan");
+    const component = await mountPicker({
+      active: activeState(preset),
+      presets: [preset],
+    });
+
+    component.handleInput?.("/");
+
+    const filterRendered = renderText(component);
+
+    component.handleInput?.("\u001B");
+
+    const listRendered = renderText(component);
+
+    expect(filterRendered).toContain("Active: plan");
+    expect(listRendered).toContain("Active: plan");
+  });
+
+  it("omits drift text from the active row", async () => {
+    const preset = makeLoadedPreset("plan");
+    const component = await mountPicker({
+      active: activeState(preset, { dirty: true }),
+      presets: [preset],
+    });
+
+    const activeLine = renderText(component)
+      .split("\n")
+      .find((line) => line.includes("Active: plan"));
+
+    expect(activeLine).toBeDefined();
+    expect(activeLine).not.toContain("modified");
+  });
+
+  it("middle-ellipsizes long active names and retains the active dot", async () => {
+    const preset = makeLoadedPreset("ifanous-anthropic-claude-opus-4-8");
+    const component = await mountPicker({
+      active: activeState(preset),
+      presets: [preset],
+    });
+
+    const rendered = stripAnsi(renderText(component, 42));
+
+    expect(rendered).toContain("Active: ifanous-anth…de-opus-4-8 (User)");
+    expect(rendered).toContain("●");
+  });
+
+  it("keeps whole wide graphemes in the active-name suffix", async () => {
+    const preset = makeLoadedPreset("abcdefghijklmnop-👨‍👩‍👧‍👦-東京-end");
+    const component = await mountPicker({
+      active: activeState(preset),
+      presets: [preset],
+    });
+
+    const rendered = stripAnsi(renderText(component, 42));
+
+    expect(rendered).toContain("Active: abcdefghijkl…👨‍👩‍👧‍👦-東京-end (User)");
+  });
+
+  it("computes width from visible columns when the theme adds ANSI", async () => {
+    const preset = makeLoadedPreset("ifanous-anthropic-claude-opus-4-8");
+    const component = await mountAnsiPicker({
+      active: activeState(preset),
+      presets: [preset],
+    });
+
+    const rendered = stripAnsi(renderText(component, 42));
+
+    // The escapes the theme injects do not count as visible columns, so
+    // the ellipsis lands where the plain theme puts it.
+    expect(rendered).toContain("Active: ifanous-anth…de-opus-4-8 (User)");
+  });
+});

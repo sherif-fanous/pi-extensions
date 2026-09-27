@@ -1,0 +1,224 @@
+/**
+ * Covers picker navigation over cards of different heights: the selected
+ * card stays rendered through repeated Down, Up, PgDn, and PgUp presses.
+ */
+import type { LoadedPreset } from "../../src/types.js";
+import { pickerMounter } from "../helpers/picker.js";
+import { Key, type Component } from "@earendil-works/pi-tui";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const loadAll = vi.fn();
+/**
+ * Raw terminal byte sequences for the special keys these tests drive.
+ *
+ * pi-tui decodes input bytes into `Key.*` ids for `matchesKey` and exports
+ * no encoder for the other direction, so a component driven through
+ * `handleInput(rawBytes)` needs this table. Keying it by `Key.*` turns a
+ * typo on either side into a compile error.
+ */
+const KEY_BYTES = {
+  [Key.down]: "\u001B[B",
+  [Key.pageDown]: "\u001B[6~",
+  [Key.pageUp]: "\u001B[5~",
+  [Key.up]: "\u001B[A",
+} as const satisfies Record<
+  typeof Key.down | typeof Key.pageDown | typeof Key.pageUp | typeof Key.up,
+  string
+>;
+
+vi.mock("../../src/store/api.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/store/api.js")>();
+
+  return {
+    ...actual,
+    addPreset: vi.fn(),
+    loadAll,
+    removePreset: vi.fn(),
+    reorderWithinScope: vi.fn().mockResolvedValue({ ok: true }),
+  };
+});
+
+const mount = pickerMounter(loadAll);
+
+interface PresetFixtureOptions {
+  readonly availability?: LoadedPreset["unavailable"];
+  readonly clampWarning?: true;
+  readonly hotkeyConflict?: true;
+  readonly hotkeyShadowsBuiltin?: true;
+  readonly instructions?: string;
+  readonly shadowed?: true;
+}
+
+/** Builds a preset whose name carries the index and whose scope alternates. */
+function makeLoadedPreset(
+  index: number,
+  options: PresetFixtureOptions = {},
+): LoadedPreset {
+  const {
+    availability,
+    clampWarning,
+    hotkeyConflict,
+    hotkeyShadowsBuiltin,
+    instructions,
+    shadowed,
+  } = options;
+
+  return {
+    ...(clampWarning ? { clampWarning } : {}),
+    ...(hotkeyConflict ? { hotkeyConflict } : {}),
+    ...(hotkeyShadowsBuiltin ? { hotkeyShadowsBuiltin } : {}),
+    ...(instructions ? { instructions } : {}),
+    ...(shadowed ? { shadowed } : {}),
+    ...(availability ? { unavailable: availability } : {}),
+    model: "claude-opus-4.5",
+    name: presetName(index),
+    provider: "anthropic",
+    scope: index % 2 === 0 ? "user" : "project",
+  };
+}
+
+/** Builds the preset at an index, spreading badges and prompts down it. */
+function makePreset(index: number): LoadedPreset {
+  return makeLoadedPreset(index, {
+    ...(index % 3 === 0 ? { instructions: `Prompt for preset ${index}` } : {}),
+    ...(index === 5 ? { clampWarning: true } : {}),
+    ...(index === 7 ? { hotkeyConflict: true } : {}),
+    ...(index === 9 ? { hotkeyShadowsBuiltin: true } : {}),
+    ...(index === 11 ? { availability: "no-key" } : {}),
+    ...(index === 13 ? { shadowed: true } : {}),
+  });
+}
+
+function makePresets(count: number): LoadedPreset[] {
+  return Array.from({ length: count }, (_unused, index) => makePreset(index));
+}
+
+/** Opens the picker over the given presets in a tall terminal. */
+async function mountPicker(
+  presets: readonly LoadedPreset[],
+): Promise<Component> {
+  return (await mount({ presets, terminalRows: 86 })).component;
+}
+
+/** Names the preset at an index with a zero-padded suffix. */
+function presetName(index: number): string {
+  return `preset-${index.toString().padStart(2, "0")}`;
+}
+
+describe("picker variable-height navigation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each([false, true])(
+    "scrolls across both ends in filter mode %s",
+    async (filterMode) => {
+      const component = await mountPicker(makePresets(18));
+
+      component.render(120);
+      if (filterMode) component.handleInput?.("/");
+
+      component.handleInput?.(KEY_BYTES[Key.up]);
+
+      const upward = component
+        .render(120)
+        .filter((line) => line.includes("preset-"));
+
+      expect(upward[0]).toContain(presetName(17));
+      expect(upward[0]).toContain("▌");
+      expect(upward[1]).toContain(presetName(0));
+      expect(upward[2]).toContain(presetName(1));
+
+      component.handleInput?.(KEY_BYTES[Key.down]);
+
+      const downward = component
+        .render(120)
+        .filter((line) => line.includes("preset-"));
+
+      expect(downward[0]).toContain(presetName(17));
+      expect(downward[1]).toContain(presetName(0));
+      expect(downward[1]).toContain("▌");
+    },
+  );
+
+  it.each([false, true])(
+    "wraps page navigation in filter mode %s",
+    async (filterMode) => {
+      const component = await mountPicker(makePresets(18));
+      const pageSize = component
+        .render(120)
+        .filter((line) => line.includes("preset-")).length;
+
+      if (filterMode) component.handleInput?.("/");
+
+      component.handleInput?.(KEY_BYTES[Key.pageUp]);
+
+      const upward = component.render(120);
+
+      expect(upward.find((line) => line.includes("▌"))).toContain(
+        presetName(18 - pageSize),
+      );
+
+      const nextPageSize = upward.filter((line) =>
+        line.includes("preset-"),
+      ).length;
+
+      component.handleInput?.(KEY_BYTES[Key.pageDown]);
+      expect(
+        component.render(120).find((line) => line.includes("▌")),
+      ).toContain(presetName((18 - pageSize + nextPageSize) % 18));
+    },
+  );
+
+  it("keeps the selected card rendered through consecutive Down presses", async () => {
+    const component = await mountPicker(makePresets(18));
+    const initialRender = component.render(120).join("\n");
+
+    expect(initialRender).toContain(presetName(0));
+
+    for (let step = 1; step <= 12; step++) {
+      component.handleInput?.(KEY_BYTES[Key.down]);
+
+      const rendered = component.render(120).join("\n");
+
+      expect(rendered).toContain(presetName(step));
+
+      if (step === 11) {
+        expect(rendered).toContain("provider has no API key");
+      }
+    }
+  });
+
+  it("keeps the selected card rendered through repeated PgDn presses", async () => {
+    const component = await mountPicker(makePresets(18));
+
+    component.render(120);
+    component.handleInput?.(KEY_BYTES[Key.pageDown]);
+
+    expect(component.render(120).join("\n")).toContain(presetName(9));
+
+    component.handleInput?.(KEY_BYTES[Key.pageDown]);
+
+    expect(component.render(120).join("\n")).toContain(presetName(17));
+  });
+
+  it("keeps the selected card rendered during upward navigation", async () => {
+    const component = await mountPicker(makePresets(18));
+
+    component.render(120);
+
+    for (let step = 0; step < 8; step++) {
+      component.handleInput?.(KEY_BYTES[Key.down]);
+    }
+
+    component.render(120);
+    component.handleInput?.(KEY_BYTES[Key.up]);
+
+    expect(component.render(120).join("\n")).toContain(presetName(7));
+
+    component.handleInput?.(KEY_BYTES[Key.pageUp]);
+
+    expect(component.render(120).join("\n")).toContain(presetName(0));
+  });
+});
