@@ -273,7 +273,8 @@ other configuration sections.
 
 - **WHEN** the user edits a `presets` array and runs `/presets reload`
 - **THEN** the new presets SHALL be loaded
-- **AND** a notification SHALL state how many presets are now loaded
+- **AND** an info notification SHALL state how many presets are now loaded
+- **AND** any load warnings SHALL follow in one warning notification
 
 ### Requirement: /presets bare invocation explains the absence of UI
 
@@ -359,11 +360,11 @@ be retried on a later `session_start`.
 The package SHALL atomically write the complete version 2 file, replacing a user
 `config.json` version 1 at the same path, before deleting migrated
 `presets.json` and `policy.json` files. It SHALL treat an already-missing legacy
-file during cleanup as success. User and project outcomes SHALL be combined into
-one migration result notification. The notification SHALL use info level when
-every attempted migration succeeds and warning level when any attempted
-migration fails. A failure SHALL name the affected file and reason and point to
-the README migration guidance.
+file during cleanup as success. The scopes that migrated SHALL be named together
+in one info notification. Migration warnings from both scopes SHALL be added to
+the startup warning collection, so they show in the one startup warning
+notification. A failure SHALL name the affected file and reason and point to the
+README migration guidance.
 
 When a version 2 configuration already exists, the package SHALL neither read
 nor report any remaining legacy files in that scope.
@@ -429,18 +430,38 @@ nor report any remaining legacy files in that scope.
 ### Requirement: Scoped configuration validation
 
 The package SHALL validate every section it reads from a version 2
-configuration. A file-level error SHALL make that scope empty and emit a
-warning. An invalid `showInactiveStatus` SHALL use the inherited or default
-value and emit a warning. Preset entry validation SHALL continue to skip invalid
-entries while retaining valid entries. Configuration warnings SHALL leave
-loading and activation available, but any warning from a scope SHALL make that
-scope unsafe for a later preset mutation.
+configuration. A file-level error SHALL make that scope empty and emit one
+warning: `Could not read configuration at <path>: <message>. Ignored the file.`
+when the file cannot be read,
+`Configuration at <path> is not valid JSON: <message>. Ignored the file.` for
+invalid JSON, `Configuration at <path> must be a JSON object. Ignored the file.`
+for any other top-level value, and
+`Configuration at <path> uses unsupported version <version>; expected 2. Ignored the file.`
+for a version other than `2`. An invalid `showInactiveStatus` SHALL use the
+inherited or default value and emit the warning
+`<User|Project> setting "showInactiveStatus" must be a boolean, not <value>.`
+followed by `Ignored it.` when the other scope's value applies, or by
+`Using the default value true.` when no scope supplies a valid value. Preset
+entry validation SHALL continue to skip invalid entries while retaining valid
+entries. Configuration warnings SHALL leave loading and activation available,
+but any warning from a scope SHALL make that scope unsafe for a later preset
+mutation.
 
 #### Scenario: Invalid project setting falls back to user
 
 - **WHEN** the project file has an invalid `showInactiveStatus` and the user
   file sets a valid value
-- **THEN** the package SHALL warn and use the user value
+- **THEN** the package SHALL warn
+  `Project setting "showInactiveStatus" must be a boolean, not <value>. Ignored it.`
+  and use the user value
+
+#### Scenario: Invalid setting falls back to the default
+
+- **WHEN** the project file has an invalid `showInactiveStatus` and the user
+  file does not set a valid value
+- **THEN** the package SHALL warn
+  `Project setting "showInactiveStatus" must be a boolean, not <value>. Using the default value true.`
+  and use `true`
 
 #### Scenario: Invalid preset does not hide valid presets
 

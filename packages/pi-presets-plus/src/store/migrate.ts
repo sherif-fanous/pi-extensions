@@ -37,28 +37,25 @@ export interface MigrationOutcome {
   readonly warnings: string[];
 }
 
-/** Describe attempted migrations as one startup notification. */
-export function describeMigration(
-  outcomes: readonly MigrationOutcome[],
-): { text: string; level: "info" | "warning" } | undefined {
-  const attempted = outcomes.filter((outcome) => outcome.attempted);
-
-  if (attempted.length === 0) return undefined;
-
-  const warnings = attempted.flatMap((outcome) => outcome.warnings);
-
-  if (warnings.length === 0) {
-    return {
-      text: `Migrated ${attempted.map((outcome) => outcome.scope).join(" and ")} configuration to config.json.`,
-      level: "info",
-    };
-  }
-
-  const migrated = attempted
+/**
+ * Describe attempted migrations for startup: an info line naming the
+ * scopes that migrated, if any, and every migration warning.
+ */
+export function describeMigration(outcomes: readonly MigrationOutcome[]): {
+  readonly info?: string;
+  readonly warnings: string[];
+} {
+  const migrated = outcomes
     .filter((outcome) => outcome.migrated)
-    .map((outcome) => `${outcome.scope} configuration migrated successfully.`);
+    .map((outcome) => outcome.scope);
+  const warnings = outcomes.flatMap((outcome) => outcome.warnings);
 
-  return { text: [...migrated, ...warnings].join("\n"), level: "warning" };
+  return migrated.length > 0
+    ? {
+        info: `Migrated ${migrated.join(" and ")} configuration to config.json.`,
+        warnings,
+      }
+    : { warnings };
 }
 
 /** Migrate both independent scopes and return their outcomes. */
@@ -184,7 +181,7 @@ export async function migrateScope(
     } catch (error) {
       if (!isNotFoundError(error))
         warnings.push(
-          `Pi Presets Plus created ${configPath} but could not remove ${path}: ${describeError(error)}. You can delete it by hand.`,
+          `Created ${configPath} but could not remove ${path}: ${describeError(error)}. Delete it by hand.`,
         );
     }
   }

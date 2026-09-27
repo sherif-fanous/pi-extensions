@@ -148,10 +148,32 @@ describe("loadAll", () => {
     ).toEqual(["project:plan"]);
 
     expect(result.warnings).toEqual([
-      expect.stringContaining("The config file"),
-      expect.stringContaining('invalid "showInactiveStatus" value'),
+      expect.stringMatching(
+        /^Configuration at .+ is not valid JSON: .+[^.]\. Ignored the file\.$/u,
+      ),
+      'Project setting "showInactiveStatus" must be a boolean, not "yes". Using the default value true.',
     ]);
-    expect(result.warnings.join("\n")).toContain("invalid JSON");
+  });
+
+  it("ignores an invalid project setting when the user setting applies", async () => {
+    const ctx = makeCtx(projectDir, fullRegistry);
+
+    await writeRawScope(
+      "user",
+      JSON.stringify({ version: 2, showInactiveStatus: false }),
+    );
+
+    await writeRawScope(
+      "project",
+      JSON.stringify({ version: 2, showInactiveStatus: "yes" }),
+    );
+
+    const result = await loadAll(ctx);
+
+    expect(result.showInactiveStatus).toBe(false);
+    expect(result.warnings).toEqual([
+      'Project setting "showInactiveStatus" must be a boolean, not "yes". Ignored it.',
+    ]);
   });
 
   it("surfaces a project policy section as one warning", async () => {
@@ -741,6 +763,20 @@ describe("unsafe mutation protection", () => {
     expect((await loadAll(ctx)).presets.map((entry) => entry.name)).toEqual([
       "plan",
     ]);
+  });
+
+  it("rejects add and preserves an invalid showInactiveStatus", async () => {
+    const ctx = makeCtx(projectDir, fullRegistry);
+    const original = JSON.stringify({ version: 2, showInactiveStatus: "yes" });
+    const path = await writeRawScope("project", original);
+
+    const result = await addPreset(preset("plan"), "project", ctx);
+
+    expect(result).toEqual({
+      ok: false,
+      reason: unsafeMutationReason("project", path),
+    });
+    expect(await readFile(path, "utf-8")).toBe(original);
   });
 
   it("rejects add when the scope path cannot be read as a file", async () => {

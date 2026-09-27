@@ -13,12 +13,16 @@ import {
   parseHotkey,
   type ParsedHotkey,
 } from "./ui/hotkey-input.js";
+import { reportWarnings } from "./warnings.js";
 import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import type { KeyId } from "@earendil-works/pi-tui";
-import { describeError } from "@sherif-fanous/pi-extensions-core";
+import {
+  describeError,
+  notifyWarnings,
+} from "@sherif-fanous/pi-extensions-core";
 
 export type { PresetIdentity } from "./preset-identity.js";
 
@@ -57,7 +61,12 @@ export class HotkeyRegistry {
   >();
   private readonly runtimeHotkeys = new Map<string, string | undefined>();
 
-  /** Bind session-start shortcuts and capture the runtime hotkey baseline. */
+  /**
+   * Bind session-start shortcuts and capture the runtime hotkey baseline.
+   *
+   * Hotkey warnings go into `warnings` when the caller collects them, and
+   * otherwise out as one warning notification.
+   */
   bindForSession(
     presets: LoadedPreset[],
     hotkeyAnalysis: HotkeyAnalysis,
@@ -65,20 +74,21 @@ export class HotkeyRegistry {
     pi: ExtensionAPI,
     loadCurrentPresets: CurrentPresetsLoader,
     session: ActivePresetSession,
+    warnings?: string[],
   ): void {
+    const hotkeyWarnings: string[] = [];
+
     this.setRuntimeHotkeyBaseline(presets);
 
     for (const conflict of hotkeyAnalysis.conflicts) {
-      ctx.ui.notify(
+      hotkeyWarnings.push(
         `${formatPresetSubject(conflict.loser)} hotkey "${conflict.loser.hotkey}" conflicts with preset ${formatPresetIdentity(conflict.winner)}. The first registered wins.`,
-        "warning",
       );
     }
 
     for (const invalid of hotkeyAnalysis.invalid) {
-      ctx.ui.notify(
-        `${formatPresetSubject(invalid.preset)} has invalid hotkey "${invalid.preset.hotkey}" (${invalid.reason}). The extension ignored it and will not register it or check it for conflicts until fixed.`,
-        "warning",
+      hotkeyWarnings.push(
+        `${formatPresetSubject(invalid.preset)} has invalid hotkey "${invalid.preset.hotkey}" (${invalid.reason}). Ignored it, so it is not registered or checked for conflicts until it is fixed.`,
       );
     }
 
@@ -89,9 +99,8 @@ export class HotkeyRegistry {
       if (preset.shadowed || preset.hotkeyConflict === true) continue;
 
       if (isPiBuiltin(parsed)) {
-        ctx.ui.notify(
+        hotkeyWarnings.push(
           `${formatPresetSubject(preset)} hotkey "${preset.hotkey}" shadows a Pi built-in. The preset binding will take precedence.`,
-          "warning",
         );
       }
 
@@ -109,10 +118,9 @@ export class HotkeyRegistry {
             });
 
             if (!current) {
-              handlerCtx.ui.notify(
+              notifyWarnings(handlerCtx, "Presets Plus", [
                 `Preset "${registeredName}" no longer exists.`,
-                "warning",
-              );
+              ]);
 
               return;
             }
@@ -136,6 +144,8 @@ export class HotkeyRegistry {
         },
       });
     }
+
+    reportWarnings(ctx, hotkeyWarnings, warnings);
   }
 
   /** Return whether deleting `identity` leaves runtime bindings out of date. */

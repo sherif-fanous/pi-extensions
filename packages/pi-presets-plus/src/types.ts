@@ -95,6 +95,12 @@ export interface PresetOverlayBaseline {
 /** Result of loading one consolidated configuration scope. */
 export interface ScopeConfig {
   readonly document: ConfigDocument;
+  /**
+   * A `showInactiveStatus` value that is not a boolean. Its warning names
+   * the value that applies instead, which depends on the other scope, so
+   * `loadAll` words it.
+   */
+  readonly invalidShowInactiveStatus?: { readonly value: unknown };
   readonly presets: Preset[];
   readonly showInactiveStatus?: boolean;
   readonly warnings: ScopeWarnings;
@@ -103,7 +109,6 @@ export interface ScopeConfig {
 /** Warnings grouped by the configuration section that produced them. */
 export interface ScopeWarnings {
   readonly file: string[];
-  readonly settings: string[];
   readonly presets: string[];
   readonly policy: string[];
 }

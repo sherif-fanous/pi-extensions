@@ -120,7 +120,7 @@ describe("apply", () => {
       ok: true,
       notices: [
         {
-          message: 'Unknown tools ignored for preset "plan": missing.',
+          message: 'Ignored unknown tools for preset "plan": missing.',
           severity: "warning",
         },
       ],
@@ -153,7 +153,7 @@ describe("apply", () => {
         },
         {
           severity: "warning",
-          message: 'Unknown tools ignored for preset "plan": missing.',
+          message: 'Ignored unknown tools for preset "plan": missing.',
         },
       ],
     });

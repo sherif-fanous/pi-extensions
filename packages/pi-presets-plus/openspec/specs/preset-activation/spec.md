@@ -44,8 +44,10 @@ prompt / hotkey / flag / session-restore callers; the shared info-dialog overlay
 for picker callers per the `preset-picker` capability).
 
 `apply()` SHALL return non-refusal accompaniments, such as dropped unknown
-tools, with `ok: true`. It SHALL NOT notify directly. Callers SHALL combine
-these accompaniments with the activation result in one user-facing outcome.
+tools, with `ok: true`. It SHALL NOT notify directly. Callers SHALL include info
+accompaniments in the activation's success outcome and show warning
+accompaniments as warnings: in one warning notification, or at session start in
+the startup warning collection.
 
 Baseline capture rules:
 
@@ -515,8 +517,10 @@ overlay baseline.
 
 When a preset is successfully applied, the package SHALL produce one
 human-facing success outcome naming the preset. The outcome SHALL NOT use
-`pi.sendMessage()` or add activation text to LLM context. Apply accompaniments
-SHALL be included in the same outcome where the delivery surface supports it.
+`pi.sendMessage()` or add activation text to LLM context. Info accompaniments
+SHALL be included in the same outcome. Warning accompaniments SHALL be shown as
+warnings, in one warning notification or at session start in the startup warning
+collection.
 
 A no-op re-apply SHALL produce no success outcome. Session restore SHALL remain
 silent because it re-attaches state without applying the preset.
@@ -542,15 +546,17 @@ silent because it re-attaches state without applying the preset.
 - **WHEN** a preset is applied from the picker and the picker remains the active
   interaction surface
 - **THEN** one user-facing success outcome SHALL name the applied preset
-- **AND** the outcome SHALL include any apply accompaniments without adding them
+- **AND** the user SHALL see any apply accompaniments without them being added
   to LLM context
 
 #### Scenario: Apply accompaniments are grouped
 
-- **WHEN** an activation succeeds with a thinking adjustment or dropped unknown
-  tools
-- **THEN** the user SHALL receive one combined outcome for that activation
-- **AND** the outcome SHALL identify each adjustment or warning
+- **WHEN** an activation outside session start succeeds with a thinking
+  adjustment and dropped unknown tools
+- **THEN** the user SHALL receive one info notification naming the applied
+  preset and the thinking adjustment
+- **AND** one warning notification, headed `Presets Plus: 1 warning`, SHALL name
+  the dropped tools
 
 ### Requirement: Clear emits a per-field result notification
 

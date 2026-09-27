@@ -13,10 +13,11 @@ import type {
 import { parsePresetArray } from "./load.js";
 import { getGlobalConfigPath, getProjectConfigPath } from "./paths.js";
 import {
-  describeError,
   isNotFoundError,
   isRecord,
+  malformedConfigWarning,
   parseJsonObject,
+  unreadableConfigWarning,
 } from "@sherif-fanous/pi-extensions-core";
 
 /** File-system seam used by scope loading tests. */
@@ -50,38 +51,31 @@ export async function loadScope(
       };
     }
 
-    return invalidScope(
-      `The extension could not read config file ${path}: ${describeError(error)}.`,
-    );
+    return invalidScope(unreadableConfigWarning(path, error));
   }
 
   const parsedResult = parseJsonObject(rawData);
 
   if (!parsedResult.ok) {
-    return invalidScope(
-      parsedResult.reason === "invalid-json"
-        ? `The config file ${path} contains invalid JSON: ${describeError(parsedResult.error)}.`
-        : `The config file ${path} top-level must be an object with a "version" field.`,
-    );
+    return invalidScope(malformedConfigWarning(path, parsedResult));
   }
 
   const parsed = parsedResult.value;
 
   if (parsed.version !== 2) {
     return invalidScope(
-      `The config file ${path} uses unsupported version ${JSON.stringify(parsed.version)}; expected 2. The extension ignored the file and used defaults.`,
+      `Configuration at ${path} uses unsupported version ${JSON.stringify(parsed.version)}; expected 2. Ignored the file.`,
     );
   }
 
   const document = parsed as ScopeConfig["document"];
   const warnings = emptyWarnings();
   let showInactiveStatus: boolean | undefined;
+  let invalidShowInactiveStatus: { value: unknown } | undefined;
 
   if (document.showInactiveStatus !== undefined) {
     if (typeof document.showInactiveStatus !== "boolean") {
-      warnings.settings.push(
-        `The config file ${path} has an invalid "showInactiveStatus" value; expected a boolean.`,
-      );
+      invalidShowInactiveStatus = { value: document.showInactiveStatus };
     } else {
       showInactiveStatus = document.showInactiveStatus;
     }
@@ -118,12 +112,15 @@ export async function loadScope(
     document,
     presets,
     ...(showInactiveStatus === undefined ? {} : { showInactiveStatus }),
+    ...(invalidShowInactiveStatus === undefined
+      ? {}
+      : { invalidShowInactiveStatus }),
     warnings,
   };
 }
 
 function emptyWarnings(): ScopeWarnings {
-  return { file: [], settings: [], presets: [], policy: [] };
+  return { file: [], presets: [], policy: [] };
 }
 
 function invalidScope(warning: string): ScopeConfig {

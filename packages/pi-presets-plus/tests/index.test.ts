@@ -236,7 +236,7 @@ describe("session_start configuration", () => {
     );
   });
 
-  it("aggregates successful and failed scope migrations", async () => {
+  it("reports a successful migration as info and a failed one as a warning", async () => {
     const cwd = join(agentDir, "project");
 
     await writeLegacyPresets(JSON.stringify({ version: 1, presets: [] }));
@@ -250,10 +250,14 @@ describe("session_start configuration", () => {
     await handlers.get("session_start")?.({ type: "session_start" }, ctx);
 
     expect(notify).toHaveBeenCalledWith(
-      expect.stringContaining("user configuration migrated successfully."),
+      "Migrated user configuration to config.json.",
+      "info",
+    );
+
+    expect(notify).toHaveBeenCalledWith(
+      expect.stringContaining("README"),
       "warning",
     );
-    expect(notify.mock.calls[0]?.[0]).toContain("README");
   });
 
   it.each(["startup", "reload", "new", "resume", "fork"] as const)(
@@ -294,6 +298,7 @@ describe("session_start configuration", () => {
           model: { id: "gpt-5", provider: "openai" },
           thinkingLevel: "medium",
         },
+        expect.any(Array),
       );
     },
   );
@@ -338,6 +343,7 @@ describe("session_start configuration", () => {
       expect.anything(),
       expect.objectContaining({ restored: true }),
       expect.anything(),
+      expect.any(Array),
     );
     expect(spies.setModel).not.toHaveBeenCalled();
     expect(spies.setThinkingLevel).not.toHaveBeenCalled();

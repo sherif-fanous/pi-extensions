@@ -111,7 +111,7 @@ export async function loadPolicy(
 
     if (!isRecord(candidate) || typeof candidate.match !== "string") {
       warnings.push(
-        `The extension skipped policy rule ${index + 1} in ${path}: "match" must be a string.`,
+        `Skipped policy rule ${index + 1} in ${path}: "match" must be a string.`,
       );
 
       continue;
@@ -121,7 +121,7 @@ export async function loadPolicy(
 
     if (!matchRegex) {
       warnings.push(
-        `The extension skipped policy rule ${index + 1} in ${path}: match pattern ${JSON.stringify(candidate.match)} is invalid.`,
+        `Skipped policy rule ${index + 1} in ${path}: match pattern ${JSON.stringify(candidate.match)} is invalid.`,
       );
 
       continue;
@@ -232,7 +232,7 @@ function compileMatcher(
 ): CompiledPolicyMatcher | undefined {
   if (!isRecord(candidate) || typeof candidate.pattern !== "string") {
     warnings.push(
-      `The extension skipped the ${section} matcher in policy rule ${ruleIndex + 1} of ${path}: "pattern" must be a string.`,
+      `Skipped the ${section} matcher in policy rule ${ruleIndex + 1} of ${path}: "pattern" must be a string.`,
     );
 
     return undefined;
@@ -242,7 +242,7 @@ function compileMatcher(
 
   if (field !== "name" && field !== "provider" && field !== "model") {
     warnings.push(
-      `The extension skipped ${section} pattern ${JSON.stringify(candidate.pattern)} in policy rule ${ruleIndex + 1} of ${path}: field ${JSON.stringify(field)} is not supported.`,
+      `Skipped ${section} pattern ${JSON.stringify(candidate.pattern)} in policy rule ${ruleIndex + 1} of ${path}: field ${JSON.stringify(field)} is not supported.`,
     );
 
     return undefined;
@@ -252,7 +252,7 @@ function compileMatcher(
 
   if (!regex) {
     warnings.push(
-      `The extension skipped the ${section} matcher in policy rule ${ruleIndex + 1} of ${path}: pattern ${JSON.stringify(candidate.pattern)} is invalid.`,
+      `Skipped the ${section} matcher in policy rule ${ruleIndex + 1} of ${path}: pattern ${JSON.stringify(candidate.pattern)} is invalid.`,
     );
 
     return undefined;
@@ -272,7 +272,7 @@ function compileMatcherList(
 
   if (!Array.isArray(candidate)) {
     warnings.push(
-      `The extension ignored "${section}" in policy rule ${ruleIndex + 1} of ${path}: the value must be an array.`,
+      `Ignored "${section}" in policy rule ${ruleIndex + 1} of ${path}: the value must be an array.`,
     );
 
     return [];

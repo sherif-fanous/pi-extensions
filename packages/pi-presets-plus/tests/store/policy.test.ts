@@ -89,7 +89,7 @@ describe("loadPolicy", () => {
       (await loadScope("user", process.cwd(), agentDir)).warnings.file.join(
         " ",
       ),
-    ).toContain("invalid JSON");
+    ).toContain("is not valid JSON");
   });
 
   it("skips an invalid match while retaining other rules", async () => {

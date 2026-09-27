@@ -220,7 +220,7 @@ describe("HotkeyRegistry.bindForSession", () => {
     );
 
     expect(notify).toHaveBeenCalledWith(
-      'Preset "review" hotkey "ctrl+shift+1" conflicts with preset "plan" (user). The first registered wins.',
+      'Presets Plus: 1 warning\n- Preset "review" hotkey "ctrl+shift+1" conflicts with preset "plan" (user). The first registered wins.',
       "warning",
     );
 
@@ -237,7 +237,7 @@ describe("HotkeyRegistry.bindForSession", () => {
 
     expect(registerShortcut).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledWith(
-      'Preset "plan" has invalid hotkey "ctrl+ctrl+p" (duplicate modifier "ctrl"). The extension ignored it and will not register it or check it for conflicts until fixed.',
+      'Presets Plus: 1 warning\n- Preset "plan" has invalid hotkey "ctrl+ctrl+p" (duplicate modifier "ctrl"). Ignored it, so it is not registered or checked for conflicts until it is fixed.',
       "warning",
     );
   });
@@ -248,7 +248,7 @@ describe("HotkeyRegistry.bindForSession", () => {
     const { notify } = bind(registry, [preset("plan", "ctrl+l")]);
 
     expect(notify).toHaveBeenCalledWith(
-      'Preset "plan" hotkey "ctrl+l" shadows a Pi built-in. The preset binding will take precedence.',
+      'Presets Plus: 1 warning\n- Preset "plan" hotkey "ctrl+l" shadows a Pi built-in. The preset binding will take precedence.',
       "warning",
     );
   });
@@ -263,11 +263,7 @@ describe("HotkeyRegistry.bindForSession", () => {
 
     expect(notify.mock.calls).toEqual([
       [
-        'Preset "review" hotkey "ctrl+l" conflicts with preset "plan" (user). The first registered wins.',
-        "warning",
-      ],
-      [
-        'Preset "plan" hotkey "ctrl+l" shadows a Pi built-in. The preset binding will take precedence.',
+        'Presets Plus: 2 warnings\n- Preset "review" hotkey "ctrl+l" conflicts with preset "plan" (user). The first registered wins.\n- Preset "plan" hotkey "ctrl+l" shadows a Pi built-in. The preset binding will take precedence.',
         "warning",
       ],
     ]);
@@ -404,7 +400,7 @@ describe("HotkeyRegistry.bindForSession", () => {
 
     expect(requestActivationMock).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledWith(
-      'Preset "plan" no longer exists.',
+      'Presets Plus: 1 warning\n- Preset "plan" no longer exists.',
       "warning",
     );
   });

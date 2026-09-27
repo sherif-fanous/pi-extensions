@@ -4,4 +4,3 @@
  */
 
 export { getArgumentCompletions, handlePresetsCommand } from "./router.js";
-export { surfaceWarnings } from "./notify.js";

@@ -140,7 +140,7 @@ describe("maybeApplyPolicyDefault", () => {
     expect(isAutomaticDefaultEligibleMock).toHaveBeenCalledWith(captured, ctx);
     expect(applyMock).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledExactlyOnceWith(
-      "Policy warning.",
+      "Presets Plus: 1 warning\n- Policy warning.",
       "warning",
     );
   });
@@ -204,6 +204,9 @@ describe("maybeApplyPolicyDefault", () => {
     const { result } = await applyDefault(ctx);
 
     expect(result).toBe(false);
-    expect(notify).toHaveBeenCalledWith("Key was revoked.", "warning");
+    expect(notify).toHaveBeenCalledWith(
+      "Presets Plus: 1 warning\n- Key was revoked.",
+      "warning",
+    );
   });
 });

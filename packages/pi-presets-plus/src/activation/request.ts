@@ -23,14 +23,20 @@ export type ActivationResult =
       readonly reason: string;
     };
 
-/** Check policy, then apply a preset when activation is permitted. */
+/**
+ * Check policy, then apply a preset when activation is permitted.
+ *
+ * Policy warnings go into `warnings` when the caller collects them, and
+ * otherwise out as one warning notification.
+ */
 export async function requestActivation(
   preset: LoadedPreset,
   ctx: ExtensionContext,
   pi: ExtensionAPI,
   session: ActivePresetSession,
+  warnings?: string[],
 ): Promise<ActivationResult> {
-  if (!(await gateActivation(preset, ctx))) {
+  if (!(await gateActivation(preset, ctx, warnings))) {
     return {
       kind: "cancelled",
       ok: false,

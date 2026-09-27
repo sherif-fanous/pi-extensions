@@ -9,6 +9,7 @@ import type {
   PresetScope,
   ScopeConfig,
 } from "../types.js";
+import { formatScopeName } from "../ui/widgets.js";
 import { loadScope } from "./config.js";
 import { mergeScopes } from "./merge.js";
 import { getGlobalConfigPath, getProjectConfigPath } from "./paths.js";
@@ -16,6 +17,9 @@ import { loadPolicy } from "./policy.js";
 import { computeClampWarning } from "./validate.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { writeJsonFile } from "@sherif-fanous/pi-extensions-core";
+
+/** Whether the status line shows when no preset is active, unless configured. */
+const DEFAULT_SHOW_INACTIVE_STATUS = true;
 
 /** Result of loading all presets. */
 export interface LoadAllResult {
@@ -70,11 +74,13 @@ export async function loadAll(ctx: StorageContext): Promise<LoadAllResult> {
     loadScope("user", ctx.cwd),
     loadScope("project", ctx.cwd),
   ]);
+  const showInactiveStatus =
+    project.showInactiveStatus ?? user.showInactiveStatus;
   // Policy warnings for the user scope belong to loadPolicy. The project
   // scope has no other reader, so its policy warnings surface here.
   const warnings = [
-    ...loadableWarnings(user),
-    ...loadableWarnings(project),
+    ...scopeLoadWarnings("user", user, showInactiveStatus),
+    ...scopeLoadWarnings("project", project, showInactiveStatus),
     ...project.warnings.policy,
   ];
   const presets = mergeScopes(
@@ -90,8 +96,7 @@ export async function loadAll(ctx: StorageContext): Promise<LoadAllResult> {
   return {
     hotkeyAnalysis: analyzeHotkeys(presets),
     presets,
-    showInactiveStatus:
-      project.showInactiveStatus ?? user.showInactiveStatus ?? true,
+    showInactiveStatus: showInactiveStatus ?? DEFAULT_SHOW_INACTIVE_STATUS,
     warnings,
   };
 }
@@ -291,11 +296,7 @@ export async function updatePreset(
 
 /** Warnings from the sections every scope loads, leaving policy aside. */
 function loadableWarnings(loaded: ScopeConfig): string[] {
-  return [
-    ...loaded.warnings.file,
-    ...loaded.warnings.settings,
-    ...loaded.warnings.presets,
-  ];
+  return [...loaded.warnings.file, ...loaded.warnings.presets];
 }
 
 function pathForScope(scope: PresetScope, ctx: StorageContext): string {
@@ -318,7 +319,7 @@ async function readScope(
       : result.warnings.policy;
   const warnings = [...loadableWarnings(result), ...policyWarnings];
 
-  if (warnings.length > 0) {
+  if (warnings.length > 0 || result.invalidShowInactiveStatus !== undefined) {
     return {
       ok: false,
       reason: `Pi Presets Plus did not change the ${scope} configuration file at ${path}. It could not load the complete file. Fix the file and try again.`,
@@ -326,6 +327,36 @@ async function readScope(
   }
 
   return { ...result, path };
+}
+
+/**
+ * Warnings `loadAll` shows for one scope, in file, setting, then preset
+ * order. An invalid `showInactiveStatus` warning names the default when no
+ * scope supplies a valid value, and otherwise says the value was ignored,
+ * since the other scope's value applies.
+ */
+function scopeLoadWarnings(
+  scope: PresetScope,
+  loaded: ScopeConfig,
+  effectiveShowInactiveStatus: boolean | undefined,
+): string[] {
+  const invalid = loaded.invalidShowInactiveStatus;
+  const settingWarnings =
+    invalid === undefined
+      ? []
+      : [
+          `${formatScopeName(scope)} setting "showInactiveStatus" must be a boolean, not ${JSON.stringify(invalid.value)}. ${
+            effectiveShowInactiveStatus === undefined
+              ? `Using the default value ${String(DEFAULT_SHOW_INACTIVE_STATUS)}.`
+              : "Ignored it."
+          }`,
+        ];
+
+  return [
+    ...loaded.warnings.file,
+    ...settingWarnings,
+    ...loaded.warnings.presets,
+  ];
 }
 
 async function writeDocument(

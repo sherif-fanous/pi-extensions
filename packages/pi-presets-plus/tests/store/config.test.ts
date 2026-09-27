@@ -57,14 +57,12 @@ describe("loadScope", () => {
 
     await expect(loadScope("project", cwd, agentDir)).resolves.toMatchObject({
       showInactiveStatus: true,
-      warnings: { file: [], settings: [], presets: [], policy: [] },
+      warnings: { file: [], presets: [], policy: [] },
     });
 
     await writeProjectConfig(cwd, { version: 2, showInactiveStatus: "yes" });
     await expect(loadScope("project", cwd, agentDir)).resolves.toMatchObject({
-      warnings: {
-        settings: [expect.stringContaining("showInactiveStatus")],
-      },
+      invalidShowInactiveStatus: { value: "yes" },
     });
   });
 
@@ -86,14 +84,27 @@ describe("loadScope", () => {
   });
 
   it.each([
-    ["invalid JSON", "{"],
-    ["unsupported version", JSON.stringify({ version: 3 })],
     [
-      "invalid field type",
-      JSON.stringify({ showInactiveStatus: "no", version: 2 }),
+      "invalid JSON",
+      "{",
+      (): unknown =>
+        expect.stringMatching(
+          /^Configuration at .+ is not valid JSON: .+[^.]\. Ignored the file\.$/u,
+        ),
     ],
-    ["invalid top-level", JSON.stringify([])],
-  ])("fails open and warns for %s", async (_label, contents) => {
+    [
+      "unsupported version",
+      JSON.stringify({ version: 3 }),
+      (path: string) =>
+        `Configuration at ${path} uses unsupported version 3; expected 2. Ignored the file.`,
+    ],
+    [
+      "invalid top-level",
+      JSON.stringify([]),
+      (path: string) =>
+        `Configuration at ${path} must be a JSON object. Ignored the file.`,
+    ],
+  ])("fails open and warns for %s", async (_label, contents, warning) => {
     const path = getGlobalConfigPath(agentDir);
 
     await mkdir(join(agentDir, "presets-plus"), { recursive: true });
@@ -102,9 +113,22 @@ describe("loadScope", () => {
     const result = await loadScope("user", join(agentDir, "project"), agentDir);
 
     expect(result.showInactiveStatus).toBeUndefined();
-    expect(result.warnings.file.length + result.warnings.settings.length).toBe(
-      1,
-    );
+    expect(result.warnings.file).toEqual([warning(path)]);
+    expect(await readFile(path, "utf-8")).toBe(contents);
+  });
+
+  it("fails open and records an invalid field type", async () => {
+    const path = getGlobalConfigPath(agentDir);
+    const contents = JSON.stringify({ showInactiveStatus: "no", version: 2 });
+
+    await mkdir(join(agentDir, "presets-plus"), { recursive: true });
+    await writeFile(path, contents, "utf-8");
+
+    const result = await loadScope("user", join(agentDir, "project"), agentDir);
+
+    expect(result.showInactiveStatus).toBeUndefined();
+    expect(result.invalidShowInactiveStatus).toEqual({ value: "no" });
+    expect(result.warnings.file).toEqual([]);
     expect(await readFile(path, "utf-8")).toBe(contents);
   });
 });

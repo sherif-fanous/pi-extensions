@@ -51,7 +51,7 @@ describe("requestActivation", () => {
     await expect(requestActivation(preset, ctx, pi, session)).resolves.toBe(
       result,
     );
-    expect(gateActivationMock).toHaveBeenCalledWith(preset, ctx);
+    expect(gateActivationMock).toHaveBeenCalledWith(preset, ctx, undefined);
     expect(applyMock).toHaveBeenCalledWith(preset, ctx, pi, session);
   });
 

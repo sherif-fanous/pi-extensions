@@ -10,7 +10,6 @@ import type { HotkeyRegistry } from "../../hotkey-registry.js";
 import { loadAll } from "../../store/api.js";
 import { notifyApplyResult } from "../../ui/apply-result.js";
 import { openPicker } from "../../ui/picker.js";
-import { surfaceWarnings } from "./notify.js";
 import { runPolicy } from "./policy.js";
 import { runReload } from "./reload.js";
 import { runShowPrompt } from "./show-prompt.js";
@@ -19,7 +18,10 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-import { subcommandCompletions } from "@sherif-fanous/pi-extensions-core";
+import {
+  notifyWarnings,
+  subcommandCompletions,
+} from "@sherif-fanous/pi-extensions-core";
 
 /**
  * One `/presets` subcommand: the token, the description its completion
@@ -116,10 +118,9 @@ export async function handlePresetsCommand(
   const subCommand = tokens[0] ?? "";
 
   if (subCommand === "list") {
-    ctx.ui.notify(
+    notifyWarnings(ctx, "Presets Plus", [
       '"list" is not a supported /presets subcommand. Run /presets to open the picker.',
-      "warning",
-    );
+    ]);
 
     return;
   }
@@ -136,10 +137,9 @@ export async function handlePresetsCommand(
 
   if (pi && (await activateNamedPreset(trimmedArgs, ctx, pi, session))) return;
 
-  ctx.ui.notify(
+  notifyWarnings(ctx, "Presets Plus", [
     `Unknown subcommand "${subCommand ?? ""}". Try ${formatSupportedCommandHint()}.`,
-    "warning",
-  );
+  ]);
 }
 
 /** Activate a preset by name, returning false when no such preset exists. */
@@ -151,7 +151,7 @@ async function activateNamedPreset(
 ): Promise<boolean> {
   const { presets, warnings } = await loadAll(ctx);
 
-  surfaceWarnings(ctx, warnings);
+  notifyWarnings(ctx, "Presets Plus", warnings);
 
   const preset = presets.find(
     (candidate) => candidate.name === name && !candidate.shadowed,
@@ -199,10 +199,9 @@ async function runPicker(
   hotkeys: HotkeyRegistry,
 ): Promise<void> {
   if (!pi) {
-    ctx.ui.notify(
+    notifyWarnings(ctx, "Presets Plus", [
       "Preset picker is only available in interactive mode.",
-      "warning",
-    );
+    ]);
 
     return;
   }

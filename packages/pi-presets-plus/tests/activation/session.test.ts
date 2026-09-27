@@ -287,7 +287,7 @@ describe("ActivePresetSession", () => {
 
     expect(result.state).toBeUndefined();
     expect(result.warnings).toEqual([
-      'The restored session references preset "missing", which is not loaded. The extension did not attach it.',
+      'The restored session references preset "missing", which is not loaded. Did not attach it.',
     ]);
   });
 
@@ -309,7 +309,7 @@ describe("ActivePresetSession", () => {
 
     expect(result.state).toBeUndefined();
     expect(result.warnings).toEqual([
-      'The restored session references preset "plan", which is unavailable (no-key). The extension did not attach it.',
+      'The restored session references preset "plan", which is unavailable (no-key). Did not attach it.',
     ]);
   });
 });

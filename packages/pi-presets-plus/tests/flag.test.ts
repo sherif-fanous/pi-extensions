@@ -73,6 +73,7 @@ describe("applyPresetFlag", () => {
       ctx,
       pi,
       session,
+      undefined,
     );
   });
 
@@ -91,7 +92,7 @@ describe("applyPresetFlag", () => {
     );
 
     expect(notify).toHaveBeenCalledWith(
-      '--preset: Unknown preset "bad". Available: plan, review.',
+      'Presets Plus: 1 warning\n- Unknown preset "bad" for --preset. Available: plan, review.',
       "warning",
     );
   });
@@ -107,7 +108,7 @@ describe("applyPresetFlag", () => {
     );
 
     expect(notify).toHaveBeenCalledWith(
-      '--preset: Unknown preset "bad". Available: plan (Unavailable: no-key).',
+      'Presets Plus: 1 warning\n- Unknown preset "bad" for --preset. Available: plan (Unavailable: no-key).',
       "warning",
     );
   });
@@ -132,6 +133,7 @@ describe("applyPresetFlag", () => {
       ctx,
       pi,
       expect.any(ActivePresetSession),
+      undefined,
     );
   });
 
@@ -156,6 +158,7 @@ describe("applyPresetFlag", () => {
       ctx,
       pi,
       session,
+      undefined,
     );
     expect(notify).toHaveBeenCalledTimes(1);
     expect(notify).toHaveBeenCalledWith(

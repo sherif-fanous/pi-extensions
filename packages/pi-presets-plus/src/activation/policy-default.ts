@@ -5,6 +5,7 @@
 import { loadPolicy, resolvePolicyDefault } from "../store/policy.js";
 import type { LoadedPreset } from "../types.js";
 import { notifyApplyResult } from "../ui/apply-result.js";
+import { reportWarnings } from "../warnings.js";
 import { apply } from "./apply.js";
 import type { ActivePresetSession } from "./session.js";
 import {
@@ -22,7 +23,12 @@ export interface PolicyDefaultPrecedence {
   readonly restored: boolean;
 }
 
-/** Apply a permitted policy default only when startup eligibility allows it. */
+/**
+ * Apply a permitted policy default only when startup eligibility allows it.
+ *
+ * Warnings go into `warnings` when the caller collects them, and otherwise
+ * out as one warning notification per step.
+ */
 export async function maybeApplyPolicyDefault(
   presets: readonly LoadedPreset[],
   ctx: ExtensionContext,
@@ -30,12 +36,13 @@ export async function maybeApplyPolicyDefault(
   session: ActivePresetSession,
   precedence: PolicyDefaultPrecedence,
   startup: StartupSelection,
+  warnings?: string[],
 ): Promise<boolean> {
   if (precedence.flagApplied || precedence.restored) return false;
 
-  const { rules, warnings } = await loadPolicy();
+  const { rules, warnings: policyWarnings } = await loadPolicy();
 
-  if (warnings.length > 0) ctx.ui.notify(warnings.join("\n"), "warning");
+  reportWarnings(ctx, policyWarnings, warnings);
 
   if (!isAutomaticDefaultEligible(startup, ctx)) return false;
 
@@ -44,9 +51,12 @@ export async function maybeApplyPolicyDefault(
   if (resolved.kind === "none") return false;
 
   if (resolved.kind === "unresolvable") {
-    ctx.ui.notify(
-      `The default from rule ${resolved.winner.rule.index + 1} (${JSON.stringify(resolved.winner.rule.match)}) does not match any permitted preset that is available. Pi kept the baseline.`,
-      "warning",
+    reportWarnings(
+      ctx,
+      [
+        `The default from rule ${resolved.winner.rule.index + 1} (${JSON.stringify(resolved.winner.rule.match)}) does not match any permitted preset that is available. Kept the baseline.`,
+      ],
+      warnings,
     );
 
     return false;
@@ -56,12 +66,12 @@ export async function maybeApplyPolicyDefault(
   const result = await apply(preset, ctx, pi, session);
 
   if (!result.ok) {
-    ctx.ui.notify(result.reason, "warning");
+    reportWarnings(ctx, [result.reason], warnings);
 
     return false;
   }
 
-  notifyApplyResult(ctx, preset, result);
+  notifyApplyResult(ctx, preset, result, warnings);
 
   return true;
 }

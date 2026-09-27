@@ -120,7 +120,7 @@ export async function apply(
 
     if (dropped.length > 0) {
       notices.push({
-        message: `Unknown tools ignored for preset "${preset.name}": ${dropped.join(", ")}.`,
+        message: `Ignored unknown tools for preset "${preset.name}": ${dropped.join(", ")}.`,
         severity: "warning",
       });
     }

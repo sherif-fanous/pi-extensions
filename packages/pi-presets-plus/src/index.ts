@@ -14,7 +14,6 @@ import { captureStartupSelection } from "./activation/startup-selection.js";
 import {
   getArgumentCompletions,
   handlePresetsCommand,
-  surfaceWarnings,
 } from "./commands/presets/index.js";
 import { applyPresetFlag, registerPresetFlag } from "./flag.js";
 import {
@@ -30,6 +29,7 @@ import {
   describeError,
   guardCommand,
   guardEvent,
+  notifyWarnings,
 } from "@sherif-fanous/pi-extensions-core";
 
 /** Register every pi-presets-plus command, flag, and event handler. */
@@ -59,61 +59,42 @@ export default function presetsPlus(pi: ExtensionAPI) {
     "session_start",
     guardEvent("Presets Plus", "session_start", async (_event, ctx) => {
       const startupSelection = captureStartupSelection(ctx, pi);
+      // Every startup step adds its warnings here, so they show as one
+      // notification once startup ends.
       const startupWarnings: string[] = [];
-      const startupCtx = {
-        ...ctx,
-        ui: {
-          ...ctx.ui,
-          notify(message: string, type?: "info" | "warning" | "error") {
-            if (type === "warning") {
-              startupWarnings.push(message);
-            } else {
-              ctx.ui.notify(message, type);
-            }
-          },
-        },
-      };
 
       try {
-        const migrationOutcomes = await migrateAll(ctx.cwd);
-        const migrationDescription = describeMigration(migrationOutcomes);
+        const migration = describeMigration(await migrateAll(ctx.cwd));
 
-        if (migrationDescription) {
-          if (migrationDescription.level === "warning") {
-            startupWarnings.push(migrationDescription.text);
-          } else {
-            ctx.ui.notify(
-              migrationDescription.text,
-              migrationDescription.level,
-            );
-          }
-        }
+        if (migration.info) ctx.ui.notify(migration.info, "info");
+
+        startupWarnings.push(...migration.warnings);
 
         const { hotkeyAnalysis, presets, showInactiveStatus, warnings } =
-          await loadAll(startupCtx);
+          await loadAll(ctx);
 
-        session.setShowInactiveStatus(showInactiveStatus, startupCtx);
-
-        surfaceWarnings(startupCtx, warnings);
+        session.setShowInactiveStatus(showInactiveStatus, ctx);
+        startupWarnings.push(...warnings);
 
         const restoreResult = session.restoreFromBranch(
-          startupCtx.sessionManager.getBranch(),
+          ctx.sessionManager.getBranch(),
           presets,
-          startupCtx,
+          ctx,
         );
 
-        surfaceWarnings(startupCtx, restoreResult.warnings);
+        startupWarnings.push(...restoreResult.warnings);
 
         const flagApplied = await applyPresetFlag(
           pi,
-          startupCtx,
+          ctx,
           presets,
           session,
+          startupWarnings,
         );
 
         await maybeApplyPolicyDefault(
           presets,
-          startupCtx,
+          ctx,
           pi,
           session,
           {
@@ -121,6 +102,7 @@ export default function presetsPlus(pi: ExtensionAPI) {
             restored: restoreResult.state !== undefined,
           },
           startupSelection,
+          startupWarnings,
         );
 
         presetNamesLoader.fn = async () => {
@@ -137,20 +119,19 @@ export default function presetsPlus(pi: ExtensionAPI) {
         hotkeys.bindForSession(
           presets,
           hotkeyAnalysis,
-          startupCtx,
+          ctx,
           pi,
           loadCurrentPresets,
           session,
+          startupWarnings,
         );
       } catch (err) {
         startupWarnings.push(
-          `pi-presets-plus failed to load preset files: ${describeError(err)}.`,
+          `Could not load preset files: ${describeError(err)}.`,
         );
       }
 
-      if (startupWarnings.length > 0) {
-        ctx.ui.notify(startupWarnings.join("\n\n"), "warning");
-      }
+      notifyWarnings(ctx, "Presets Plus", startupWarnings);
     }),
   );
 

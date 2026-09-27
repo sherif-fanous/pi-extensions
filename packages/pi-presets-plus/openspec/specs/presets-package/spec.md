@@ -462,9 +462,9 @@ requirement is that no two surfaces hold their own copy of the same string.
 
 #### Scenario: Notify-surfaced messages from non-overlay paths follow the convention
 
-- **WHEN** the package emits a `ctx.ui.notify` call from `hotkeys.ts`,
-  `flag.ts`, `index.ts` (session restore), `commands/presets/router.ts`,
-  `commands/presets/notify.ts`, `commands/presets/reload.ts`, or
+- **WHEN** the package emits a `ctx.ui.notify` or `notifyWarnings` call from
+  `hotkeys.ts`, `flag.ts`, `index.ts` (session restore),
+  `commands/presets/router.ts`, `commands/presets/reload.ts`, or
   `commands/presets/status.ts`
 - **THEN** the message SHALL be sentence-case English with a terminal period
 - **AND** any embedded preset names, model identifiers, or command names SHALL
@@ -475,8 +475,10 @@ requirement is that no two surfaces hold their own copy of the same string.
 #### Scenario: Store-layer warnings follow the convention
 
 - **WHEN** `store/load.ts`, `store/validate.ts`, or `store/merge.ts` produces a
-  warning string surfaced via `surfaceWarnings`
+  warning string surfaced via `notifyWarnings`
 - **THEN** the warning SHALL be sentence-case English with a terminal period
+- **AND** it SHALL NOT name the extension, because the notification heading
+  `Presets Plus: <n> warning(s)` already does
 
 #### Scenario: Overlay titles introduced by concurrent changes follow the convention
 
@@ -538,8 +540,8 @@ The class SHALL own:
 6. Session-restore reconstruction from a session branch: a method
    `restoreFromBranch(branch, presets)` SHALL return
    `{ state: ActivePresetState | undefined; warnings: string[] }` so the UI
-   boundary in `src/index.ts` can roll the warnings into a single
-   `surfaceWarnings(ctx, warnings)` call.
+   boundary in `src/index.ts` can add the warnings to the startup warning
+   collection, which it shows through one `notifyWarnings` call.
 
 The session class SHALL NOT contain the apply or clear decision logic; those
 stay in `src/activation/apply.ts` and `src/activation/clear.ts` respectively,
@@ -587,8 +589,8 @@ The deleted modules `src/activation/active-state.ts` and
 - **THEN** it SHALL return `{ state: undefined, warnings: [...] }` with composed
   warning strings
 - **AND** it SHALL NOT call `ctx.ui.notify` directly
-- **AND** the caller in `src/index.ts` SHALL forward the warnings through the
-  existing `surfaceWarnings` helper
+- **AND** the caller in `src/index.ts` SHALL add the warnings to the startup
+  warning collection it shows through `notifyWarnings`
 
 ### Requirement: Status-badge renderer is a pure exported formatter with no lookup callback
 

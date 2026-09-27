@@ -22,7 +22,7 @@ export function parsePresetArray(
 
     if (!result.ok) {
       warnings.push(
-        `The extension skipped preset ${describeInvalidPreset(candidatePreset, i)} in ${path}: ${result.reason ?? "Its shape is invalid."}`,
+        `Skipped preset ${describeInvalidPreset(candidatePreset, i)} in ${path}: ${result.reason ?? "Its shape is invalid."}`,
       );
 
       continue;
@@ -53,7 +53,7 @@ export function parsePresetArray(
 
       if (dropped) {
         warnings.push(
-          `The extension skipped preset "${dropped.name}" in ${path} because its name is duplicated. It kept the first occurrence.`,
+          `Skipped preset "${dropped.name}" in ${path} because its name is duplicated. Kept the first occurrence.`,
         );
       }
 

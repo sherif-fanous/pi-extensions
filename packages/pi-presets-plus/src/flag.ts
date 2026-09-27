@@ -6,6 +6,7 @@ import { requestActivation } from "./activation/request.js";
 import type { ActivePresetSession } from "./activation/session.js";
 import type { LoadedPreset } from "./types.js";
 import { notifyApplyResult } from "./ui/apply-result.js";
+import { reportWarnings } from "./warnings.js";
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -18,12 +19,16 @@ const PRESET_FLAG = "preset";
  * Activate the preset named by `--preset` and report whether it took
  * effect. Returns `false` when the flag is absent, names a preset that
  * does not exist, or the user cancels the activation prompt.
+ *
+ * Warnings go into `warnings` when the caller collects them, and otherwise
+ * out as one warning notification per step.
  */
 export async function applyPresetFlag(
   pi: ExtensionAPI,
   ctx: ExtensionContext,
   presets: readonly LoadedPreset[],
   session: ActivePresetSession,
+  warnings?: string[],
 ): Promise<boolean> {
   const value = pi.getFlag(PRESET_FLAG);
 
@@ -36,19 +41,22 @@ export async function applyPresetFlag(
   const preset = findPresetForFlag(presets, name);
 
   if (!preset) {
-    ctx.ui.notify(
-      `--preset: Unknown preset "${name}". Available: ${formatAvailableNames(presets)}.`,
-      "warning",
+    reportWarnings(
+      ctx,
+      [
+        `Unknown preset "${name}" for --preset. Available: ${formatAvailableNames(presets)}.`,
+      ],
+      warnings,
     );
 
     return false;
   }
 
-  const result = await requestActivation(preset, ctx, pi, session);
+  const result = await requestActivation(preset, ctx, pi, session, warnings);
 
   if (!result.ok && result.kind === "cancelled") return false;
 
-  notifyApplyResult(ctx, preset, result);
+  notifyApplyResult(ctx, preset, result, warnings);
 
   return result.ok;
 }

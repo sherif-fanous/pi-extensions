@@ -8,18 +8,23 @@ import {
   resolveMatchingRules,
 } from "../store/policy.js";
 import type { LoadedPreset } from "../types.js";
+import { reportWarnings } from "../warnings.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-/** Return true when activation may proceed, including an explicit override. */
+/**
+ * Return true when activation may proceed, including an explicit override.
+ *
+ * Policy warnings go into `warnings` when the caller collects them, and
+ * otherwise out as one warning notification.
+ */
 export async function gateActivation(
   preset: LoadedPreset,
   ctx: Pick<ExtensionContext, "cwd" | "ui">,
+  warnings?: string[],
 ): Promise<boolean> {
-  const { rules, warnings } = await loadPolicy();
+  const { rules, warnings: policyWarnings } = await loadPolicy();
 
-  if (warnings.length > 0) {
-    ctx.ui.notify(warnings.join("\n"), "warning");
-  }
+  reportWarnings(ctx, policyWarnings, warnings);
 
   const matchedRules = resolveMatchingRules(ctx.cwd, rules);
 

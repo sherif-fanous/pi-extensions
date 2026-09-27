@@ -5,7 +5,6 @@
 import { detectDriftReasons } from "../activation/drift.js";
 import type { ActivationResult } from "../activation/request.js";
 import type { ActivePresetSession } from "../activation/session.js";
-import { surfaceWarnings } from "../commands/presets/notify.js";
 import type { HotkeyRegistry } from "../hotkey-registry.js";
 import { samePresetIdentity } from "../preset-identity.js";
 import { loadAll } from "../store/api.js";
@@ -68,6 +67,7 @@ import {
   type OverlayHandle,
   type Terminal,
 } from "@earendil-works/pi-tui";
+import { notifyWarnings } from "@sherif-fanous/pi-extensions-core";
 
 /** Everything the picker needs from its caller to open. */
 export interface PickerOptions {
@@ -338,7 +338,7 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
   async refreshPresets(selectionKey?: string): Promise<void> {
     const { presets, warnings } = await loadAll(this.ctx);
 
-    surfaceWarnings(this.ctx, warnings);
+    notifyWarnings(this.ctx, "Presets Plus", warnings);
     this.allPresets = presets;
     this.inheritedTools = this.pi?.getActiveTools() ?? this.inheritedTools;
     this.invalidateVisible();
@@ -667,7 +667,7 @@ export async function openPicker(
 ): Promise<PickerResult | undefined> {
   const { presets, warnings } = await loadAll(ctx);
 
-  surfaceWarnings(ctx, warnings);
+  notifyWarnings(ctx, "Presets Plus", warnings);
 
   const inheritedTools = options.inheritedTools ?? [];
   let currentPicker: PresetPickerComponent | undefined;

@@ -92,7 +92,7 @@ describe("gateActivation", () => {
     await gateActivation(allowed, ctx);
 
     expect(notify).toHaveBeenCalledWith(
-      "First warning.\nSecond warning.",
+      "Presets Plus: 2 warnings\n- First warning.\n- Second warning.",
       "warning",
     );
   });

@@ -293,14 +293,14 @@ solely from the lifecycle event reason.
 When eligible, the package SHALL select only permitted, available default
 candidates through the existing policy rules. When it activates the default, it
 SHALL capture a fresh baseline, produce one visible success outcome naming the
-preset, and refresh the footer indicator. It SHALL combine apply accompaniments
-into that outcome and SHALL NOT emit a second success notification for the same
-activation.
+preset, and refresh the footer indicator. It SHALL include info accompaniments
+in that outcome, add warning accompaniments to the startup warning collection,
+and SHALL NOT emit a second success notification for the same activation.
 
 If the default apply operation returns a refusal, the package SHALL report its
 reason as a warning, leave the Pi baseline in place, attach no preset, and
-continue the session. The package SHALL combine startup warnings into one
-startup warning where possible.
+continue the session. The package SHALL show every startup warning in one
+warning notification.
 
 #### Scenario: Fresh session applies the default
 
@@ -308,8 +308,9 @@ startup warning where possible.
   restored preset, all startup values match resolved defaults, and policy
   resolves a permitted available preset
 - **THEN** the package SHALL apply that preset through the standard apply flow
-- **AND** it SHALL emit exactly one combined success outcome with any apply
-  accompaniments
+- **AND** it SHALL emit exactly one success outcome with any info
+  accompaniments, and add any warning accompaniments to the startup warning
+  collection
 
 #### Scenario: Flag overrides policy default
 
@@ -333,8 +334,8 @@ startup warning where possible.
   preset
 - **THEN** restore SHALL attach nothing and contribute its existing warning to
   the startup warning collection
-- **AND** the package SHALL apply the policy default and emit one combined
-  success outcome
+- **AND** the package SHALL apply the policy default and emit one success
+  outcome
 
 #### Scenario: Failed flag continues through eligibility checks
 
@@ -408,10 +409,11 @@ startup warning where possible.
 
 #### Scenario: Startup warnings are aggregated
 
-- **WHEN** startup produces multiple warnings from preset loading, hotkey
-  registration, policy loading, restore, or an attempted default activation
-- **THEN** the package SHALL present one startup warning containing the
-  individual messages where possible
+- **WHEN** startup produces multiple warnings from migration, preset loading,
+  hotkey registration, policy loading, restore, the `--preset` flag, or an
+  attempted default activation
+- **THEN** the package SHALL present one warning notification, headed
+  `Presets Plus: <n> warnings`, that lists each individual message
 - **AND** it SHALL preserve each warning's meaning without adding
   settings-comparison diagnostics
 
