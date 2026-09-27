@@ -49,6 +49,74 @@ try {
 }
 ```
 
+### `parseJsonObject(text: string): ParseJsonObjectResult`
+
+Parses JSON text whose top level must be an object, without throwing. Returns
+`{ ok: true, value }` for an object,
+`{ ok: false, reason: "invalid-json", error }` with the error `JSON.parse`
+threw, or `{ ok: false, reason: "not-object" }` for `null`, an array, or a
+primitive, so callers can word a warning for each.
+
+```ts
+import {
+  describeError,
+  parseJsonObject,
+} from "@sherif-fanous/pi-extensions-core";
+
+const parsed = parseJsonObject(text);
+if (!parsed.ok) {
+  return parsed.reason === "invalid-json"
+    ? `${path} contains invalid JSON: ${describeError(parsed.error)}.`
+    : `${path} must contain a JSON object.`;
+}
+```
+
+### `atomicWrite(target: string, contents: string, fs?: AtomicWriteFs): Promise<void>`
+
+Writes `contents` to a temporary file beside `target`, syncs it, and renames it
+over `target`, creating missing parent directories first. Readers see either the
+previous file or the new one, never a partial write. On failure the call
+rejects, `target` keeps its previous contents, and the temporary file is
+removed. Tests can pass an `AtomicWriteFs` stub to simulate failures.
+
+### `writeJsonFile(path: string, value: unknown, fs?: AtomicWriteFs): Promise<void>`
+
+Writes `value` atomically as JSON indented by two spaces and ending in a
+newline.
+
+```ts
+import { writeJsonFile } from "@sherif-fanous/pi-extensions-core";
+
+await writeJsonFile(configPath, { version: 2, presets });
+```
+
+### `extensionConfigPath({ extension, file, agentDir? }): string`
+
+Returns `<agentDir>/<extension>/<file>`. `agentDir` defaults to Pi's
+`getAgentDir()`, which honors the agent directory override.
+
+### `projectConfigPath({ cwd, extension, file }): string`
+
+Returns `<cwd>/.pi/<extension>/<file>`, using Pi's `CONFIG_DIR_NAME` for the
+`.pi` segment.
+
+```ts
+import {
+  extensionConfigPath,
+  projectConfigPath,
+} from "@sherif-fanous/pi-extensions-core";
+
+const globalPath = extensionConfigPath({
+  extension: "theme-sync",
+  file: "settings.json",
+});
+const projectPath = projectConfigPath({
+  cwd: ctx.cwd,
+  extension: "theme-sync",
+  file: "settings.json",
+});
+```
+
 ## License
 
 MIT

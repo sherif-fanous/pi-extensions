@@ -12,11 +12,12 @@ import {
   getProjectConfigPath,
   getProjectPresetsPath,
 } from "./paths.js";
-import { atomicWrite, type AtomicWriteFs } from "./save.js";
 import {
   describeError,
   isNotFoundError,
   isRecord,
+  writeJsonFile,
+  type AtomicWriteFs,
 } from "@sherif-fanous/pi-extensions-core";
 
 /** File-system seam for migration tests. */
@@ -166,11 +167,7 @@ export async function migrateScope(
   }
 
   try {
-    await atomicWrite(
-      configPath,
-      `${JSON.stringify(document, null, 2)}\n`,
-      fs.atomicWriteFs,
-    );
+    await writeJsonFile(configPath, document, fs.atomicWriteFs);
   } catch (error) {
     return failed(
       scope,

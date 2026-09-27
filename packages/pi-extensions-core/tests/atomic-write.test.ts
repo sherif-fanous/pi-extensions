@@ -8,7 +8,8 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { atomicWrite, makeTmpPath } from "../../src/store/save.js";
+import { atomicWrite, makeTmpPath } from "../src/atomic-write.js";
+import { writeJsonFile } from "../src/index.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let dir: string;
@@ -90,5 +91,16 @@ describe("makeTmpPath", () => {
     const second = makeTmpPath("/tmp/foo/bar.json");
 
     expect(first).not.toBe(second);
+  });
+});
+
+describe("writeJsonFile", () => {
+  it("writes two-space JSON with a trailing newline, creating parent directories", async () => {
+    const target = join(dir, "nested", "config.json");
+
+    await writeJsonFile(target, { version: 2, presets: ["a"] });
+    expect(await readFile(target, "utf-8")).toBe(
+      '{\n  "version": 2,\n  "presets": [\n    "a"\n  ]\n}\n',
+    );
   });
 });

@@ -13,9 +13,9 @@ import { loadScope } from "./config.js";
 import { mergeScopes } from "./merge.js";
 import { getGlobalConfigPath, getProjectConfigPath } from "./paths.js";
 import { loadPolicy } from "./policy.js";
-import { atomicWrite } from "./save.js";
 import { computeClampWarning } from "./validate.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { writeJsonFile } from "@sherif-fanous/pi-extensions-core";
 
 /** Result of loading all presets. */
 export interface LoadAllResult {
@@ -341,5 +341,5 @@ async function writeDocument(
     presets: presets.map(toPersistedPreset),
   };
 
-  await atomicWrite(targetPath, `${JSON.stringify(nextDocument, null, 2)}\n`);
+  await writeJsonFile(targetPath, nextDocument);
 }

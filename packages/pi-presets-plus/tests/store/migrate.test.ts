@@ -25,7 +25,7 @@ import {
   getProjectConfigPath,
   getProjectPresetsPath,
 } from "../../src/store/paths.js";
-import type { AtomicWriteFs } from "../../src/store/save.js";
+import type { AtomicWriteFs } from "@sherif-fanous/pi-extensions-core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 let root: string;

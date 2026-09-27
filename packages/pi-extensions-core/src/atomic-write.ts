@@ -1,7 +1,6 @@
 /**
  * Writes a file durably by creating the parent directory, filling a
- * temporary file, syncing it, and renaming it over the destination. Every
- * user-visible file presets-plus persists goes through this path, so no
+ * temporary file, syncing it, and renaming it over the destination, so no
  * reader sees a half-written file.
  */
 import { mkdir, open, rename, unlink } from "node:fs/promises";
@@ -69,4 +68,19 @@ export async function atomicWrite(
  */
 export function makeTmpPath(target: string): string {
   return `${target}.tmp.${process.pid}.${process.hrtime.bigint().toString(36)}`;
+}
+
+/**
+ * Atomically write `value` to `path` as JSON indented by two spaces and
+ * ending in a newline.
+ *
+ * Throws on I/O failure, leaving the destination untouched, as
+ * `atomicWrite` does.
+ */
+export async function writeJsonFile(
+  path: string,
+  value: unknown,
+  fs: AtomicWriteFs = defaultFs,
+): Promise<void> {
+  await atomicWrite(path, `${JSON.stringify(value, null, 2)}\n`, fs);
 }
