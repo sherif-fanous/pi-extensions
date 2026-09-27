@@ -60,11 +60,14 @@ The system MUST be installable and discoverable as a standard Pi package.
 ### Requirement: Pi SDK Compatibility
 
 The package MUST remain compatible with the supported Pi extension runtime and
-MUST require the documented Pi API surface needed for shell optimization.
+MUST require the documented Pi API surface needed for shell optimization. The
+minimum supported Pi version is v0.80.4, the first Pi that provides both
+`ctx.mode` (added in v0.78.1) and `pi.registerEntryRenderer` (added in v0.80.4),
+which the extension uses through `@sherif-fanous/pi-extensions-core`.
 
 #### Scenario: Runtime loading on supported Pi version
 
-- **GIVEN** the package is installed in a Pi v0.60.0 or later environment
+- **GIVEN** the package is installed in a Pi v0.80.4 or later environment
 - **WHEN** Pi loads the package
 - **THEN** the extension MUST load using Pi's exported
   `createLocalBashOperations()` helper
@@ -73,9 +76,9 @@ MUST require the documented Pi API surface needed for shell optimization.
 
 #### Scenario: Unsupported Pi version
 
-- **GIVEN** a Pi environment earlier than v0.60.0
+- **GIVEN** a Pi environment earlier than v0.80.4
 - **WHEN** a user attempts to use a release of `pi-rtk` that depends on Pi's
-  exported `createLocalBashOperations()` helper
+  `ctx.mode` or `pi.registerEntryRenderer`
 - **THEN** that Pi version MUST be considered unsupported by the package
 - **AND** the package documentation and changelog MUST communicate the minimum
   supported Pi version as a breaking compatibility requirement

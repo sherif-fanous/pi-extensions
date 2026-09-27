@@ -111,23 +111,47 @@ toggle MUST NOT be persisted to disk.
 
 The extension MUST register a single footer status entry via
 `ctx.ui.setStatus("pi-rtk", ...)` and MUST keep that entry present for the
-lifetime of the extension. The entry MUST visually differentiate the `enabled`
-and `disabled` states. The entry MUST update immediately when the session toggle
-changes.
+lifetime of the extension. The entry MUST reflect both the session toggle and
+whether the `rtk` binary runs:
+
+- `RTK: on` in the theme's `dim` color when the toggle is `enabled` and the last
+  spawn of `rtk` succeeded (or none has failed yet).
+- `RTK: off` in the theme's `dim` color when the toggle is `disabled`, whatever
+  the binary's availability.
+- `RTK: unavailable` in the theme's `warning` color when the toggle is `enabled`
+  and the last spawn of `rtk` failed with `ENOENT` or `EACCES`.
+
+The entry MUST update immediately when the session toggle changes and whenever a
+spawn of `rtk` (the `session_start` probe, a rewrite, or `/rtk status`) changes
+the binary's availability. Other spawn failures, such as a timeout, MUST NOT
+change the entry.
 
 #### Scenario: indicator present on load
 
-- **WHEN** the `pi-rtk` extension is loaded by Pi
-- **THEN** the footer MUST display a `pi-rtk` status entry
-- **AND** the entry MUST reflect the `enabled` default state
+- **GIVEN** `rtk` runs
+- **WHEN** Pi fires `session_start`
+- **THEN** the footer MUST display the `pi-rtk` status entry as dim `RTK: on`
+
+#### Scenario: indicator shows a missing binary at session start
+
+- **GIVEN** `rtk` is not on PATH or not executable
+- **WHEN** Pi fires `session_start`
+- **THEN** the footer entry MUST read `RTK: unavailable` in warning color
 
 #### Scenario: indicator updates on toggle
 
-- **GIVEN** the footer is displaying the `pi-rtk` status entry in the `enabled`
-  style
 - **WHEN** the user invokes `/rtk disable`
-- **THEN** the footer entry MUST transition to a visually distinct `disabled`
-  style
+- **THEN** the footer entry MUST read dim `RTK: off`
+- **AND** when the user then invokes `/rtk enable`, the entry MUST return to
+  `RTK: on` or `RTK: unavailable` according to the binary's availability
+
+#### Scenario: indicator follows availability detected mid-session
+
+- **GIVEN** the footer entry reads `RTK: on`
+- **WHEN** a rewrite spawn of `rtk` fails with `ENOENT` or `EACCES`
+- **THEN** the footer entry MUST change to `RTK: unavailable` in warning color
+- **AND** when a later spawn of `rtk` succeeds, the entry MUST return to dim
+  `RTK: on`
 
 ### Requirement: /rtk Bare Invocation Opens Settings Overlay
 

@@ -20,7 +20,7 @@
   "author": "Sherif Fanous",
   "type": "module",
   "files": [
-    "*.ts",
+    "index.ts",
     "CHANGELOG.md",
     "LICENSE",
     "README.md"
@@ -30,6 +30,7 @@
     "format-check": "prettier --check *.ts",
     "lint": "eslint .",
     "sort-package-json": "npx sort-package-json",
+    "test": "vitest",
     "type-check": "tsc --noEmit"
   },
   "prettier": {
@@ -64,6 +65,7 @@
     "@earendil-works/pi-tui": "catalog:",
     "@eslint/js": "^10.0.1",
     "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
+    "@sherif-fanous/pi-extensions-testing": "workspace:*",
     "@stylistic/eslint-plugin": "^5.10.0",
     "@types/node": "^25.5.0",
     "eslint": "^10.3.0",
@@ -74,7 +76,8 @@
     "prettier": "^3.8.1",
     "sort-package-json": "^3.6.1",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.57.1"
+    "typescript-eslint": "^8.57.1",
+    "vitest": "^4.1.11"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",

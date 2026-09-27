@@ -19,14 +19,14 @@ Commands entered with `!!<cmd>` are intentionally not intercepted. They continue
 
 ## Prerequisites
 
-- Pi v0.60.0 or later
+- Pi v0.80.4 or later
 - [rtk](https://github.com/rtk-ai/rtk), installed and available on your `PATH`
 
 If `rtk` is unavailable, `pi-rtk` still preserves normal shell behavior by falling back to the original command.
 
 ## Install
 
-Make sure your Pi installation is v0.60.0 or later before installing this package.
+Make sure your Pi installation is v0.80.4 or later before installing this package.
 
 ```shell
 pi install npm:@sherif-fanous/pi-rtk
@@ -117,7 +117,7 @@ User !!<cmd>
 - `/rtk status` shows the current toggle state, detected `rtk` binary details, and a bypass tip.
 - `/rtk` opens an overlay where you can choose the same actions interactively.
 
-The footer includes a persistent `pi-rtk` status indicator: `rtk ✓` in green when rewriting is enabled, `rtk ✗` in red when disabled.
+The footer includes a persistent `pi-rtk` status indicator: dim `RTK: on` when rewriting is enabled and the `rtk` binary runs, dim `RTK: off` when rewriting is disabled, and `RTK: unavailable` in warning color when rewriting is enabled but the `rtk` binary is missing from `PATH` or not executable.
 
 The toggle is in-memory only. It resets to enabled every time Pi restarts and is not written to disk. For a single-command bypass while leaving the session toggle enabled, use rtk's per-command form:
 

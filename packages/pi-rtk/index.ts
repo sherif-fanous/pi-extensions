@@ -20,6 +20,7 @@ import {
   createLocalBashOperations,
   type ExtensionAPI,
   type ExtensionContext,
+  type ExtensionUIContext,
 } from "@earendil-works/pi-coding-agent";
 import {
   alignLabelRows,
@@ -28,7 +29,6 @@ import {
   guardEvent,
   notifyWarnings,
   subcommandCompletions,
-  type GuardContext,
 } from "@sherif-fanous/pi-extensions-core";
 
 const REWRITE_TIMEOUT_MS = 5000;
@@ -38,6 +38,15 @@ const VALID_RTK_SUBCOMMANDS = ["enable", "disable", "status"] as const;
 // Session state is intentionally in-memory only: it resets to enabled on every
 // Pi process start and is never persisted to disk.
 let sessionEnabled = true;
+
+// Whether the last spawn of the rtk binary succeeded. ENOENT and EACCES mark it
+// unavailable; other spawn failures leave it unchanged.
+let rtkAvailable = true;
+
+/** The part of a Pi context used to warn and to draw the footer badge. */
+interface RtkUiContext {
+  readonly ui: Pick<ExtensionUIContext, "notify" | "setStatus" | "theme">;
+}
 
 type RtkSubcommand = (typeof VALID_RTK_SUBCOMMANDS)[number];
 type RtkUnavailableReason = "missing" | "unexecutable";
@@ -49,7 +58,7 @@ type SpawnErrorClassification = RtkUnavailableReason | "other";
 // exposes the TUI notify surface through lifecycle context, so the context is
 // captured from the first relevant event rather than at module load.
 let rtkUnavailableNotified = false;
-let cachedNotifyContext: GuardContext | null = null;
+let cachedNotifyContext: null | RtkUiContext = null;
 
 function alertRtkUnavailable(reason: RtkUnavailableReason): void {
   if (rtkUnavailableNotified || cachedNotifyContext === null) return;
@@ -65,7 +74,7 @@ function alertRtkUnavailable(reason: RtkUnavailableReason): void {
   notifyWarnings(cachedNotifyContext, "RTK", [messages[reason]]);
 }
 
-function cacheNotifyContext(ctx: GuardContext): void {
+function cacheNotifyContext(ctx: RtkUiContext): void {
   if (cachedNotifyContext === null) cachedNotifyContext = ctx;
 }
 
@@ -102,10 +111,18 @@ function isSessionEnabled(): boolean {
   return sessionEnabled;
 }
 
-function renderStatusText(ctx: ExtensionContext): string {
-  return isSessionEnabled()
-    ? ctx.ui.theme.fg("success", "rtk ✓")
-    : ctx.ui.theme.fg("error", "rtk ✗");
+function markRtkUnavailable(reason: RtkUnavailableReason): void {
+  alertRtkUnavailable(reason);
+  setRtkAvailable(false);
+}
+
+function renderStatusText(ctx: RtkUiContext): string {
+  const { theme } = ctx.ui;
+
+  if (!isSessionEnabled()) return theme.fg("dim", "RTK: off");
+  if (!rtkAvailable) return theme.fg("warning", "RTK: unavailable");
+
+  return theme.fg("dim", "RTK: on");
 }
 
 function rtkRewriteCommand(command: string): string | undefined {
@@ -122,12 +139,13 @@ function rtkRewriteCommand(command: string): string | undefined {
     if (result.error) {
       const reason = classifySpawnError(result.error);
 
-      if (reason !== "other") alertRtkUnavailable(reason);
+      if (reason !== "other") markRtkUnavailable(reason);
 
       return undefined;
     }
 
     rtkUnavailableNotified = false;
+    setRtkAvailable(true);
 
     const out = (result.stdout ?? "").trimEnd();
 
@@ -148,9 +166,10 @@ function rtkStatusReport(): string {
   if (version.error) {
     const reason = classifySpawnError(version.error);
 
-    if (reason !== "other") alertRtkUnavailable(reason);
+    if (reason !== "other") markRtkUnavailable(reason);
   } else {
     rtkUnavailableNotified = false;
+    setRtkAvailable(true);
 
     const path = spawnSync("sh", ["-c", "command -v rtk"], {
       encoding: "utf-8",
@@ -171,6 +190,16 @@ function rtkStatusReport(): string {
       ["Tip:", "bypass rtk for one command with !RTK_DISABLED=1 <cmd>."],
     ]),
   ].join("\n");
+}
+
+// Refreshes the footer badge when availability flips, because rewrites from
+// the bash tool happen outside any handler that receives a context.
+function setRtkAvailable(available: boolean): void {
+  if (rtkAvailable === available) return;
+
+  rtkAvailable = available;
+
+  if (cachedNotifyContext !== null) updateFooterStatus(cachedNotifyContext);
 }
 
 function setSessionEnabled(enabled: boolean): void {
@@ -196,7 +225,7 @@ function showRtkStatus(ctx: ExtensionContext, pi: ExtensionAPI): void {
   STATUS_REPORT.deliver(ctx, pi, { body: rtkStatusReport() });
 }
 
-function updateFooterStatus(ctx: ExtensionContext): void {
+function updateFooterStatus(ctx: RtkUiContext): void {
   ctx.ui.setStatus("pi-rtk", renderStatusText(ctx));
 }
 
@@ -245,17 +274,20 @@ export default function (pi: ExtensionAPI) {
     "session_start",
     guardEvent("RTK", "session_start", (_event, ctx) => {
       cacheNotifyContext(ctx);
-      updateFooterStatus(ctx);
 
       const result = spawnSync("rtk", ["--version"], {
         timeout: REWRITE_TIMEOUT_MS,
       });
 
-      if (!result.error) return;
+      if (result.error) {
+        const reason = classifySpawnError(result.error);
 
-      const reason = classifySpawnError(result.error);
+        if (reason !== "other") markRtkUnavailable(reason);
+      } else {
+        setRtkAvailable(true);
+      }
 
-      if (reason !== "other") alertRtkUnavailable(reason);
+      updateFooterStatus(ctx);
     }),
   );
 

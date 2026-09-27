@@ -13,5 +13,6 @@
     "lib": ["ES2022"],
     "target": "ES2022",
     "skipLibCheck": true
-  }
+  },
+  "include": ["index.ts", "tests", "vitest.config.ts"]
 }
