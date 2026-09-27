@@ -1,0 +1,6 @@
+.DS_Store
+.env
+.pi/
+node_modules/
+openspec/changes/*
+!openspec/changes/archive/
