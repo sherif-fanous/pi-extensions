@@ -16,6 +16,7 @@ import {
   describeError,
   isNotFoundError,
   isRecord,
+  parseJsonObject,
 } from "@sherif-fanous/pi-extensions-core";
 
 /** File-system seam used by scope loading tests. */
@@ -54,21 +55,17 @@ export async function loadScope(
     );
   }
 
-  let parsed: unknown;
+  const parsedResult = parseJsonObject(rawData);
 
-  try {
-    parsed = JSON.parse(rawData);
-  } catch (error) {
+  if (!parsedResult.ok) {
     return invalidScope(
-      `The config file ${path} contains invalid JSON: ${describeError(error)}.`,
+      parsedResult.reason === "invalid-json"
+        ? `The config file ${path} contains invalid JSON: ${describeError(parsedResult.error)}.`
+        : `The config file ${path} top-level must be an object with a "version" field.`,
     );
   }
 
-  if (!isRecord(parsed)) {
-    return invalidScope(
-      `The config file ${path} top-level must be an object with a "version" field.`,
-    );
-  }
+  const parsed = parsedResult.value;
 
   if (parsed.version !== 2) {
     return invalidScope(
