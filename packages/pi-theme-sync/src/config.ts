@@ -5,6 +5,7 @@ import path from "node:path";
 
 import type {
   ConfigScope,
+  ConfigSource,
   EditableConfigChanges,
   LoadedConfig,
   LoadedRuntimeConfig,
@@ -51,6 +52,10 @@ export const POLL_INTERVAL_MAX_MS = 60_000;
 /** Shortest supported appearance polling interval. */
 export const POLL_INTERVAL_MIN_MS = 1000;
 
+/** Outcome of checking one scope's value for a setting. */
+type ParsedSetting<T> =
+  { kind: "absent" } | { kind: "invalid" } | { kind: "valid"; value: T };
+
 type ReadJsonResult = {
   missing?: true;
   config?: LoadedConfig;
@@ -58,6 +63,25 @@ type ReadJsonResult = {
 };
 
 type SaveResult = { ok: true } | { ok: false; reason: string };
+
+/** One setting's raw value in each scope, before validation. */
+type ScopedValues = Record<ConfigScope, unknown>;
+
+/** How to check a setting and word the warning for an invalid value. */
+type SettingRules<T> = {
+  defaultValue: T;
+  parse: (value: unknown) => ParsedSetting<T>;
+  /** First sentence of the warning; the outcome sentence is appended. */
+  invalidWarning: (scope: ConfigScope, value: unknown) => string;
+  /** Outcome sentence used when no scope supplies a valid value. */
+  defaultOutcome: string;
+};
+
+const ABSENT = { kind: "absent" } as const;
+const INVALID = { kind: "invalid" } as const;
+
+/** Scopes in the order their values take precedence. */
+const SCOPE_PRECEDENCE: readonly ConfigScope[] = ["project", "global"];
 
 /** Resolves the configuration file that a scope currently uses. */
 export async function getConfigPath(
@@ -100,66 +124,60 @@ export async function loadConfig(
     ctx.ui.getAllThemes().map((theme) => theme.name),
   );
 
-  const projectIsSyncActive = validIsSyncActive(
-    projectLoadedConfig?.isSyncActive,
-  );
-  const globalIsSyncActive = validIsSyncActive(
-    globalLoadedConfig?.isSyncActive,
-  );
-  const isSyncActiveSource = resolveSource(
-    projectIsSyncActive,
-    globalIsSyncActive,
-  );
+  const scopeValues = (
+    read: (config: LoadedConfig | undefined) => unknown,
+  ): ScopedValues => ({
+    project: read(projectLoadedConfig),
+    global: read(globalLoadedConfig),
+  });
 
-  warnInvalidIsSyncActive(
-    "project",
-    projectLoadedConfig?.isSyncActive,
-    isSyncActiveSource,
+  const isSyncActive = resolveSetting(
+    scopeValues((config) => config?.isSyncActive),
+    {
+      defaultValue: DEFAULT_CONFIG.isSyncActive,
+      parse: (value) =>
+        value === undefined
+          ? ABSENT
+          : typeof value === "boolean"
+            ? valid(value)
+            : INVALID,
+      invalidWarning: (scope, value) =>
+        `${scopeLabel(scope)} setting "isSyncActive" must be a boolean, not ${JSON.stringify(value)}.`,
+      defaultOutcome: `Using the default value ${String(DEFAULT_CONFIG.isSyncActive)}.`,
+    },
     warnings,
   );
-
-  warnInvalidIsSyncActive(
-    "global",
-    globalLoadedConfig?.isSyncActive,
-    isSyncActiveSource,
-    warnings,
-  );
-
-  const lightThemeSource = resolveSource(
-    projectLoadedConfig?.themes?.light,
-    globalLoadedConfig?.themes?.light,
-  );
-  const lightTheme = validateTheme(
-    projectLoadedConfig?.themes?.light ?? globalLoadedConfig?.themes?.light,
+  const lightTheme = resolveTheme(
+    scopeValues((config) => config?.themes?.light),
     "light",
-    lightThemeSource,
     availableThemes,
     warnings,
   );
-  const darkThemeSource = resolveSource(
-    projectLoadedConfig?.themes?.dark,
-    globalLoadedConfig?.themes?.dark,
-  );
-  const darkTheme = validateTheme(
-    projectLoadedConfig?.themes?.dark ?? globalLoadedConfig?.themes?.dark,
+  const darkTheme = resolveTheme(
+    scopeValues((config) => config?.themes?.dark),
     "dark",
-    darkThemeSource,
     availableThemes,
     warnings,
   );
-  const pollIntervalMsSource = resolveSource(
-    projectLoadedConfig?.detection?.pollIntervalMs,
-    globalLoadedConfig?.detection?.pollIntervalMs,
-  );
-  const pollIntervalMs = validatePollingIntervalMs(
-    projectLoadedConfig?.detection?.pollIntervalMs ??
-      globalLoadedConfig?.detection?.pollIntervalMs,
-    pollIntervalMsSource,
+  const pollIntervalMs = resolveSetting(
+    scopeValues((config) => config?.detection?.pollIntervalMs),
+    {
+      defaultValue: DEFAULT_CONFIG.detection.pollIntervalMs,
+      parse: (value) =>
+        value == null
+          ? ABSENT
+          : typeof value === "number" && isValidPollIntervalMs(value)
+            ? valid(value)
+            : INVALID,
+      invalidWarning: (scope, value) =>
+        `${scopeLabel(scope)} setting "pollIntervalMs" must be a number between ${POLL_INTERVAL_MIN_MS} and ${POLL_INTERVAL_MAX_MS} milliseconds, not ${JSON.stringify(value)}.`,
+      defaultOutcome: `Using the default value ${DEFAULT_CONFIG.detection.pollIntervalMs}.`,
+    },
     warnings,
   );
 
   const runtimeConfigSources: RuntimeConfigSources = {
-    isSyncActive: isSyncActiveSource,
+    isSyncActive: isSyncActive.source,
 
     themes: {
       light: lightTheme.source,
@@ -172,8 +190,7 @@ export async function loadConfig(
   };
 
   const runtimeConfig: RuntimeConfig = {
-    isSyncActive:
-      projectIsSyncActive ?? globalIsSyncActive ?? DEFAULT_CONFIG.isSyncActive,
+    isSyncActive: isSyncActive.value,
 
     themes: {
       light: lightTheme.value,
@@ -286,19 +303,63 @@ async function readScopedConfig(
     : { ...legacy, filePath: legacyPath };
 }
 
-function resolveSource<T>(
-  projectValue: T | null | undefined,
-  globalValue: T | null | undefined,
-): ConfigScope | "default" {
-  if (projectValue != null) {
-    return "project";
+/**
+ * Resolves one setting from project, then global, then the default, skipping
+ * a scope whose value is invalid. Each invalid value is warned about, ending
+ * with the default outcome when no scope supplies a valid value, and otherwise
+ * with `Ignored it.`, since another scope's value applies.
+ */
+function resolveSetting<T>(
+  values: ScopedValues,
+  setting: SettingRules<T>,
+  warnings: string[],
+): { source: ConfigSource; value: T } {
+  let resolved: { source: ConfigScope; value: T } | undefined;
+  const invalidScopes: ConfigScope[] = [];
+
+  for (const scope of SCOPE_PRECEDENCE) {
+    const parsed = setting.parse(values[scope]);
+
+    if (parsed.kind === "invalid") {
+      invalidScopes.push(scope);
+    } else if (parsed.kind === "valid") {
+      resolved ??= { source: scope, value: parsed.value };
+    }
   }
 
-  if (globalValue != null) {
-    return "global";
+  const outcome = resolved ? "Ignored it." : setting.defaultOutcome;
+
+  for (const scope of invalidScopes) {
+    warnings.push(`${setting.invalidWarning(scope, values[scope])} ${outcome}`);
   }
 
-  return "default";
+  return resolved ?? { source: "default", value: setting.defaultValue };
+}
+
+function resolveTheme(
+  values: ScopedValues,
+  appearance: "light" | "dark",
+  availableThemes: Set<string>,
+  warnings: string[],
+): { source: ConfigSource; value: string } {
+  const defaultTheme = DEFAULT_CONFIG.themes[appearance];
+
+  return resolveSetting(
+    values,
+    {
+      defaultValue: defaultTheme,
+      parse: (value) =>
+        value == null || value === ""
+          ? ABSENT
+          : typeof value === "string" && availableThemes.has(value)
+            ? valid(value)
+            : INVALID,
+      invalidWarning: (_scope, value) =>
+        `Theme ${JSON.stringify(value)} was not found in Pi.`,
+      defaultOutcome: `Using the default theme "${defaultTheme}".`,
+    },
+    warnings,
+  );
 }
 
 /** Label that starts a setting warning, naming the file's scope. */
@@ -306,79 +367,6 @@ function scopeLabel(scope: ConfigScope): string {
   return scope === "project" ? "Project" : "Global";
 }
 
-function validatePollingIntervalMs(
-  value: number | undefined,
-  source: ConfigScope | "default",
-  warnings: string[],
-): { source: ConfigScope | "default"; value: number } {
-  if (value === undefined) {
-    return {
-      source: "default",
-      value: DEFAULT_CONFIG.detection.pollIntervalMs,
-    };
-  }
-
-  if (typeof value !== "number" || !isValidPollIntervalMs(value)) {
-    const scope = scopeLabel(source === "project" ? "project" : "global");
-
-    warnings.push(
-      `${scope} setting "pollIntervalMs" must be a number between ${POLL_INTERVAL_MIN_MS} and ${POLL_INTERVAL_MAX_MS} milliseconds, not ${JSON.stringify(value)}. Using the default value ${DEFAULT_CONFIG.detection.pollIntervalMs}.`,
-    );
-
-    return {
-      source: "default",
-      value: DEFAULT_CONFIG.detection.pollIntervalMs,
-    };
-  }
-
-  return { source, value };
-}
-
-function validateTheme(
-  themeName: string | undefined,
-  fallback: "light" | "dark",
-  source: ConfigScope | "default",
-  availableThemes: Set<string>,
-  warnings: string[],
-): { source: ConfigScope | "default"; value: string } {
-  if (!themeName) {
-    return { source: "default", value: DEFAULT_CONFIG.themes[fallback] };
-  }
-
-  if (!availableThemes.has(themeName)) {
-    warnings.push(
-      `Theme "${themeName}" was not found in Pi. Using the default theme "${DEFAULT_CONFIG.themes[fallback]}".`,
-    );
-
-    return { source: "default", value: DEFAULT_CONFIG.themes[fallback] };
-  }
-
-  return { source, value: themeName };
-}
-
-function validIsSyncActive(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
-}
-
-/**
- * Warn about an `isSyncActive` value that is not a boolean. The warning
- * names the default when no scope supplies a valid value, and otherwise
- * says the value was ignored, since the other scope's value applies.
- */
-function warnInvalidIsSyncActive(
-  scope: ConfigScope,
-  value: unknown,
-  effectiveSource: ConfigScope | "default",
-  warnings: string[],
-): void {
-  if (value === undefined || typeof value === "boolean") return;
-
-  const outcome =
-    effectiveSource === "default"
-      ? `Using the default value ${String(DEFAULT_CONFIG.isSyncActive)}.`
-      : "Ignored it.";
-
-  warnings.push(
-    `${scopeLabel(scope)} setting "isSyncActive" must be a boolean, not ${JSON.stringify(value)}. ${outcome}`,
-  );
+function valid<T>(value: T): ParsedSetting<T> {
+  return { kind: "valid", value };
 }

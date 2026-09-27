@@ -138,7 +138,7 @@ describe("loadConfig", () => {
     });
   });
 
-  test("reports defaults when invalid project themes and interval fall back", async () => {
+  test("uses valid global themes and interval after invalid project values", async () => {
     await writeConfigs(
       {
         detection: { pollIntervalMs: 5000 },
@@ -152,17 +152,88 @@ describe("loadConfig", () => {
 
     const result = await loadConfig(createContext());
 
-    expect(result.runtimeConfig.themes).toEqual(DEFAULT_CONFIG.themes);
-    expect(result.runtimeConfig.detection).toEqual(DEFAULT_CONFIG.detection);
+    expect(result.runtimeConfig.themes).toEqual({
+      dark: "global-dark",
+      light: "light",
+    });
+    expect(result.runtimeConfig.detection.pollIntervalMs).toBe(5000);
     expect(result.runtimeConfigSources.themes).toEqual({
-      dark: "default",
-      light: "default",
+      dark: "global",
+      light: "global",
+    });
+    expect(result.runtimeConfigSources.detection.pollIntervalMs).toBe("global");
+    expect(result.warnings).toEqual([
+      'Theme "missing-light" was not found in Pi. Ignored it.',
+      'Theme "missing-dark" was not found in Pi. Ignored it.',
+      'Project setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not 999. Ignored it.',
+    ]);
+  });
+
+  test("ignores invalid global values when valid project values apply", async () => {
+    await writeUncheckedConfigs(
+      {
+        detection: { pollIntervalMs: 60_001 },
+        isSyncActive: "no",
+        themes: { dark: "missing-dark", light: "missing-light" },
+      },
+      {
+        detection: { pollIntervalMs: 3000 },
+        isSyncActive: false,
+        themes: { dark: "global-dark", light: "project-light" },
+      },
+    );
+
+    const result = await loadConfig(createContext());
+
+    expect(result.runtimeConfig).toEqual({
+      detection: { pollIntervalMs: 3000 },
+      isSyncActive: false,
+      themes: { dark: "global-dark", light: "project-light" },
     });
 
-    expect(result.runtimeConfigSources.detection.pollIntervalMs).toBe(
-      "default",
+    expect(result.runtimeConfigSources).toEqual({
+      detection: { pollIntervalMs: "project" },
+      isSyncActive: "project",
+      themes: { dark: "project", light: "project" },
+    });
+
+    expect(result.warnings).toEqual([
+      'Global setting "isSyncActive" must be a boolean, not "no". Ignored it.',
+      'Theme "missing-light" was not found in Pi. Ignored it.',
+      'Theme "missing-dark" was not found in Pi. Ignored it.',
+      'Global setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not 60001. Ignored it.',
+    ]);
+  });
+
+  test("uses default themes and interval when no scope supplies a valid one", async () => {
+    await writeUncheckedConfigs(
+      {
+        detection: { pollIntervalMs: "3000" },
+        themes: { dark: 42, light: "global-missing" },
+      },
+      {
+        detection: { pollIntervalMs: 999 },
+        themes: { dark: "missing-dark", light: "missing-light" },
+      },
     );
-    expect(result.warnings).toHaveLength(3);
+
+    const result = await loadConfig(createContext());
+
+    expect(result.runtimeConfig).toEqual(DEFAULT_CONFIG);
+    expect(result.runtimeConfigSources).toEqual({
+      detection: { pollIntervalMs: "default" },
+      isSyncActive: "default",
+      themes: { dark: "default", light: "default" },
+    });
+
+    expect(result.warnings).toEqual([
+      'Theme "missing-light" was not found in Pi. Using the default theme "light".',
+      'Theme "global-missing" was not found in Pi. Using the default theme "light".',
+      'Theme "missing-dark" was not found in Pi. Using the default theme "dark".',
+      'Theme 42 was not found in Pi. Using the default theme "dark".',
+      'Project setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not 999. Using the default value 2000.',
+      'Global setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not "3000". Using the default value 2000.',
+    ]);
   });
 
   test("uses a valid global activation value after an invalid project value", async () => {
@@ -823,4 +894,13 @@ async function writeConfigs(
       projectConfig,
     );
   }
+}
+
+/** Writes both scope files without the `LoadedConfig` shape, for invalid values. */
+async function writeUncheckedConfigs(
+  globalConfig: Record<string, unknown>,
+  projectConfig: Record<string, unknown>,
+): Promise<void> {
+  await writeConfigFile(CONFIG_PATHS.global, globalConfig);
+  await writeConfigFile(CONFIG_PATHS.project(projectDirectory), projectConfig);
 }

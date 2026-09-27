@@ -9,8 +9,8 @@ import type {
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 import {
-  isInteractiveTui,
   notifyWarnings,
+  requireInteractiveTui,
 } from "@sherif-fanous/pi-extensions-core";
 
 /** Opens the interactive theme sync configuration overlay for a TUI session. */
@@ -18,7 +18,7 @@ export async function openThemeSyncOverlay(
   _runtime: ThemeSyncRuntime,
   ctx: ExtensionCommandContext,
 ): Promise<void> {
-  if (!requireUI(ctx, "/theme-sync")) return;
+  if (!requireInteractiveTui(ctx, "Theme Sync", "/theme-sync")) return;
 
   const config = await loadConfig(ctx);
   let component: ConfigOverlayComponent | undefined;
@@ -86,15 +86,4 @@ export async function runThemeSyncCommand(
   notifyWarnings(ctx, "Theme Sync", [
     `Unknown subcommand "${argument}". Try /theme-sync or /theme-sync status.`,
   ]);
-}
-
-function requireUI(ctx: ExtensionCommandContext, commandName: string): boolean {
-  if (isInteractiveTui(ctx)) return true;
-
-  ctx.ui.notify(
-    `Interactive TUI mode is required for ${commandName}.`,
-    "error",
-  );
-
-  return false;
 }

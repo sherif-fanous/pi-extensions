@@ -78,7 +78,7 @@ preferred file is missing. To migrate, move `theme-sync.json` to
 | `themes.dark`              | `"dark"`  | Pi theme to use when dark appearance is detected                            |
 | `detection.pollIntervalMs` | `2000`    | Polling interval in milliseconds (1000 to 60000, inclusive)                 |
 
-If a configured theme name does not exist in Pi, `pi-theme-sync` falls back to the corresponding built-in theme (`light` or `dark`).
+Each setting comes from the project config, then the global config, then the default. An invalid value, such as a theme name that does not exist in Pi or an out-of-range polling interval, is skipped with a warning, so the next source applies. If no source has a valid theme name, `pi-theme-sync` uses the corresponding built-in theme (`light` or `dark`).
 
 ## Reload behavior
 

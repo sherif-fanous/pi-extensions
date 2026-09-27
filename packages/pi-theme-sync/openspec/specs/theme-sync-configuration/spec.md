@@ -34,6 +34,16 @@ every load.
 - **THEN** the extension resolves each effective configuration key from project
   config first, then global config, then defaults
 
+#### Scenario: Invalid value falls through to the next scope
+
+- **WHEN** a scope's value for a setting is present but invalid
+- **THEN** the extension skips that value and resolves the setting from the next
+  scope in project, global, default order, reporting the source of the value it
+  uses
+- **AND** it emits one validation warning per invalid value, ending with the
+  setting's default outcome when no scope supplies a valid value, or with
+  `Ignored it.` when another scope's value applies
+
 #### Scenario: Preferred file wins within either scope
 
 - **WHEN** a scope contains both preferred and legacy config files
@@ -102,10 +112,12 @@ polling interval, and `isSyncActive`.
 
 #### Scenario: Reject an out-of-range configured polling interval
 
-- **WHEN** the selected polling interval is outside `1000` to `60000`
-  milliseconds, inclusive
-- **THEN** the extension uses the default `2000` milliseconds, reports Default
-  provenance, and emits a validation warning
+- **WHEN** a scope's polling interval is present but not a number from `1000` to
+  `60000` milliseconds, inclusive
+- **THEN** the extension emits the warning
+  `<Project|Global> setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not <value>.`
+  followed by `Using the default value 2000.` when no scope supplies a valid
+  interval, or by `Ignored it.` when the other scope's interval applies
 
 #### Scenario: Reject a non-boolean sync activation state
 
@@ -133,13 +145,24 @@ the Pi themes available at runtime.
 
 #### Scenario: Fallback when configured light theme is unavailable
 
-- **WHEN** the configured light theme name is not available in Pi
+- **WHEN** no scope configures a light theme name that is available in Pi and at
+  least one scope configures an unavailable one
 - **THEN** the extension uses Pi built-in `light` for the light mapping
 
 #### Scenario: Fallback when configured dark theme is unavailable
 
-- **WHEN** the configured dark theme name is not available in Pi
+- **WHEN** no scope configures a dark theme name that is available in Pi and at
+  least one scope configures an unavailable one
 - **THEN** the extension uses Pi built-in `dark` for the dark mapping
+
+#### Scenario: Warn about an unavailable theme
+
+- **WHEN** a scope configures a light or dark theme name that is not available
+  in Pi
+- **THEN** the extension emits the warning `Theme "<name>" was not found in Pi.`
+  followed by `Using the default theme "<light|dark>".` when no scope supplies
+  an available theme for that mapping, or by `Ignored it.` when the other
+  scope's theme applies
 
 ### Requirement: Theme sync supports scoped config writes
 

@@ -104,7 +104,9 @@ Theme sync SHALL open config inside a popup overlay window.
 #### Scenario: Config overlay requires UI
 
 - **WHEN** the user runs `/theme-sync` outside interactive TUI mode
-- **THEN** theme sync reports that interactive TUI mode is required
+- **THEN** theme sync opens no overlay and shows the warning
+  `/theme-sync needs Pi's interactive terminal UI. Run it from the TUI.` under
+  the `Theme Sync` heading
 
 ### Requirement: Theme sync config overlay owns its editing flow
 

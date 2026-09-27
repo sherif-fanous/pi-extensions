@@ -41,9 +41,9 @@ test.each(["rpc", "json", "print"] as const)(
     expect(ui.onTerminalInput).not.toHaveBeenCalled();
     expect(ui.setWidget).not.toHaveBeenCalled();
     expect(ui.custom).not.toHaveBeenCalled();
-    expect(ui.notify).toHaveBeenCalledWith(
-      "Interactive TUI mode is required for /theme-sync.",
-      "error",
+    expect(ui.notify).toHaveBeenCalledExactlyOnceWith(
+      "Theme Sync: 1 warning\n- /theme-sync needs Pi's interactive terminal UI. Run it from the TUI.",
+      "warning",
     );
   },
 );
