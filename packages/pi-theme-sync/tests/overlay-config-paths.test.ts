@@ -4,6 +4,7 @@ import path from "node:path";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
   createFakeCustom,
+  createPiKeybindings,
   type CustomComponent,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, expect, test, vi } from "vitest";
@@ -23,17 +24,6 @@ const globalPreferred = path.join(
   "settings.json",
 );
 const globalLegacy = path.join(agentDirectory, "theme-sync.json");
-
-vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@earendil-works/pi-coding-agent")>()),
-  getSelectListTheme: () => ({
-    selectedPrefix: (text: string) => text,
-    selectedText: (text: string) => text,
-    description: (text: string) => text,
-    scrollInfo: (text: string) => text,
-    noMatch: (text: string) => text,
-  }),
-}));
 
 vi.mock("@sherif-fanous/pi-extensions-core", async (importOriginal) => {
   const actual =
@@ -195,6 +185,7 @@ async function withOverlay(
   const { openThemeSyncOverlay } = await import("../src/command.js");
   const { createThemeSyncRuntime } = await import("../src/runtime.js");
   const custom = createFakeCustom({
+    keybindings: createPiKeybindings(),
     onMount: async (overlay, done) => {
       try {
         await exercise(overlay);

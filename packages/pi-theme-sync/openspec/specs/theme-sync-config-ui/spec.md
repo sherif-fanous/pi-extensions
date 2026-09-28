@@ -20,16 +20,28 @@ for `/theme-sync`.
 
 ### Requirement: Theme sync config uses complete window framing
 
-Theme sync SHALL render every configuration view as a complete, width-safe
-window with plain borders, an ordinary accent title, section rules where content
-regions meet, and a footer contained inside the frame.
+Theme sync SHALL render every configuration view with the family frame: box
+borders in the theme's `border` color, a bold accent Title Case title in the top
+border, a rule above a dim footer of key hints, and a footer contained inside
+the frame. The footer SHALL wrap between hints rather than truncate one.
 
 #### Scenario: Main config view uses a complete frame
 
 - **WHEN** the main configuration view is rendered
-- **THEN** its top, side, and bottom borders form a complete window, its title
-  alone accents the frame header, and its complete footer appears inside the
-  window without truncation when the terminal has enough width
+- **THEN** its top, side, and bottom borders form a complete window in the
+  `border` color, the top border carries `Theme Sync Config` in bold accent, and
+  its complete footer appears inside the window
+
+#### Scenario: Nested views use Title Case titles
+
+- **WHEN** the user opens a nested view
+- **THEN** its title is `Light Mode Theme`, `Dark Mode Theme`,
+  `Polling Interval`, `Sync Status`, `Write Config To`, or `<Field> Help`
+
+#### Scenario: Footer wraps on a narrow window
+
+- **WHEN** the footer hints are wider than the frame
+- **THEN** they continue on the next footer line, broken only between two hints
 
 #### Scenario: Nested config view keeps the same presentation
 
@@ -41,16 +53,35 @@ regions meet, and a footer contained inside the frame.
 #### Scenario: Frame fits the rendered width
 
 - **WHEN** any configuration view renders styled text, wide characters, long
-  values, or long paths
+  values, or long paths at any width, including 40 columns or fewer
 - **THEN** every output line fits the width assigned by Pi and the right border
   remains aligned
 
+#### Scenario: Config opens at the main overlay size
+
+- **WHEN** the user runs `/theme-sync` in interactive TUI mode
+- **THEN** the overlay opens centered with a margin of 1, 80% of the terminal
+  wide (at least 60 columns), and at most 80% of the terminal height
+
 #### Scenario: Frame chrome remains visible within the height limit
 
-- **WHEN** a configuration list contains more items than fit in the available
-  terminal height
-- **THEN** the view limits or scrolls its content while keeping the title,
-  footer, and bottom border visible
+- **WHEN** a configuration list or help text is taller than the rows left inside
+  80% of the terminal height
+- **THEN** the view scrolls its content while keeping the title, the focused
+  row, the footer, and the bottom border visible, and a scrolling list shows its
+  muted `(n/m)` position at the right of the top border
+
+#### Scenario: Selected rows are marked
+
+- **WHEN** a view shows a list
+- **THEN** the focused row of the configuration form carries an accent `▌` at
+  its left edge, and the selected row of a nested theme, sync status, or write
+  target list starts with an accent `→ `
+
+#### Scenario: No themes to choose from
+
+- **WHEN** the user opens theme selection and Pi reports no themes
+- **THEN** the view shows the muted sentence `No themes are available.`
 
 ### Requirement: Theme sync config errors use consistent presentation
 
@@ -78,11 +109,18 @@ consistent semantic styling.
   `Could not save the configuration: <message>`, where `<message>` is the
   error description ending in one full stop
 
-#### Scenario: Progress and no-change messages are neutral
+#### Scenario: Busy states replace the footer hints
 
-- **WHEN** the overlay shows `Resolving configuration paths.`,
-  `Saving configuration.`, or `No changes to save.`
-- **THEN** the message uses muted styling rather than warning styling
+- **WHEN** the overlay waits for the write-target paths or for a save
+- **THEN** the footer shows only the dim line `Resolving configuration paths…`
+  or `Saving configuration…` in place of the key hints, and input is ignored
+  until the work finishes
+
+#### Scenario: No-change message is neutral
+
+- **WHEN** a save has no changes to write
+- **THEN** the overlay shows `No changes to save.` in muted styling rather than
+  warning styling
 
 #### Scenario: Save result counts changed settings
 
@@ -93,7 +131,7 @@ consistent semantic styling.
 #### Scenario: Error dialog uses a complete frame
 
 - **WHEN** a configuration action presents an error in a nested dialog
-- **THEN** the dialog uses a complete plain border, semantic error styling,
+- **THEN** the dialog uses a complete border, semantic error styling,
   wrapped body text, and a contained dismissal footer
 
 ### Requirement: Polling interval editor exposes normal text-input focus
@@ -275,19 +313,61 @@ config changes.
 #### Scenario: Config overlay supports navigation and activation
 
 - **WHEN** the config overlay is open
-- **THEN** the user can navigate rows or actions with `↑` and `↓` (supporting
-  wrapping/looping) and activate the focused item with `Enter`
+- **THEN** the user can move through rows with `↑` and `↓`, which wrap around
+  the ends, move one page with `PgUp` and `PgDn`, which stop at the first or
+  last row, and activate the focused item with `Enter`
 
 #### Scenario: Config overlay supports save and close shortcuts
 
 - **WHEN** the config overlay is open
-- **THEN** `Ctrl+S` saves pending edits (showing a "Saving..." indicator), `Esc`
-  goes back or closes the overlay, and `Ctrl+C` quits the entire process
+- **THEN** `Ctrl+S` saves pending edits, and `Esc` or `Ctrl+C` goes back from a
+  nested view or closes the overlay from the configuration form
+
+#### Scenario: Keys follow the user's Pi keybindings
+
+- **WHEN** the user has remapped Pi's `tui.select.*` keybindings
+- **THEN** movement, paging, `Enter`, and `Esc` use only the remapped keys, not
+  the defaults, and the footer names the remapped keys
+
+#### Scenario: Footer lists the keys of the current view
+
+- **WHEN** a view is shown with Pi's default keybindings
+- **THEN** the footer reads
+  `↑/↓ Move · Enter Edit · F1 Help · Ctrl+S Save · Ctrl+R Reload · Esc Close`
+  on the configuration form, `↑/↓ Move · Enter Select · Esc Back` on theme and
+  sync status selection, `↑/↓ Move · Enter Save · Esc Back` on write-target
+  selection, `Enter Confirm · Esc Cancel` in the polling interval editor, and
+  `Esc Back` on help, with `PgUp/PgDn Page` after the movement hint (and
+  `↑/↓ Scroll · PgUp/PgDn Page` on help) only while the content scrolls
 
 #### Scenario: Config overlay reload shortcut reloads Pi runtime
 
 - **WHEN** the config overlay is open and the user presses `Ctrl+R`
 - **THEN** the extension triggers Pi runtime reload explicitly
+
+### Requirement: Theme sync config form offers help for the focused field
+
+The configuration form SHALL show help for the focused field when the user
+presses `F1`, including the Kitty keyboard protocol encodings of `F1`, inside
+the same overlay.
+
+#### Scenario: F1 opens help
+
+- **WHEN** the user presses `F1` on a row of the configuration form
+- **THEN** the overlay shows a `<Field> Help` view, such as
+  `Light Mode Theme Help`, that explains the field, how to change it, where its
+  value comes from, and how to save and apply it
+
+#### Scenario: Leaving help returns to the same row
+
+- **WHEN** the user presses `Esc` in a help view
+- **THEN** the configuration form returns with the same row focused
+
+#### Scenario: Long help scrolls
+
+- **WHEN** the help text is taller than the view
+- **THEN** `↑`, `↓`, `PgUp`, and `PgDn` scroll it, and the first or last
+  visible row shows a dim `↑` or `↓` where more text is hidden
 
 ### Requirement: Theme sync config overlay preserves alignment when messages wrap
 

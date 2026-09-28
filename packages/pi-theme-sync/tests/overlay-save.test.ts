@@ -7,6 +7,7 @@ import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
   createDeferred,
   createFakeCustom,
+  createPiKeybindings,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -103,6 +104,7 @@ async function startOverlay() {
   const done = vi.fn();
   const reload = vi.fn();
   const custom = createFakeCustom({
+    keybindings: createPiKeybindings(),
     onDone: done,
     onMount: (overlay) => {
       acceptInput = (data) => overlay.handleInput?.(data);

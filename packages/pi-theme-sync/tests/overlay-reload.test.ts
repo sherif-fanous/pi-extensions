@@ -6,6 +6,7 @@ import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
   createDeferred,
   createFakeCustom,
+  createPiKeybindings,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -68,6 +69,7 @@ function createContext(
 
   const done = vi.fn();
   const custom = createFakeCustom({
+    keybindings: createPiKeybindings(),
     keys: input,
     onDone: done,
     onMount: () => {

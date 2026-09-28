@@ -11,6 +11,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import {
   notifyUsageWarning,
+  overlayOptions,
   requireInteractiveTui,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -25,10 +26,11 @@ export async function openThemeSyncOverlay(
   let component: ConfigOverlayComponent | undefined;
 
   await ctx.ui.custom<void>(
-    (tui, theme, _keybindings, done) => {
+    (tui, theme, keybindings, done) => {
       component = new ConfigOverlayComponent({
         config,
         done,
+        keybindings,
         resolvePaths: async () => {
           const [project, global] = await Promise.all([
             getConfigPath("project", ctx.cwd),
@@ -46,15 +48,7 @@ export async function openThemeSyncOverlay(
 
       return component;
     },
-    {
-      overlay: true,
-      overlayOptions: {
-        anchor: "center",
-        margin: 1,
-        maxHeight: "90%",
-        width: 80,
-      },
-    },
+    { overlay: true, overlayOptions: overlayOptions("main") },
   );
 
   // Reload only after the overlay closes so the command observes failures.

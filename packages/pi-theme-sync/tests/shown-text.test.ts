@@ -15,6 +15,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import {
   createFakeCustom,
+  createPiKeybindings,
   createPlainTheme,
   createShownTextRecorder,
   findShownTextViolations,
@@ -22,17 +23,6 @@ import {
   type ShownTextRecorder,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-
-vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@earendil-works/pi-coding-agent")>()),
-  getSelectListTheme: () => ({
-    description: (text: string) => text,
-    noMatch: (text: string) => text,
-    scrollInfo: (text: string) => text,
-    selectedPrefix: (text: string) => text,
-    selectedText: (text: string) => text,
-  }),
-}));
 
 vi.mock("../src/detectors/pi/color-scheme.js", () => ({
   detectAppearanceViaColorScheme: vi.fn(),
@@ -145,7 +135,10 @@ function commandContext(
     mode,
     reload: vi.fn(),
     ui: {
-      custom: createFakeCustom({ onMount }),
+      custom: createFakeCustom({
+        keybindings: createPiKeybindings(),
+        onMount,
+      }),
       getAllThemes: () => [
         { name: "light", path: undefined },
         { name: "dark", path: undefined },

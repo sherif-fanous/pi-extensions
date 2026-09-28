@@ -99,9 +99,9 @@ sentence case with a trailing colon, as in `Appearance:`, `Applied theme:`,
 view titles use the same sentence-case text without the colon. The overlay and
 report headings are `Theme Sync Config` and `Theme Sync Status`. Button and
 footer action labels use Title Case. The repository's `AGENTS.md` "Text and
-naming" section is the family standard these rules follow. Footer hint items are joined with
-` · `. Group related keys with `/` and no surrounding spaces, as in `↑/↓
-Navigate · Enter Open`.
+naming" section is the family standard these rules follow, and its "TUI"
+section governs the overlay's frame, key hints (such as `↑/↓ Move · Enter Edit
+· Esc Close`), keys, lists, and selection markers.
 
 Detector strategy labels live in `DETECTOR_LABELS` in `src/runtime.ts`. Read
 the label from there instead of repeating the text at a call site.

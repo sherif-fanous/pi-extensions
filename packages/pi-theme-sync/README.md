@@ -32,6 +32,20 @@ No configuration is needed. Once installed, Theme Sync detects your current appe
 
 Run `/theme-sync` to open the configuration overlay. Run `/theme-sync status` to add the current runtime status to the transcript.
 
+The overlay lists the light and dark mode themes, the polling interval, and the sync status, each with the source of its value. Press `Enter` to change a setting, `F1` to read about it, and `Ctrl+S` to save your changes to the User or Project configuration. The footer shows the keys that work in the current step.
+
+| Key             | Action                                    |
+| :-------------- | :---------------------------------------- |
+| `↑` / `↓`       | Move the selection                        |
+| `PgUp` / `PgDn` | Move one page                             |
+| `Enter`         | Change the selected setting               |
+| `F1`            | Show help for the selected setting        |
+| `Ctrl+S`        | Save changes to the User or Project file  |
+| `Ctrl+R`        | Close the overlay and reload Pi           |
+| `Esc`           | Close, or go back from a nested step      |
+
+If you have remapped Pi's keys, the overlay follows your bindings.
+
 ### Relationship to Pi's built-in `auto` theme
 
 Pi has its own automatic theme setting of the form `auto:<light-theme>,<dark-theme>`. Theme Sync does the same job with per-project configuration, custom theme mapping, and a status report, so the two are alternatives rather than complements.

@@ -5,6 +5,7 @@ import type { ThemeSyncRuntime } from "../src/runtime.js";
 import type { RuntimeStatus } from "../src/types.js";
 import { STATUS_REPORT_ENTRY_TYPE } from "../src/ui/status-report.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { overlayOptions } from "@sherif-fanous/pi-extensions-core";
 import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, expect, test, vi } from "vitest";
 
@@ -36,7 +37,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-test("bare command opens configuration directly", async () => {
+test("bare command opens configuration directly at the main overlay size", async () => {
   vi.spyOn(fs, "readFile").mockRejectedValue(
     Object.assign(new Error("missing"), { code: "ENOENT" }),
   );
@@ -50,11 +51,10 @@ test("bare command opens configuration directly", async () => {
 
   expect(custom).toHaveBeenCalledOnce();
 
-  const overlayOptions = custom.mock.calls[0]?.[1] as unknown as {
-    overlayOptions?: { width?: number };
-  };
-
-  expect(overlayOptions.overlayOptions?.width).toBe(80);
+  expect(custom.mock.calls[0]?.[1]).toEqual({
+    overlay: true,
+    overlayOptions: overlayOptions("main"),
+  });
   expect(appendEntry).not.toHaveBeenCalled();
   expect(notify).not.toHaveBeenCalled();
 });

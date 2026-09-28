@@ -1,4 +1,4 @@
-/** Implements the focused, framed theme sync configuration overlay. */
+/** Implements the framed Theme Sync configuration form and its nested steps. */
 
 import {
   isValidPollIntervalMs,
@@ -13,36 +13,41 @@ import type {
   EditableConfigChanges,
   LoadedRuntimeConfig,
 } from "../types.js";
-import {
-  fitLines,
-  frameLine,
-  frameSegment,
-  padToWidth,
-  wrapToWidth,
-} from "./frame.js";
-import {
-  getSelectListTheme,
-  type Theme,
-} from "@earendil-works/pi-coding-agent";
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
   Input,
   Key,
   matchesKey,
-  SelectList,
-  visibleWidth,
+  wrapTextWithAnsi,
   type Component,
   type Focusable,
-  type SelectItem,
+  type KeybindingsManager,
 } from "@earendil-works/pi-tui";
 import {
   describeErrorSentence,
+  emptyStateLines,
+  frameBodyRows,
+  frameBodyWidth,
+  keyHint,
+  listWindow,
+  matchesHelpKey,
+  matchSelectAction,
+  moveListSelection,
+  overlayMaxHeight,
+  padToWidth,
   pluralize,
+  renderFrame,
+  scrollLines,
+  wrapKeyHints,
+  type SelectAction,
 } from "@sherif-fanous/pi-extensions-core";
 
 /** Inputs and I/O callbacks used by the configuration overlay. */
 export interface ConfigOverlayOptions {
   readonly config: LoadedRuntimeConfig;
   readonly done: () => void;
+  /** Pi's keybindings; list movement, confirm, and cancel follow them. */
+  readonly keybindings: Pick<KeybindingsManager, "getKeys" | "matches">;
   readonly resolvePaths: () => Promise<Record<ConfigScope, string>>;
   readonly requestRender: () => void;
   readonly save: (
@@ -54,30 +59,111 @@ export interface ConfigOverlayOptions {
   readonly themeNames: readonly string[];
 }
 
-/** Semantic severity for an inline configuration message. */
-export type ConfigMessageSeverity = "error" | "info" | "success";
+/** One row of the configuration form. */
+interface ConfigFieldInfo {
+  /** Paragraphs the `F1 Help` step shows for the row. */
+  readonly help: readonly string[];
+  readonly id: ConfigField;
+  /** Sentence-case row label. */
+  readonly label: string;
+  /** Title Case name for the row's nested step titles. */
+  readonly title: string;
+}
+
+/** One row of a nested selection list. */
+interface ListItem {
+  readonly label: string;
+  readonly value: string;
+}
+
+type ConfigField = keyof EditableConfigChanges;
+
+/** Severity of an inline configuration message. */
+type ConfigMessageSeverity = "error" | "info" | "success";
+
 type ConfigMode =
   | { kind: "config" }
-  | { kind: "themeSelect"; fieldId: ThemeField }
-  | { kind: "syncSelect" }
+  | { kind: "help"; field: ConfigFieldInfo; maxOffset: number; offset: number }
   | { kind: "pollIntervalEdit"; error?: string }
+  | { kind: "syncSelect" }
+  | { kind: "themeSelect"; fieldId: ThemeField }
   | { kind: "writeTarget"; paths: Record<ConfigScope, string> };
-type DraftConfig = Record<keyof EditableConfigChanges, string>;
+
+type DraftConfig = Record<ConfigField, string>;
 
 type ThemeField = "themes.light" | "themes.dark";
+
+const SOURCE_HELP =
+  "The tag after each value shows where it comes from: Default, User, or Project.";
+const APPLY_HELP =
+  "Press Ctrl+S to save your changes to the User or Project configuration, then Ctrl+R to reload Pi and apply them.";
+
+const CONFIG_FIELDS: readonly ConfigFieldInfo[] = [
+  {
+    help: [
+      "The Pi theme Theme Sync applies while your terminal or system is in light mode.",
+      "Press Enter to choose one of the installed themes.",
+      SOURCE_HELP,
+      APPLY_HELP,
+    ],
+    id: "themes.light",
+    label: "Light mode theme",
+    title: "Light Mode Theme",
+  },
+  {
+    help: [
+      "The Pi theme Theme Sync applies while your terminal or system is in dark mode.",
+      "Press Enter to choose one of the installed themes.",
+      SOURCE_HELP,
+      APPLY_HELP,
+    ],
+    id: "themes.dark",
+    label: "Dark mode theme",
+    title: "Dark Mode Theme",
+  },
+  {
+    help: [
+      "How often, in milliseconds, Theme Sync checks the appearance when your terminal cannot report changes itself. When it can, this is how often Theme Sync checks that Pi still shows the matching theme.",
+      `Press Enter to type a value from ${String(POLL_INTERVAL_MIN_MS)} to ${String(POLL_INTERVAL_MAX_MS)}.`,
+      SOURCE_HELP,
+      APPLY_HELP,
+    ],
+    id: "detection.pollIntervalMs",
+    label: "Polling interval",
+    title: "Polling Interval",
+  },
+  {
+    help: [
+      "Active switches Pi's theme to match the appearance. Inactive leaves the current theme alone.",
+      "Press Enter to choose Active or Inactive.",
+      SOURCE_HELP,
+      APPLY_HELP,
+    ],
+    id: "isSyncActive",
+    label: "Sync status",
+    title: "Sync Status",
+  },
+];
+
+/** Label column width of the form rows: the longest label and a gap. */
+const LABEL_COLUMN_WIDTH =
+  Math.max(...CONFIG_FIELDS.map((field) => field.label.length)) + 2;
 
 /** Focused component that edits and saves a theme sync configuration draft. */
 export class ConfigOverlayComponent implements Component, Focusable {
   private _focused = false;
+  /** Footer busy line while input waits on a save or a path lookup. */
+  private busyText: string | undefined;
+  private configIndex = 0;
   private readonly current: DraftConfig;
   private readonly desired: DraftConfig;
-  private mode: ConfigMode = { kind: "config" };
+  private listIndex = 0;
   private message:
     { text: string; severity: ConfigMessageSeverity } | undefined;
-  private activeList: SelectList | undefined;
-  private listCapacity = 0;
+  private mode: ConfigMode = { kind: "config" };
+  /** Rows of the list or help text at the last render, for PgUp/PgDn. */
+  private pageRows = 1;
   private readonly pollInput = new Input();
-  private isBusy = false;
   private reloadAfterClose = false;
 
   constructor(private readonly options: ConfigOverlayOptions) {
@@ -90,7 +176,6 @@ export class ConfigOverlayComponent implements Component, Focusable {
       isSyncActive: runtime.isSyncActive ? "active" : "inactive",
     };
     this.desired = { ...this.current };
-    this.rebuildList();
   }
 
   get focused(): boolean {
@@ -108,125 +193,64 @@ export class ConfigOverlayComponent implements Component, Focusable {
   }
 
   handleInput(data: string): void {
-    if (this.isBusy) return;
+    if (this.busyText !== undefined) return;
 
-    if (matchesKey(data, Key.ctrl("c"))) {
-      this.options.done();
+    switch (this.mode.kind) {
+      case "pollIntervalEdit":
+        this.pollInput.handleInput(data);
 
-      return;
+        break;
+      case "help":
+        this.handleHelpInput(this.mode, data);
+
+        break;
+      case "config":
+        this.handleConfigInput(data);
+
+        break;
+      default:
+        this.handleListInput(data);
     }
 
-    if (this.mode.kind === "pollIntervalEdit") {
-      this.pollInput.handleInput(data);
-      this.options.requestRender();
-
-      return;
-    }
-
-    if (this.mode.kind === "config" && matchesKey(data, Key.ctrl("s"))) {
-      void this.openWriteTarget();
-
-      return;
-    }
-
-    if (this.mode.kind === "config" && matchesKey(data, Key.ctrl("r"))) {
-      this.reloadAfterClose = true;
-      this.options.done();
-
-      return;
-    }
-
-    this.activeList?.handleInput(data);
     this.options.requestRender();
   }
 
   invalidate(): void {
-    this.activeList?.invalidate();
     this.pollInput.invalidate();
   }
 
   render(width: number): string[] {
-    const frameWidth = Math.max(0, width);
+    if (width <= 0) return [];
 
-    if (frameWidth === 0) return [];
-
-    const innerWidth = Math.max(1, frameWidth - 2);
-    const bodyBudget = this.bodyRowBudget();
-    const nextCapacity = this.listCapacityForBody(innerWidth, bodyBudget);
-
-    if (this.isListMode() && nextCapacity !== this.listCapacity) {
-      this.rebuildList(nextCapacity);
-    }
-
-    const body = this.renderBody(innerWidth, bodyBudget);
-    const title = this.options.theme.fg(
-      "accent",
-      this.options.theme.bold(this.title()),
-    );
-    const titleSegment = `─ ${title} `;
-    const top =
-      frameWidth <= 2
-        ? frameSegment("┌", "─", "┐", frameWidth)
-        : `┌${padToWidth(titleSegment, frameWidth - 2, "─", "─")}┐`;
-    const lines = [
-      top,
-      ...body.map((line) => frameLine(line, frameWidth)),
-      frameSegment("├", "─", "┤", frameWidth),
-      frameLine(this.options.theme.fg("dim", ` ${this.footer()}`), frameWidth),
-      frameSegment("└", "─", "┘", frameWidth),
-    ];
-
-    return fitLines(lines, frameWidth);
-  }
-
-  private bodyRowBudget(): number {
-    const frameRows = Math.max(
-      4,
-      Math.floor(this.options.terminalRows() * 0.9),
+    const bodyWidth = frameBodyWidth(width);
+    const height = overlayMaxHeight(this.options.terminalRows());
+    const layout = (paging: boolean): string[] =>
+      this.busyText === undefined
+        ? wrapKeyHints(this.footerHints(paging), bodyWidth)
+        : [this.busyText];
+    const unpagedFooter = layout(false);
+    const footer = this.overflows(
+      bodyWidth,
+      frameBodyRows(height, unpagedFooter.length),
+    )
+      ? layout(true)
+      : unpagedFooter;
+    const body = this.renderBody(
+      bodyWidth,
+      frameBodyRows(height, footer.length),
     );
 
-    return frameRows - 4;
-  }
-
-  private buildConfigItems(): SelectItem[] {
-    const sources = this.options.config.runtimeConfigSources;
-
-    return [
-      {
-        value: "themes.light",
-        label: "Light mode theme",
-        description: `${this.desired["themes.light"]} [${formatSource(sources.themes.light)}]`,
-      },
-      {
-        value: "themes.dark",
-        label: "Dark mode theme",
-        description: `${this.desired["themes.dark"]} [${formatSource(sources.themes.dark)}]`,
-      },
-      {
-        value: "detection.pollIntervalMs",
-        label: "Polling interval",
-        description: `${this.desired["detection.pollIntervalMs"]}ms [${formatSource(sources.detection.pollIntervalMs)}]`,
-      },
-      {
-        value: "isSyncActive",
-        label: "Sync status",
-        description: `${this.desired.isSyncActive} [${formatSource(sources.isSyncActive)}]`,
-      },
-    ];
-  }
-
-  private buildList(items: SelectItem[], capacity: number): SelectList {
-    const previous = this.activeList?.getSelectedItem()?.value;
-    const list = new SelectList(
-      items,
-      Math.max(1, Math.min(items.length, capacity)),
-      getSelectListTheme(),
-    );
-    const selectedIndex = items.findIndex((item) => item.value === previous);
-
-    if (selectedIndex >= 0) list.setSelectedIndex(selectedIndex);
-
-    return list;
+    return renderFrame({
+      body: body.lines,
+      footer,
+      theme: this.options.theme,
+      title: this.title(),
+      titleRight:
+        body.position === undefined
+          ? undefined
+          : this.options.theme.fg("muted", body.position),
+      width,
+    });
   }
 
   private changes(): EditableConfigChanges {
@@ -256,63 +280,236 @@ export class ConfigOverlayComponent implements Component, Focusable {
     return changes;
   }
 
-  private footer(): string {
+  private confirmListItem(item: ListItem): void {
     switch (this.mode.kind) {
-      case "config":
-        return "↑/↓ Move · Enter Edit · Ctrl+S Save · Ctrl+R Reload · Esc Close · Ctrl+C Quit";
-      case "pollIntervalEdit":
-        return "Enter Confirm · Esc Cancel · Ctrl+C Quit";
-      case "writeTarget":
-        return "↑/↓ Navigate · Enter Save · Esc Back · Ctrl+C Quit";
-      default:
-        return "↑/↓ Navigate · Enter Select · Esc Back · Ctrl+C Quit";
-    }
-  }
-
-  private isListMode(): boolean {
-    return this.mode.kind !== "pollIntervalEdit";
-  }
-
-  private listCapacityForBody(width: number, budget: number): number {
-    const listBudget = Math.max(
-      0,
-      budget - this.messageRowBudget(width, budget),
-    );
-    const itemCount = this.listItemCount();
-
-    if (itemCount <= listBudget) return Math.max(1, itemCount);
-
-    return Math.max(1, listBudget - 1);
-  }
-
-  private listItemCount(): number {
-    switch (this.mode.kind) {
-      case "config":
-        return 4;
       case "themeSelect":
-        return this.options.themeNames.length;
+        this.desired[this.mode.fieldId] = item.value;
+        this.setMode({ kind: "config" });
+
+        break;
       case "syncSelect":
+        this.desired.isSyncActive = item.value;
+        this.setMode({ kind: "config" });
+
+        break;
       case "writeTarget":
-        return 2;
-      case "pollIntervalEdit":
-        return 0;
+        void this.save(item.value as ConfigScope);
+
+        break;
+      default:
+        break;
     }
   }
 
-  private messageRowBudget(width: number, budget: number): number {
-    if (!this.message || budget <= 0) return 0;
+  private editField(field: ConfigFieldInfo): void {
+    const { id } = field;
 
-    const messageRows = this.styledMessage(
+    if (id === "themes.light" || id === "themes.dark") {
+      this.listIndex = Math.max(
+        0,
+        this.options.themeNames.indexOf(this.desired[id]),
+      );
+      this.setMode({ kind: "themeSelect", fieldId: id });
+    } else if (id === "detection.pollIntervalMs") {
+      this.openPollEditor();
+    } else {
+      this.listIndex = this.desired.isSyncActive === "active" ? 0 : 1;
+      this.setMode({ kind: "syncSelect" });
+    }
+  }
+
+  private footerHints(paging: boolean): (string | undefined)[] {
+    const { keybindings } = this.options;
+    const move = keyHint(
+      keybindings,
+      ["tui.select.up", "tui.select.down"],
+      "Move",
+    );
+    const page = paging
+      ? keyHint(
+          keybindings,
+          ["tui.select.pageUp", "tui.select.pageDown"],
+          "Page",
+        )
+      : undefined;
+    const confirm = (action: string): string | undefined =>
+      keyHint(keybindings, "tui.select.confirm", action);
+    const cancel = (action: string): string | undefined =>
+      keyHint(keybindings, "tui.select.cancel", action);
+
+    switch (this.mode.kind) {
+      case "config":
+        return [
+          move,
+          page,
+          confirm("Edit"),
+          "F1 Help",
+          "Ctrl+S Save",
+          "Ctrl+R Reload",
+          cancel("Close"),
+        ];
+      case "help":
+        return [
+          paging
+            ? keyHint(
+                keybindings,
+                ["tui.select.up", "tui.select.down"],
+                "Scroll",
+              )
+            : undefined,
+          page,
+          cancel("Back"),
+        ];
+      case "pollIntervalEdit":
+        return [
+          keyHint(keybindings, "tui.input.submit", "Confirm"),
+          cancel("Cancel"),
+        ];
+      case "writeTarget":
+        return [move, page, confirm("Save"), cancel("Back")];
+      default:
+        return this.listItems().length === 0
+          ? [cancel("Back")]
+          : [move, page, confirm("Select"), cancel("Back")];
+    }
+  }
+
+  private handleConfigInput(data: string): void {
+    const field = CONFIG_FIELDS[this.configIndex];
+
+    if (matchesHelpKey(data)) {
+      if (field !== undefined) {
+        this.setMode({ kind: "help", field, maxOffset: 0, offset: 0 });
+      }
+
+      return;
+    }
+
+    if (matchesKey(data, Key.ctrl("s"))) {
+      void this.openWriteTarget();
+
+      return;
+    }
+
+    if (matchesKey(data, Key.ctrl("r"))) {
+      this.reloadAfterClose = true;
+      this.options.done();
+
+      return;
+    }
+
+    const action = matchSelectAction(this.options.keybindings, data);
+
+    if (action === "cancel") {
+      this.options.done();
+    } else if (action === "confirm") {
+      if (field !== undefined) this.editField(field);
+    } else if (action !== undefined) {
+      this.configIndex = moveListSelection(
+        this.configIndex,
+        CONFIG_FIELDS.length,
+        action,
+        this.pageRows,
+      );
+    }
+  }
+
+  private handleHelpInput(
+    mode: Extract<ConfigMode, { kind: "help" }>,
+    data: string,
+  ): void {
+    const action = matchSelectAction(this.options.keybindings, data);
+    const scrollBy: Partial<Record<SelectAction, number>> = {
+      down: 1,
+      pageDown: this.pageRows,
+      pageUp: -this.pageRows,
+      up: -1,
+    };
+
+    if (action === "cancel") {
+      this.setMode({ kind: "config" });
+    } else if (action !== undefined) {
+      mode.offset = Math.max(
+        0,
+        Math.min(mode.maxOffset, mode.offset + (scrollBy[action] ?? 0)),
+      );
+    }
+  }
+
+  private handleListInput(data: string): void {
+    const action = matchSelectAction(this.options.keybindings, data);
+    const items = this.listItems();
+
+    if (action === "cancel") {
+      this.setMode({ kind: "config" });
+    } else if (action === "confirm") {
+      const item = items[this.listIndex];
+
+      if (item !== undefined) this.confirmListItem(item);
+    } else if (action !== undefined) {
+      this.listIndex = moveListSelection(
+        this.listIndex,
+        items.length,
+        action,
+        this.pageRows,
+      );
+    }
+  }
+
+  /** The field's help paragraphs wrapped to `width`, one blank row apart. */
+  private helpText(field: ConfigFieldInfo, width: number): string[] {
+    return field.help.flatMap((paragraph, index) => [
+      ...(index === 0 ? [] : [""]),
+      ...wrapTextWithAnsi(paragraph, Math.max(1, width)),
+    ]);
+  }
+
+  /** Rows a list gets in a body of `rows` rows, after the inline message. */
+  private listRows(width: number, rows: number): number {
+    return Math.max(1, rows - this.messageLines(width, rows).length);
+  }
+
+  private listItems(): readonly ListItem[] {
+    switch (this.mode.kind) {
+      case "themeSelect":
+        return this.options.themeNames.map((name) => ({
+          label: name,
+          value: name,
+        }));
+      case "syncSelect":
+        return [
+          { label: "Active", value: "active" },
+          { label: "Inactive", value: "inactive" },
+        ];
+      case "writeTarget":
+        return [
+          { label: `Project (${this.mode.paths.project})`, value: "project" },
+          { label: `User (${this.mode.paths.global})`, value: "global" },
+        ];
+      default:
+        return [];
+    }
+  }
+
+  /**
+   * The inline message as body rows below a list, with a blank row above
+   * it when there is room. The list keeps at least its focused row.
+   */
+  private messageLines(width: number, rows: number): string[] {
+    if (!this.message) return [];
+
+    const lines = this.styledMessage(
       this.message.text,
       this.message.severity,
       width,
-    ).length;
-    const minimumListRows = Math.min(budget, this.listItemCount() > 1 ? 2 : 1);
-    const available = budget - minimumListRows;
+    );
+    const available = Math.max(0, Math.min(lines.length + 1, rows - 1));
 
-    if (available <= 0) return Math.min(1, budget);
+    if (available === 0) return [];
 
-    return Math.min(messageRows + 1, Math.max(1, available));
+    return available === 1
+      ? lines.slice(0, 1)
+      : ["", ...lines.slice(0, available - 1)];
   }
 
   private openPollEditor(): void {
@@ -341,17 +538,14 @@ export class ConfigOverlayComponent implements Component, Focusable {
   }
 
   private async openWriteTarget(): Promise<void> {
-    this.isBusy = true;
-    this.message = {
-      text: "Resolving configuration paths.",
-      severity: "info",
-    };
+    this.busyText = "Resolving configuration paths…";
+    this.message = undefined;
     this.options.requestRender();
 
     try {
       const paths = await this.options.resolvePaths();
 
-      this.message = undefined;
+      this.listIndex = 0;
       this.setMode({ kind: "writeTarget", paths });
     } catch (error) {
       this.message = {
@@ -360,152 +554,154 @@ export class ConfigOverlayComponent implements Component, Focusable {
       };
       this.setMode({ kind: "config" });
     } finally {
-      this.isBusy = false;
+      this.busyText = undefined;
       this.options.requestRender();
     }
   }
 
-  private rebuildList(capacity = 4): void {
-    this.listCapacity = capacity;
+  /**
+   * Whether the current step's list or help text is taller than `rows`,
+   * so the footer offers paging keys.
+   */
+  private overflows(width: number, rows: number): boolean {
+    switch (this.mode.kind) {
+      case "help":
+        return this.helpText(this.mode.field, width).length > rows;
+      case "pollIntervalEdit":
+        return false;
+      case "config":
+        return CONFIG_FIELDS.length > this.listRows(width, rows);
+      default:
+        return this.listItems().length > this.listRows(width, rows);
+    }
+  }
+
+  private renderBody(
+    width: number,
+    rows: number,
+  ): { lines: string[]; position?: string } {
+    const { theme } = this.options;
 
     switch (this.mode.kind) {
-      case "config": {
-        const list = this.buildList(this.buildConfigItems(), capacity);
-
-        list.onCancel = () => this.options.done();
-
-        list.onSelect = (item) => {
-          if (item.value === "themes.light" || item.value === "themes.dark") {
-            this.setMode({ kind: "themeSelect", fieldId: item.value });
-          } else if (item.value === "detection.pollIntervalMs") {
-            this.openPollEditor();
-          } else {
-            this.setMode({ kind: "syncSelect" });
-          }
-        };
-
-        this.activeList = list;
-
-        break;
-      }
-
-      case "themeSelect": {
-        const items = this.options.themeNames.map((name) => ({
-          value: name,
-          label: name,
-        }));
-        const list = this.buildList(items, capacity);
-        const currentIndex = items.findIndex(
-          (item) =>
-            item.value ===
-            this.desired[
-              this.mode.kind === "themeSelect"
-                ? this.mode.fieldId
-                : "themes.light"
-            ],
+      case "help": {
+        const text = this.helpText(this.mode.field, width);
+        const scrolled = scrollLines(
+          text,
+          rows,
+          this.mode.offset,
+          width,
+          theme,
         );
 
-        if (this.activeList === undefined && currentIndex >= 0) {
-          list.setSelectedIndex(currentIndex);
-        }
+        this.mode.offset = scrolled.offset;
+        this.mode.maxOffset = Math.max(0, text.length - rows);
+        this.pageRows = Math.max(1, rows);
 
-        list.onCancel = () => this.setMode({ kind: "config" });
-
-        list.onSelect = (item) => {
-          if (this.mode.kind !== "themeSelect") return;
-          this.desired[this.mode.fieldId] = item.value;
-          this.setMode({ kind: "config" });
-        };
-
-        this.activeList = list;
-
-        break;
-      }
-
-      case "syncSelect": {
-        const items = [
-          { value: "active", label: "Active" },
-          { value: "inactive", label: "Inactive" },
-        ];
-        const list = this.buildList(items, capacity);
-
-        list.setSelectedIndex(this.desired.isSyncActive === "active" ? 0 : 1);
-        list.onCancel = () => this.setMode({ kind: "config" });
-
-        list.onSelect = (item) => {
-          this.desired.isSyncActive = item.value;
-          this.setMode({ kind: "config" });
-        };
-
-        this.activeList = list;
-
-        break;
-      }
-
-      case "writeTarget": {
-        const items = [
-          { value: "project", label: `Project (${this.mode.paths.project})` },
-          { value: "global", label: `User (${this.mode.paths.global})` },
-        ];
-        const list = this.buildList(items, capacity);
-
-        list.onCancel = () => this.setMode({ kind: "config" });
-        list.onSelect = (item) => void this.save(item.value as ConfigScope);
-        this.activeList = list;
-
-        break;
+        return { lines: scrolled.lines };
       }
 
       case "pollIntervalEdit":
-        this.activeList = undefined;
+        return { lines: this.renderPollEditorBody(width, rows) };
+      case "config":
+        return this.renderList(
+          CONFIG_FIELDS.length,
+          this.configIndex,
+          width,
+          rows,
+          (index, selected) => this.renderFieldRow(index, selected, width),
+        );
+
+      default: {
+        const items = this.listItems();
+
+        if (items.length === 0) {
+          return {
+            lines: emptyStateLines("No themes are available.", width, theme),
+          };
+        }
+
+        return this.renderList(
+          items.length,
+          this.listIndex,
+          width,
+          rows,
+          (index, selected) =>
+            this.renderListRow(items[index]?.label ?? "", selected, width),
+        );
+      }
     }
   }
 
-  private renderBody(width: number, budget: number): string[] {
-    if (this.mode.kind === "pollIntervalEdit") {
-      return this.renderPollEditorBody(width, budget);
-    }
+  private renderFieldRow(
+    index: number,
+    selected: boolean,
+    width: number,
+  ): string {
+    const { theme } = this.options;
+    const field = CONFIG_FIELDS[index];
 
-    const messageBudget = this.messageRowBudget(width, budget);
-    const listBudget = Math.max(0, budget - messageBudget);
-    const listLines = (this.activeList?.render(Math.max(1, width - 2)) ?? [])
-      .slice(0, listBudget)
-      .map((line) => ` ${line}`);
+    if (field === undefined) return "";
 
-    return [...listLines, ...this.renderMessage(width, messageBudget)].slice(
-      0,
-      budget,
+    const marker = selected ? theme.fg("accent", "▌") : " ";
+    const label = theme.fg("muted", field.label.padEnd(LABEL_COLUMN_WIDTH));
+    const value = this.valueText(field.id);
+    const source = theme.fg(
+      "muted",
+      `[${formatSource(this.sourceOf(field.id))}]`,
     );
-  }
 
-  private renderMessage(width: number, budget: number): string[] {
-    if (!this.message || budget <= 0) return [];
-
-    const lines = this.styledMessage(
-      this.message.text,
-      this.message.severity,
+    return padToWidth(
+      `${marker} ${label}${selected ? theme.fg("accent", value) : value} ${source}`,
       width,
     );
+  }
 
-    return budget === 1
-      ? lines.slice(0, 1)
-      : ["", ...lines.slice(0, budget - 1)];
+  private renderList(
+    count: number,
+    selected: number,
+    width: number,
+    rows: number,
+    renderRow: (index: number, selected: boolean) => string,
+  ): { lines: string[]; position?: string } {
+    const message = this.messageLines(width, rows);
+    const listRows = this.listRows(width, rows);
+    const window = listWindow(selected, count, listRows);
+    const lines: string[] = [];
+
+    for (let index = window.start; index < window.end; index++) {
+      lines.push(renderRow(index, index === selected));
+    }
+
+    this.pageRows = listRows;
+
+    return { lines: [...lines, ...message], position: window.position };
+  }
+
+  private renderListRow(
+    label: string,
+    selected: boolean,
+    width: number,
+  ): string {
+    const { theme } = this.options;
+
+    return padToWidth(
+      selected ? theme.fg("accent", `→ ${label}`) : `  ${label}`,
+      width,
+    );
   }
 
   private renderPollEditorBody(width: number, budget: number): string[] {
     if (budget <= 0 || this.mode.kind !== "pollIntervalEdit") return [];
 
     const errorMessage = this.mode.error;
-    const instruction = wrapToWidth(
+    const instruction = wrapTextWithAnsi(
       `Enter milliseconds (${POLL_INTERVAL_MIN_MS} to ${POLL_INTERVAL_MAX_MS}, inclusive).`,
-      Math.max(1, width - 1),
-    ).map((line) => ` ${line}`);
-    const input = this.pollInput
-      .render(Math.max(1, width - 2))
-      .map((line) => ` ${line}`);
+      Math.max(1, width),
+    );
+    const input = this.pollInput.render(Math.max(1, width));
 
     if (!errorMessage) {
-      const preferred = ["", ...instruction, "", ...input];
+      const preferred = [...instruction, "", ...input];
 
       if (preferred.length <= budget) return preferred;
 
@@ -515,7 +711,7 @@ export class ConfigOverlayComponent implements Component, Focusable {
     }
 
     const error = this.styledMessage(errorMessage, "error", width);
-    const preferred = ["", ...instruction, "", ...input, "", ...error];
+    const preferred = [...instruction, "", ...input, "", ...error];
 
     if (preferred.length <= budget) return preferred;
     if (budget === 1) return input.slice(0, 1);
@@ -531,14 +727,12 @@ export class ConfigOverlayComponent implements Component, Focusable {
   }
 
   private async save(scope: ConfigScope): Promise<void> {
-    if (this.isBusy) return;
-
     const submitted = { ...this.desired };
     const changes = this.changes();
     const count = Object.keys(changes).length;
 
-    this.isBusy = true;
-    this.message = { text: "Saving configuration.", severity: "info" };
+    this.busyText = "Saving configuration…";
+    this.message = undefined;
     this.setMode({ kind: "config" });
 
     try {
@@ -564,18 +758,30 @@ export class ConfigOverlayComponent implements Component, Focusable {
         severity: "error",
       };
     } finally {
-      this.isBusy = false;
-      this.rebuildList();
+      this.busyText = undefined;
       this.options.requestRender();
     }
   }
 
   private setMode(mode: ConfigMode): void {
     this.mode = mode;
-    this.activeList = undefined;
-    this.rebuildList();
     this.syncInputFocus();
     this.options.requestRender();
+  }
+
+  private sourceOf(field: ConfigField): ConfigSource {
+    const sources = this.options.config.runtimeConfigSources;
+
+    switch (field) {
+      case "themes.light":
+        return sources.themes.light;
+      case "themes.dark":
+        return sources.themes.dark;
+      case "detection.pollIntervalMs":
+        return sources.detection.pollIntervalMs;
+      case "isSyncActive":
+        return sources.isSyncActive;
+    }
   }
 
   private styledMessage(
@@ -584,12 +790,10 @@ export class ConfigOverlayComponent implements Component, Focusable {
     width: number,
   ): string[] {
     const indent = "  ";
-    const bodyWidth = Math.max(1, width - visibleWidth(indent));
-
     const color = severity === "info" ? "muted" : severity;
 
-    return wrapToWidth(text, bodyWidth).map((line) =>
-      this.options.theme.fg(color, `${indent}${line}`),
+    return wrapTextWithAnsi(text, Math.max(1, width - indent.length)).map(
+      (line) => this.options.theme.fg(color, `${indent}${line}`),
     );
   }
 
@@ -602,18 +806,28 @@ export class ConfigOverlayComponent implements Component, Focusable {
     switch (this.mode.kind) {
       case "config":
         return `${EXTENSION_NAME} Config`;
+      case "help":
+        return `${this.mode.field.title} Help`;
       case "themeSelect":
-        return this.mode.fieldId === "themes.light"
-          ? "Light mode theme"
-          : "Dark mode theme";
+        return fieldTitle(this.mode.fieldId);
       case "syncSelect":
-        return "Sync status";
+        return fieldTitle("isSyncActive");
       case "pollIntervalEdit":
-        return "Polling interval";
+        return fieldTitle("detection.pollIntervalMs");
       case "writeTarget":
-        return "Write config to";
+        return "Write Config To";
     }
   }
+
+  private valueText(field: ConfigField): string {
+    const value = this.desired[field];
+
+    return field === "detection.pollIntervalMs" ? `${value}ms` : value;
+  }
+}
+
+function fieldTitle(id: ConfigField): string {
+  return CONFIG_FIELDS.find((field) => field.id === id)?.title ?? "";
 }
 
 function formatSource(source: ConfigSource): string {
