@@ -278,7 +278,7 @@ describe("openPicker info actions", () => {
     expect(clearReturning).toHaveBeenCalledOnce();
     expect(openInfoDialog).toHaveBeenCalledWith(ctx, {
       body: "clear body",
-      title: "Presets Plus Clear",
+      title: "Presets Plus Cleared",
       tone: "info",
     });
     expect(ctx.notify).not.toHaveBeenCalledWith("clear body", "info");

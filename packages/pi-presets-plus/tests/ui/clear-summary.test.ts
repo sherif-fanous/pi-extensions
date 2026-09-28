@@ -129,7 +129,7 @@ describe("renderClearSummary", () => {
       { action: "restored", field: "tools", value: "bash" },
     ]);
 
-    expect(out).toContain("Presets Plus Clear");
+    expect(out).toContain("Presets Plus Cleared");
     expect(out).toContain("Preset:         plan");
     expect(out).toContain("Pi restored your previous settings.");
     expect(out).toContain("Model:          anthropic/old");
@@ -161,7 +161,7 @@ describe("renderClearSummary", () => {
     expect(
       renderClearSummary("plan", [part("already-baseline", "model", "none")]),
     ).toBe(
-      "Presets Plus Clear\nYour settings already matched the saved baseline.\n  Preset: plan\n  Model:  none",
+      "Presets Plus Cleared\nYour settings already matched the saved baseline.\n  Preset: plan\n  Model:  none",
     );
   });
 });

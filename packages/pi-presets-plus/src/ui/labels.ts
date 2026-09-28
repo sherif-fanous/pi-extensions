@@ -33,7 +33,7 @@ export const DEFAULT_MATCHES_LABEL = "Default matches";
 // Dialog titles shared by overlays and report headings.
 export const STATUS_DIALOG_TITLE = `${EXTENSION_NAME} Status`;
 export const POLICY_DIALOG_TITLE = `${EXTENSION_NAME} Policy`;
-export const CLEAR_DIALOG_TITLE = `${EXTENSION_NAME} Clear`;
+export const CLEAR_DIALOG_TITLE = `${EXTENSION_NAME} Cleared`;
 export const ACTIVATION_FAILED_TITLE = "Activation failed";
 export const RELOAD_PROMPT_TITLE = "Reload Pi?";
 export const MOVE_PRESET_TITLE = "Move preset?";

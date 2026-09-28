@@ -399,7 +399,7 @@ shared module SHALL include at minimum:
   change finalizes the voice of:
   - `Presets Plus Status` (picker `s` action's info-dialog from
     `route-picker-info-output-through-overlay`).
-  - `Presets Plus Clear` (picker `c` action's info-dialog and prompt-invoked
+  - `Presets Plus Cleared` (picker `c` action's info-dialog and prompt-invoked
     clear's report heading — same string sourced once).
   - `Presets Plus Policy` (`/presets policy` report heading).
   - `Activation failed` (picker error info-dialog from
@@ -434,7 +434,7 @@ requirement is that no two surfaces hold their own copy of the same string.
 #### Scenario: Clear summary lead and labels follow the convention
 
 - **WHEN** `renderClearSummary` renders its heading and lead sentence
-- **THEN** the heading SHALL read `Presets Plus Clear`
+- **THEN** the heading SHALL read `Presets Plus Cleared`
 - **AND** the lead SHALL be sentence-case English with a terminal period (e.g.
   `Restored your previous settings.`)
 - **AND** a `Preset:` row SHALL name the cleared preset, followed by one row per

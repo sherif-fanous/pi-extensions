@@ -201,7 +201,7 @@ describe("shown text", () => {
         'Preset "notes" applied.',
         expect.stringMatching(/^Presets Plus Status\n/),
         expect.stringMatching(/^Presets Plus Policy\n/),
-        expect.stringMatching(/^Presets Plus Clear\n/),
+        expect.stringMatching(/^Presets Plus Cleared\n/),
       ]),
     );
   });

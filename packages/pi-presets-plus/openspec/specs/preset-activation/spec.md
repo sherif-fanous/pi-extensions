@@ -768,7 +768,7 @@ info-dialog overlay (see the picker capability for those scenarios).
 - **WHEN** the user runs `/presets clear`
 - **THEN** the clear flow SHALL run per the clear requirement
 - **AND** the summary SHALL be delivered as a command report headed
-  `Presets Plus Clear`
+  `Presets Plus Cleared`
 
 #### Scenario: Status with no active preset
 
