@@ -24,6 +24,13 @@ starts the slicing flow.
 The command SHALL refuse to start, display a notification explaining why, and
 write nothing when preconditions are not met.
 
+#### Scenario: Unexpected argument
+
+- **WHEN** `/slice` is run with an argument that is not only whitespace
+- **THEN** a warning notification reads
+  `Unknown subcommand "<argument>". Try /slice.`, with the argument trimmed, and
+  no picker is shown
+
 #### Scenario: Not in the interactive terminal UI
 
 - **WHEN** `/slice` is run in Pi's print, JSON, or RPC mode
@@ -261,7 +268,9 @@ end message SHALL be placed in the editor.
 
 - **WHEN** the switch completes
 - **THEN** a notification reports the number of copied range entries, excluding
-  synthetic state and re-emitted label entries
+  synthetic state and re-emitted label entries, as
+  `Sliced 1 entry into a new session.` or
+  `Sliced <count> entries into a new session.`
 
 ### Requirement: Source session is not modified
 

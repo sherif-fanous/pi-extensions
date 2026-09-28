@@ -3,8 +3,15 @@
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
+  ExtensionUIContext,
   RegisteredCommand,
 } from "@earendil-works/pi-coding-agent";
+import {
+  createFakeCustom,
+  createFakeKeybindings,
+  createShownTextRecorder,
+  findShownTextViolations,
+} from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -24,6 +31,8 @@ vi.mock("../src/slice.js", async (importOriginal) => ({
 }));
 
 const { default: sessionSlice } = await import("../src/index.js");
+const actualPicker =
+  await vi.importActual<typeof import("../src/picker.js")>("../src/picker.js");
 
 const SOURCE_PATH = import.meta.filename;
 
@@ -62,6 +71,7 @@ const CANDIDATE_ENTRIES = [
 
 function makeContext(
   overrides: Partial<{
+    custom: ExtensionUIContext["custom"];
     header: { version?: number } | null;
     idle: boolean;
     mode: ExtensionCommandContext["mode"];
@@ -111,6 +121,7 @@ function makeContext(
     },
     switchSession,
     ui: {
+      custom: overrides.custom,
       notify: (message: string, type?: string) => {
         if (stale) throw new Error("This extension ctx is stale");
 
@@ -267,7 +278,7 @@ describe("sessionSlice", () => {
     // The original ctx is stale after the switch and must not be used.
     expect(notify).not.toHaveBeenCalled();
     expect(newNotify).toHaveBeenCalledWith(
-      "Sliced 1 entries into a new session.",
+      "Sliced 1 entry into a new session.",
       "info",
     );
 
@@ -280,12 +291,43 @@ describe("sessionSlice", () => {
 
   it("keeps the editor empty when slicing to the end", async () => {
     const command = registeredCommand();
-    const { ctx, setEditorText } = makeContext();
+    const { ctx, newNotify, setEditorText } = makeContext();
 
     mocks.showEndPicker.mockResolvedValueOnce({ kind: "end" });
     await command.handler("", ctx);
 
     expect(setEditorText).not.toHaveBeenCalled();
+    expect(newNotify).toHaveBeenCalledWith(
+      "Sliced 2 entries into a new session.",
+      "info",
+    );
+  });
+
+  it.each(["foo", "  status now  "])(
+    "rejects the argument %j without slicing",
+    async (args) => {
+      const command = registeredCommand();
+      const { ctx, notify } = makeContext();
+
+      await command.handler(args, ctx);
+
+      expect(notify).toHaveBeenCalledExactlyOnceWith(
+        `Session Slice: 1 warning\n- Unknown subcommand "${args.trim()}". Try /slice.`,
+        "warning",
+      );
+      expect(mocks.showStartPicker).not.toHaveBeenCalled();
+      expect(mocks.writeSliceFile).not.toHaveBeenCalled();
+    },
+  );
+
+  it("slices when the argument is only whitespace", async () => {
+    const command = registeredCommand();
+    const { ctx, switchSession } = makeContext();
+
+    await command.handler("   ", ctx);
+
+    expect(mocks.showStartPicker).toHaveBeenCalledTimes(1);
+    expect(switchSession).toHaveBeenCalledTimes(1);
   });
 
   it("reports a write failure without switching", async () => {
@@ -328,5 +370,83 @@ describe("sessionSlice", () => {
       "Session Slice: 1 warning\n- The sliced session was saved at /sessions/slice.jsonl, but Pi did not switch to it.",
       "warning",
     );
+  });
+});
+
+describe("Session Slice shown text", () => {
+  it("follows the family text standard on every /slice path", async () => {
+    const shown = createShownTextRecorder();
+    const command = registeredCommand();
+    const rendered: string[] = [];
+    // The real pickers: choose the first message, then end before the next.
+    const custom = createFakeCustom({
+      keybindings: createFakeKeybindings({
+        "tui.select.confirm": "\r",
+        "tui.select.up": "UP",
+      }),
+      keys: ["UP", "\r"],
+      rendered,
+    });
+    const run = async (
+      args: string,
+      overrides: Parameters<typeof makeContext>[0] = {},
+      switchCancelled = false,
+    ): Promise<void> => {
+      const { ctx, newNotify, notify, switchSession } = makeContext(overrides);
+
+      notify.mockImplementation(shown.notify);
+      newNotify.mockImplementation(shown.notify);
+
+      if (switchCancelled)
+        switchSession.mockResolvedValueOnce({ cancelled: true });
+
+      await command.handler(args, ctx);
+    };
+
+    await shown.recordCommand(command);
+
+    mocks.showStartPicker.mockImplementationOnce(actualPicker.showStartPicker);
+    mocks.showEndPicker.mockImplementationOnce(actualPicker.showEndPicker);
+    await run("", { custom });
+    await run("foo");
+    await run("", { mode: "rpc" });
+    await run("", { sessionFile: undefined });
+    await run("", { idle: false });
+    await run("", { header: { version: 2 } });
+    await run("", { contextEntries: [] });
+
+    mocks.writeSliceFile.mockImplementationOnce(() => {
+      throw new Error("read-only directory");
+    });
+    await run("");
+
+    await run("", {}, true);
+
+    mocks.showStartPicker.mockRejectedValueOnce(new Error("overlay closed"));
+    await run("");
+
+    for (const line of rendered) shown.record("text", line.trim());
+
+    expect(shown.texts).toContainEqual({
+      surface: "text",
+      text: "Slice: start at message",
+    });
+
+    expect(shown.texts).toContainEqual({
+      surface: "text",
+      text: "Slice: end before message",
+    });
+
+    expect(shown.texts).toContainEqual({
+      surface: "notification",
+      text: "Sliced 1 entry into a new session.",
+    });
+
+    expect(
+      findShownTextViolations(shown, {
+        displayName: "Session Slice",
+        slug: "session-slice",
+      }),
+    ).toEqual([]);
   });
 });

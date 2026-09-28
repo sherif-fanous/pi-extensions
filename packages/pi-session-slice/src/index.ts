@@ -1,5 +1,6 @@
 /** Registers `/slice` and coordinates boundary selection and session switching. */
 
+import { EXTENSION_NAME } from "./extension-name.js";
 import { showEndPicker, showStartPicker } from "./picker.js";
 import {
   buildSlice,
@@ -12,9 +13,11 @@ import type {
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 import {
-  describeError,
+  describeErrorSentence,
   guardCommand,
+  notifyUsageWarning,
   notifyWarnings,
+  pluralize,
   requireInteractiveTui,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -23,14 +26,14 @@ export async function handleSliceCommand(
   ctx: ExtensionCommandContext,
 ): Promise<void> {
   // Outside the TUI, ui.custom resolves undefined and no picker can open.
-  if (!requireInteractiveTui(ctx, "Session Slice", "/slice")) return;
+  if (!requireInteractiveTui(ctx, EXTENSION_NAME, "/slice")) return;
 
   // Pi assigns the path at session creation and defers the first write; like
   // /fork, slicing only records the path as parentSession and never reads it.
   const sourcePath = ctx.sessionManager.getSessionFile();
 
   if (!sourcePath) {
-    notifyWarnings(ctx, "Session Slice", [
+    notifyWarnings(ctx, EXTENSION_NAME, [
       "Slicing needs a session file to switch to, but Pi was started with --no-session.",
     ]);
 
@@ -38,7 +41,7 @@ export async function handleSliceCommand(
   }
 
   if (!ctx.isIdle()) {
-    notifyWarnings(ctx, "Session Slice", [
+    notifyWarnings(ctx, EXTENSION_NAME, [
       "The agent is still running. Wait for it to finish before slicing.",
     ]);
 
@@ -48,7 +51,7 @@ export async function handleSliceCommand(
   const header = ctx.sessionManager.getHeader();
 
   if (header?.version !== SUPPORTED_SESSION_VERSION) {
-    notifyWarnings(ctx, "Session Slice", [
+    notifyWarnings(ctx, EXTENSION_NAME, [
       `This session uses unsupported format version ${String(header?.version ?? "unknown")}.`,
     ]);
 
@@ -58,7 +61,7 @@ export async function handleSliceCommand(
   const candidates = listCandidates(ctx.sessionManager);
 
   if (candidates.length === 0) {
-    notifyWarnings(ctx, "Session Slice", [
+    notifyWarnings(ctx, EXTENSION_NAME, [
       "This session has no user messages yet, so there is nothing to slice.",
     ]);
 
@@ -74,7 +77,7 @@ export async function handleSliceCommand(
   );
 
   if (!startCandidate) {
-    notifyWarnings(ctx, "Session Slice", [
+    notifyWarnings(ctx, EXTENSION_NAME, [
       "The selected start message is no longer available.",
     ]);
 
@@ -93,7 +96,7 @@ export async function handleSliceCommand(
   const result = buildSlice(ctx.sessionManager.getBranch(), start.id, endId);
 
   if ("reason" in result) {
-    notifyWarnings(ctx, "Session Slice", [result.reason]);
+    notifyWarnings(ctx, EXTENSION_NAME, [result.reason]);
 
     return;
   }
@@ -109,7 +112,7 @@ export async function handleSliceCommand(
     );
   } catch (error) {
     ctx.ui.notify(
-      `Could not create the sliced session: ${describeError(error)}.`,
+      `Could not create the sliced session: ${describeErrorSentence(error)}`,
       "error",
     );
 
@@ -133,7 +136,7 @@ export async function handleSliceCommand(
   });
 
   if (switched.cancelled) {
-    notifyWarnings(ctx, "Session Slice", [
+    notifyWarnings(ctx, EXTENSION_NAME, [
       `The sliced session was saved at ${destination}, but Pi did not switch to it.`,
     ]);
 
@@ -141,7 +144,7 @@ export async function handleSliceCommand(
   }
 
   sliceCtx?.ui.notify(
-    `Sliced ${result.copiedCount} entries into a new session.`,
+    `Sliced ${pluralize(result.copiedCount, "entry", "entries")} into a new session.`,
     "info",
   );
 }
@@ -150,8 +153,15 @@ export async function handleSliceCommand(
 export default function sessionSlice(pi: ExtensionAPI): void {
   pi.registerCommand("slice", {
     description: "Start a new session from a range of this one",
-    handler: guardCommand("Session Slice", (_args, ctx) =>
-      handleSliceCommand(ctx),
-    ),
+    handler: guardCommand(EXTENSION_NAME, async (args, ctx) => {
+      // /slice takes no argument, so any argument is a usage mistake.
+      if (args.trim() !== "") {
+        notifyUsageWarning(ctx, EXTENSION_NAME, args, ["/slice"]);
+
+        return;
+      }
+
+      await handleSliceCommand(ctx);
+    }),
   });
 }
