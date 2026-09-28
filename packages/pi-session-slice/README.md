@@ -15,7 +15,8 @@ replies and tool results. Your original session stays unchanged.
 
 ## Requirements
 
-- Pi 0.80.4 or newer
+- Tested only against the latest stable release of
+  [Pi](https://github.com/earendil-works/pi)
 
 ## Install
 

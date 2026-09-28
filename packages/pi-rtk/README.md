@@ -22,7 +22,8 @@ normal shell path, which keeps their output out of the model's context.
 
 ## Requirements
 
-- Pi 0.80.4 or newer
+- Tested only against the latest stable release of
+  [Pi](https://github.com/earendil-works/pi)
 - [rtk](https://github.com/rtk-ai/rtk), installed and on your `PATH`
 
 Without the rtk binary, RTK still runs every command, unchanged.

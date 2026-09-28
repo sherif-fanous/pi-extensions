@@ -10,7 +10,8 @@ this package, so nothing here keeps module-level state.
 
 ## Requirements
 
-- Pi 0.80.4 or newer
+- Tested only against the latest stable release of
+  [Pi](https://github.com/earendil-works/pi)
 
 `@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui` are peer
 dependencies, so the extension uses the copies Pi provides.
@@ -415,8 +416,7 @@ Returns `<agentDir>/<extension>/config.json` for `"user"` and
 
 Reads the extension's `config.json` in each scope of `options.scopes` and
 returns one `ConfigFile` per scope. `ctx` needs `cwd` and `isProjectTrusted()`
-(Pi 0.79.1 or newer), which is consulted only when the project scope is read.
-The options are:
+which is consulted only when the project scope is read. The options are:
 
 - `extension`: the slug, which names the configuration directory.
 - `scopes`: the scopes the extension has, such as `["user", "project"]` or

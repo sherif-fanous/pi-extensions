@@ -5,20 +5,8 @@ to match your terminal or system appearance.
 
 ## Requirements
 
-- Pi 0.80.4 or newer
-
-On an older Pi, install an earlier release line instead. Versions 0.4.0 to 0.5.x
-need Pi 0.79.7 or newer:
-
-```shell
-pi install npm:@sherif-fanous/pi-theme-sync@0.5.x
-```
-
-Version 0.3.x runs on Pi versions before 0.79.7:
-
-```shell
-pi install npm:@sherif-fanous/pi-theme-sync@0.3.x
-```
+- Tested only against the latest stable release of
+  [Pi](https://github.com/earendil-works/pi)
 
 ## Install
 

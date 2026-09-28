@@ -3,8 +3,8 @@
 ## Purpose
 
 Define the shape every package in the pi-extensions workspace shares: the npm
-manifest, dependencies, published files, minimum Pi version, README, changelog,
-license, and the tooling each package runs. The five extensions are
+manifest, dependencies, published files, supported Pi version, README,
+changelog, license, and the tooling each package runs. The five extensions are
 `@sherif-fanous/pi-rtk`, `pi-theme-sync`, `pi-presets-plus`,
 `pi-notification-center`, and `pi-session-slice`; the published library is
 `@sherif-fanous/pi-extensions-core`. Each extension's own specs cover its
@@ -73,26 +73,17 @@ other development files.
 - **THEN** the listed files SHALL be the runtime sources plus `README.md`,
   `LICENSE`, `CHANGELOG.md`, and `package.json`
 
-### Requirement: Minimum Pi version
+### Requirement: Supported Pi version
 
-Every published package SHALL support Pi 0.80.4 or newer, the first Pi that
-provides both `ctx.mode` (added in 0.78.1) and `pi.registerEntryRenderer` (added
-in 0.80.4), which `pi-extensions-core` uses. A package MAY require a newer Pi
-for its own reasons. Each README SHALL state its package's minimum in its
-`## Requirements` section as `Pi <version> or newer`. A release that raises a
-package's minimum SHALL say so in a `**Breaking:**` changelog entry.
+Every published package SHALL be tested against the latest stable Pi release
+only, and SHALL NOT state a minimum Pi version. Each README SHALL say so as the
+first item of its `## Requirements` section.
 
 #### Scenario: Requirements section
 
 - **WHEN** a package's README is read
-- **THEN** its `## Requirements` section SHALL list `Pi <version> or newer`
-  first
-
-#### Scenario: Raised minimum
-
-- **WHEN** a release requires a newer Pi than the previous release
-- **THEN** its changelog SHALL contain the entry
-  `**Breaking:** Require Pi <version> or newer`
+- **THEN** its `## Requirements` section SHALL first say that the package is
+  tested only against the latest stable release of Pi
 
 ### Requirement: README follows the family template
 

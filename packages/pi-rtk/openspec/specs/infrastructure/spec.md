@@ -51,7 +51,7 @@ The system MUST provide a `bash` tool implementation that Pi uses when the
 
 The extension MUST run shell commands through Pi's exported
 `createLocalBashOperations()` helper and MUST NOT bundle a duplicate of Pi's
-local bash operations. The minimum supported Pi version is in the repository's
+local bash operations. The supported Pi version is in the repository's
 `extension-packaging` spec.
 
 #### Scenario: Runtime loading on a supported Pi version

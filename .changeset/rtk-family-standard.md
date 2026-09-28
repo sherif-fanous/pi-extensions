@@ -2,8 +2,6 @@
 "@sherif-fanous/pi-rtk": minor
 ---
 
-- Changed: **Breaking:** Require Pi 0.80.4 or newer. Upgrade Pi before upgrading
-  RTK
 - Changed: Show the real state in the footer: dim `RTK: on` while rewriting is
   on and the rtk binary runs, dim `RTK: off` while rewriting is off, and
   `RTK: unavailable` in the warning color when the rtk binary is missing from

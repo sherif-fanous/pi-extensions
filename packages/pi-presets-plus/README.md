@@ -16,9 +16,8 @@ presets with one keystroke.
 
 ## Requirements
 
-- Pi 0.80.5 or newer
-
-The `max` thinking level needs Pi 0.80.6 or newer.
+- Tested only against the latest stable release of
+  [Pi](https://github.com/earendil-works/pi)
 
 ## Install
 
