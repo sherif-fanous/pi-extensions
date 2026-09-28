@@ -54,11 +54,14 @@ it can't check.
   (`Could not save the configuration: …`). `<message>` is
   `describeErrorSentence(error)`; use `describeError` mid-sentence. No local
   error formatters and no `(error as Error).message`.
-- Reports: send them through `createCommandReport`, never as a plain `notify`,
-  with rows from `alignLabelRows`. Values: `on`/`off` for toggles, `none` for an
-  absent value, `never` for a time never set; no `yes`/`no`,
-  `enabled`/`disabled`, or `n/a`. Warnings go last, in one `Warnings:` block of
-  `- ` lines.
+- Reports: lay the body out with `formatReport` and send it through
+  `createCommandReport`, never as a plain `notify`. The body is the heading
+  `<Display Name> <Thing>`, an optional unindented lead sentence, the aligned
+  `Label: value` rows (a row may instead be an indented sentence, such as
+  `No preset is active.`), then the `Config:` block, then the warnings last, in
+  one `Warnings:` block of `- ` lines, with a blank line between blocks. Values:
+  `on`/`off` for toggles, `none` for an absent value, `never` for a time never
+  set; no `yes`/`no`, `enabled`/`disabled`, or `n/a`.
 - Scopes: label them `User` and `Project`, as Pi does, never `Global`.
 - Internal keys: the slug is the package folder without `pi-` and is also the
   config directory name. Transcript entry types, widget keys, and message types

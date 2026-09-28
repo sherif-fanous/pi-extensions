@@ -6,8 +6,8 @@
 import type { LoadedConfig } from "../config.js";
 import { EXTENSION_NAME } from "../extension-name.js";
 import {
-  alignLabelRows,
   createCommandReport,
+  formatReport,
   pluralize,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -36,24 +36,17 @@ export const registerStatusReportRenderer = statusReport.register;
  */
 export function formatStatusReport(status: NotificationStatus): string {
   const { toast } = status.loaded.config;
-  const lines = [
-    `${EXTENSION_NAME} Status`,
-    ...alignLabelRows([
+
+  return formatReport(EXTENSION_NAME, "Status", {
+    config: status.loaded.outcome.statusLines,
+    rows: [
       ["Toasts:", status.toasts ? "on" : "off"],
       ["Captured:", pluralize(status.captured, "notification")],
       ["Visible toasts:", `at most ${String(toast.maxVisible)}`],
       ["Toast timeout:", `${String(toast.timeoutMs)}ms`],
       ["Toast height:", `at most ${pluralize(toast.maxLines, "line")}`],
       ["Toast width:", `at most ${pluralize(toast.width, "column")}`],
-    ]),
-    "",
-    ...status.loaded.outcome.statusLines,
-  ];
-  const warnings = status.loaded.outcome.statusWarnings;
-
-  if (warnings.length > 0) {
-    lines.push("", "Warnings:", ...warnings.map((warning) => `- ${warning}`));
-  }
-
-  return lines.join("\n");
+    ],
+    warnings: status.loaded.outcome.statusWarnings,
+  });
 }

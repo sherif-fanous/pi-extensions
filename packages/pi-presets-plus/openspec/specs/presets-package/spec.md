@@ -114,13 +114,13 @@ requirement is that no two surfaces hold their own copy of the same string.
 
 #### Scenario: Clear summary lead and labels follow the convention
 
-- **WHEN** `renderClearSummary` renders its heading and lead sentence
+- **WHEN** `clearReport` builds its heading and lead sentence
 - **THEN** the heading SHALL read `Presets Plus Cleared`
 - **AND** the lead SHALL be sentence-case English with a terminal period (e.g.
   `Restored your previous settings.`)
 - **AND** a `Preset:` row SHALL name the cleared preset, followed by one row per
   field, each label sentence case with a trailing colon (`Model:`,
-  `Thinking level:`, `Tools:`), all aligned by `alignLabelRows`
+  `Thinking level:`, `Tools:`), all aligned by `formatReport`
 
 #### Scenario: Activation-failure reason follows the convention
 
@@ -458,42 +458,41 @@ Every existing call site that performs the identity-equality lookup
   `samePresetIdentity`
 - **AND** `src/hotkey-conflicts.ts` SHALL NOT exist
 
-### Requirement: Clear-summary renderer is split from the clear engine
+### Requirement: Clear and status return finished reports
 
-The package SHALL split the pure clear-summary rendering surface out of
-`src/activation/clear.ts` into a new module `src/ui/clear-summary.ts`. The pure
-rendering surface previously living in `src/activation/clear.ts` SHALL move to
-that new module, exporting at minimum `renderClearSummary`, `chooseClearLead`,
-and any helpers required to render a `ClearPart[]` (`formatRowValue`,
-`formatModel`, `formatTools`, `isKeptLike`, `isRestoreLike`, and the
-`FIELD_LABELS` table). `renderClearSummary` SHALL return a plain report body;
-styling is left to the command report or `styleReport`.
+`src/ui/clear-report.ts` SHALL export `clearReport(name, parts)`, which builds
+the clear report from the cleared preset's name and its `ClearPart[]`, and
+`src/commands/presets/status.ts` SHALL export `statusReport(ctx, pi, session)`,
+which loads the presets and builds the status report. Each SHALL return a
+finished report `{ title, body, severity }`: `body` is a plain report body laid
+out by core's `formatReport`, with the configuration's warnings last; `title` is
+its heading, `Presets Plus Cleared` or `Presets Plus Status`; and `severity` is
+decided once, inside the report. A clear report SHALL be a `warning` when a
+field was `restore-failed` or `restored-partial`, and a status report SHALL be a
+`warning` when the active preset is no longer loaded.
 
-The engine module `src/activation/clear.ts` SHALL retain `decideClear`,
-`executeClear`, `clear`, `clearReturning`, and the `ClearDecision` / `ClearPart`
-/ `ClearWrites` / `ClearSnapshot` / `ClearAction` / `ClearField` types. After
-this change `src/activation/clear.ts` SHALL NOT import any rendering helper from
-`src/ui/clear-summary.ts` except inside the `clear` runner that produces the
-user-visible notification.
+`clear(ctx, pi, session)` in `src/activation/clear.ts` SHALL run the clear and
+return its report, or `undefined` when no preset is active. The `/presets clear`
+and `/presets status` subcommands SHALL deliver the report as a command report,
+and the picker SHALL show the same report in an info dialog titled `title`.
+Neither SHALL compute a severity or append warnings of its own.
 
-The renderer module SHALL be importable by both the `clear` runner and
-`src/ui/picker.ts` (which renders the same `ClearPart[]` inline after
-`clearReturning` returns).
+The model and tool values and the phrase for each overlay field classification
+SHALL live in one module, `src/ui/overlay-wording.ts`, which both reports read.
 
-#### Scenario: Renderer module exists with the documented exports
+#### Scenario: One report, two surfaces
 
-- **WHEN** `src/ui/clear-summary.ts` is inspected after the change
-- **THEN** it SHALL export `renderClearSummary` and `chooseClearLead` at minimum
-- **AND** the engine file `src/activation/clear.ts` SHALL NOT define
-  `renderClearSummary` or `chooseClearLead`
+- **WHEN** a clear leaves out baseline tools Pi no longer has and the user runs
+  it from `/presets clear` or from the picker
+- **THEN** both show the body `clearReport` built, at `warning` severity
 
-#### Scenario: Engine and renderer are separately testable
+#### Scenario: Engine and report are separately testable
 
-- **WHEN** the test files for clear are inspected after the change
+- **WHEN** the test files for clear are inspected
 - **THEN** decision logic tests (e.g. `tests/activation/clear-decide.test.ts`)
   SHALL import from `src/activation/clear.ts` only
-- **AND** the new `tests/ui/clear-summary.test.ts` SHALL import from
-  `src/ui/clear-summary.ts` only
+- **AND** `tests/ui/clear-report.test.ts` SHALL import `clearReport` from
+  `src/ui/clear-report.ts`
 
 ### Requirement: Apply, clear, drift, and flag take session as an explicit parameter
 
@@ -502,8 +501,7 @@ Functions that mutate or read the active-preset attachment SHALL declare
 a module-scoped accessor. Concretely:
 
 - `apply(preset, ctx, pi, session)` in `src/activation/apply.ts`.
-- `clear(ctx, pi, session)` and `clearReturning(ctx, pi, session)` in
-  `src/activation/clear.ts`.
+- `clear(ctx, pi, session)` in `src/activation/clear.ts`.
 - `handleModelSelectDrift(event, ctx, pi, session)` and
   `syncDirtyFromCurrentState(ctx, pi, session)` in
   `src/activation/drift-handlers.ts`.
@@ -517,9 +515,9 @@ consumer for the lifetime of the extension.
 
 #### Scenario: Functions declare their session dependency
 
-- **WHEN** the signatures of `apply`, `clear`, `clearReturning`,
-  `handleModelSelectDrift`, `syncDirtyFromCurrentState`, and `applyPresetFlag`
-  are inspected after the change
+- **WHEN** the signatures of `apply`, `clear`, `handleModelSelectDrift`,
+  `syncDirtyFromCurrentState`, and `applyPresetFlag` are inspected after the
+  change
 - **THEN** each SHALL accept an `ActivePresetSession` parameter
 - **AND** none SHALL import a free `getActive()` / `setActive()` /
   `clearActive()` from a module-scoped cell

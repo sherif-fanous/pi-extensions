@@ -3,15 +3,15 @@
  * overlays, how the session's current model, thinking level, and tools
  * compare against both, and the state of each configuration file.
  */
-import type { OverlayFieldClassification } from "../../activation/classify-overlay-field.js";
 import { assessOverlay } from "../../activation/overlay-assessment.js";
 import type { ActivePresetSession } from "../../activation/session.js";
 import { findPreset } from "../../preset-identity.js";
 import { loadAll } from "../../store/api.js";
-import type { LoadedPreset } from "../../types.js";
+import type { ActivePresetState } from "../../types.js";
 import {
-  appendReportWarnings,
   deliverCommandReport,
+  presetsReport,
+  type PresetsReport,
 } from "../../ui/command-report.js";
 import {
   BASELINE_MODEL_LABEL,
@@ -26,39 +26,76 @@ import {
   PRESET_TOOLS_LABEL,
   RESTORE_LABEL,
   SCOPE_LABEL,
-  STATUS_DIALOG_TITLE,
 } from "../../ui/labels.js";
+import {
+  formatModel,
+  formatTools,
+  OVERLAY_FIELD_WORDING,
+} from "../../ui/overlay-wording.js";
 import { formatScopeName } from "../../ui/widgets.js";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-import { alignLabelRows } from "@sherif-fanous/pi-extensions-core";
+import type { ReportRow } from "@sherif-fanous/pi-extensions-core";
 
-/**
- * Report text, its severity, and the warnings about values in the loaded
- * files. File problems show in the body's `Config:` block instead.
- */
-export interface StatusBodyResult {
-  readonly body: string;
-  readonly severity: "info" | "warning";
-  readonly warnings: readonly string[];
+/** Run `/presets status` and deliver the report to the user. */
+export async function runStatus(
+  ctx: ExtensionCommandContext,
+  pi: ExtensionAPI,
+  session: ActivePresetSession,
+): Promise<void> {
+  const report = await statusReport(ctx, pi, session);
+
+  deliverCommandReport(ctx, pi, {
+    body: report.body,
+    severity: report.severity,
+  });
 }
 
 /**
- * Render the status report for the active preset.
- *
- * A session whose baseline was never captured gets the shorter report
- * that omits the baseline and preset rows.
+ * Load the presets and build the status report, ending with the `Config:`
+ * block and the configuration's warnings. It is a warning when the active
+ * preset is no longer loaded.
  */
-export function formatStatus(
-  active: ReturnType<ActivePresetSession["current"]>,
-  _preset: LoadedPreset,
+export async function statusReport(
+  ctx: ExtensionCommandContext,
+  pi: Pick<ExtensionAPI, "getActiveTools" | "getThinkingLevel">,
+  session: ActivePresetSession,
+): Promise<PresetsReport> {
+  const active = session.current();
+  const { config, presets } = await loadAll(ctx);
+  const report = (
+    rows: readonly ReportRow[],
+    severity: PresetsReport["severity"],
+  ) =>
+    presetsReport(
+      "Status",
+      { config: config.statusLines, rows, warnings: config.statusWarnings },
+      severity,
+    );
+
+  if (!active) return report(["No preset is active."], "info");
+
+  if (!findPreset(presets, active)) {
+    return report(
+      [`Active preset "${active.name}" is no longer loaded.`],
+      "warning",
+    );
+  }
+
+  return report(statusRows(active, ctx, pi), "info");
+}
+
+/**
+ * The rows for the active preset. A session whose baseline was never
+ * captured gets the shorter list that omits the baseline and preset rows.
+ */
+function statusRows(
+  active: ActivePresetState,
   ctx: Pick<ExtensionCommandContext, "model">,
   pi: Pick<ExtensionAPI, "getActiveTools" | "getThinkingLevel">,
-): string {
-  if (!active) return `${STATUS_DIALOG_TITLE}\n  No preset is active.`;
-
+): ReportRow[] {
   const currentModel = ctx.model
     ? { provider: ctx.model.provider, id: ctx.model.id }
     : null;
@@ -72,134 +109,47 @@ export function formatStatus(
 
   if (assessment.kind === "unknown") {
     return [
-      STATUS_DIALOG_TITLE,
-      ...alignLabelRows([
-        [`${PRESET_LABEL}:`, active.name],
-        [`${SCOPE_LABEL}:`, formatScopeName(active.scope)],
-        [
-          `${RESTORE_LABEL}:`,
-          "No saved baseline. Clear will only turn the preset off.",
-        ],
-        [`${CURRENT_MODEL_LABEL}:`, formatModel(currentModel)],
-        [`${CURRENT_THINKING_LABEL}:`, currentThinking],
-        [`${CURRENT_TOOLS_LABEL}:`, formatTools(currentTools)],
-      ]),
-    ].join("\n");
+      [`${PRESET_LABEL}:`, active.name],
+      [`${SCOPE_LABEL}:`, formatScopeName(active.scope)],
+      [
+        `${RESTORE_LABEL}:`,
+        "No saved baseline. Clear will only turn the preset off.",
+      ],
+      [`${CURRENT_MODEL_LABEL}:`, formatModel(currentModel)],
+      [`${CURRENT_THINKING_LABEL}:`, currentThinking],
+      [`${CURRENT_TOOLS_LABEL}:`, formatTools(currentTools)],
+    ];
   }
 
   const { baseline, lastApplied } = assessment.restore;
-  const modelClass = statusLabel(assessment.model);
-  const thinkingClass = statusLabel(assessment.thinking);
-  const toolsClass =
+  const toolsWording =
     assessment.tools === "not-owned"
       ? "Not managed by active preset"
-      : statusLabel(assessment.tools);
+      : OVERLAY_FIELD_WORDING[assessment.tools];
 
   return [
-    STATUS_DIALOG_TITLE,
-    ...alignLabelRows([
-      [`${PRESET_LABEL}:`, active.name],
-      [`${SCOPE_LABEL}:`, formatScopeName(active.scope)],
-      [`${BASELINE_MODEL_LABEL}:`, formatModel(baseline.model)],
-      [`${BASELINE_THINKING_LABEL}:`, baseline.thinkingLevel],
-      [`${BASELINE_TOOLS_LABEL}:`, formatTools(baseline.tools)],
-      [`${PRESET_MODEL_LABEL}:`, formatModel(lastApplied.model)],
-      [`${PRESET_THINKING_LABEL}:`, lastApplied.thinkingLevel],
-      [
-        `${PRESET_TOOLS_LABEL}:`,
-        lastApplied.tools ? formatTools(lastApplied.tools) : "none",
-      ],
-      [
-        `${CURRENT_MODEL_LABEL}:`,
-        `${formatModel(currentModel)} (${modelClass})`,
-      ],
-      [`${CURRENT_THINKING_LABEL}:`, `${currentThinking} (${thinkingClass})`],
-      [
-        `${CURRENT_TOOLS_LABEL}:`,
-        `${formatTools(currentTools)} (${toolsClass})`,
-      ],
-    ]),
-  ].join("\n");
-}
-
-/**
- * Load the presets and build the status report, severity, and warnings.
- * The body ends with the `Config:` block after a blank line.
- */
-export async function formatStatusBody(
-  ctx: ExtensionCommandContext,
-  pi: ExtensionAPI,
-  session: ActivePresetSession,
-): Promise<StatusBodyResult> {
-  const active = session.current();
-  const { config, presets } = await loadAll(ctx);
-  const withConfig = (main: string) =>
-    [main, "", ...config.statusLines].join("\n");
-  const warnings = config.statusWarnings;
-
-  if (!active) {
-    return {
-      body: withConfig(`${STATUS_DIALOG_TITLE}\n  No preset is active.`),
-      severity: "info",
-      warnings,
-    };
-  }
-
-  const preset = findPreset(presets, active);
-
-  if (!preset) {
-    return {
-      body: withConfig(
-        `${STATUS_DIALOG_TITLE}\n  Active preset "${active.name}" is no longer loaded.`,
-      ),
-      severity: "warning",
-      warnings,
-    };
-  }
-
-  return {
-    body: withConfig(formatStatus(active, preset, ctx, pi)),
-    severity: "info",
-    warnings,
-  };
-}
-
-/** Run `/presets status` and deliver the report to the user. */
-export async function runStatus(
-  ctx: ExtensionCommandContext,
-  pi: ExtensionAPI,
-  session: ActivePresetSession,
-): Promise<void> {
-  const result = await formatStatusBody(ctx, pi, session);
-
-  const body = appendReportWarnings(result.body, result.warnings);
-
-  deliverCommandReport(ctx, pi, {
-    body,
-    severity: result.severity,
-  });
-}
-
-/**
- * Wording each {@link OverlayFieldClassification} gets in a status row.
- *
- * `renderClearSummary` annotates its rows with the same vocabulary, so a
- * phrase that changes here has to change there too.
- */
-const STATUS_VOCABULARY: Record<OverlayFieldClassification, string> = {
-  "already-baseline": "Already at baseline",
-  "matches-last-applied": "Managed by active preset",
-  "user-override": "Left as-is because you changed it after activation",
-};
-
-function formatModel(model: { provider: string; id: string } | null): string {
-  return model ? `${model.provider}/${model.id}` : "none";
-}
-
-function formatTools(tools: readonly string[]): string {
-  return tools.length > 0 ? tools.join(", ") : "none";
-}
-
-function statusLabel(classification: OverlayFieldClassification): string {
-  return STATUS_VOCABULARY[classification];
+    [`${PRESET_LABEL}:`, active.name],
+    [`${SCOPE_LABEL}:`, formatScopeName(active.scope)],
+    [`${BASELINE_MODEL_LABEL}:`, formatModel(baseline.model)],
+    [`${BASELINE_THINKING_LABEL}:`, baseline.thinkingLevel],
+    [`${BASELINE_TOOLS_LABEL}:`, formatTools(baseline.tools)],
+    [`${PRESET_MODEL_LABEL}:`, formatModel(lastApplied.model)],
+    [`${PRESET_THINKING_LABEL}:`, lastApplied.thinkingLevel],
+    [
+      `${PRESET_TOOLS_LABEL}:`,
+      lastApplied.tools ? formatTools(lastApplied.tools) : "none",
+    ],
+    [
+      `${CURRENT_MODEL_LABEL}:`,
+      `${formatModel(currentModel)} (${OVERLAY_FIELD_WORDING[assessment.model]})`,
+    ],
+    [
+      `${CURRENT_THINKING_LABEL}:`,
+      `${currentThinking} (${OVERLAY_FIELD_WORDING[assessment.thinking]})`,
+    ],
+    [
+      `${CURRENT_TOOLS_LABEL}:`,
+      `${formatTools(currentTools)} (${toolsWording})`,
+    ],
+  ];
 }

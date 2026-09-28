@@ -3,8 +3,8 @@
 import { EXTENSION_NAME } from "../extension-name.js";
 import type { RuntimeStatus } from "../types.js";
 import {
-  alignLabelRows,
   createCommandReport,
+  formatReport,
 } from "@sherif-fanous/pi-extensions-core";
 
 const statusReport = createCommandReport("theme-sync:status-report");
@@ -27,9 +27,9 @@ export function formatStatusReport(
   formatTime: (timestamp: number) => string = (timestamp) =>
     new Date(timestamp).toLocaleString(),
 ): string {
-  const lines = [
-    `${EXTENSION_NAME} Status`,
-    ...alignLabelRows([
+  return formatReport(EXTENSION_NAME, "Status", {
+    config: status.configStatusLines,
+    rows: [
       ["Appearance:", status.currentAppearance],
       ["Applied theme:", status.appliedTheme],
       ["Desired theme:", status.desiredTheme ?? "none"],
@@ -44,20 +44,7 @@ export function formatStatusReport(
           : "never",
       ],
       ["Last event:", status.lastEvent],
-    ]),
-  ];
-
-  if (status.configStatusLines.length > 0) {
-    lines.push("", ...status.configStatusLines);
-  }
-
-  if (status.warnings.length > 0) {
-    lines.push(
-      "",
-      "Warnings:",
-      ...status.warnings.map((warning) => `- ${warning}`),
-    );
-  }
-
-  return lines.join("\n");
+    ],
+    warnings: status.warnings,
+  });
 }

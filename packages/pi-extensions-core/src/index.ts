@@ -69,10 +69,12 @@ export {
   type OverlaySize,
 } from "./tui/overlay.js";
 export {
-  alignLabelRows,
   type CommandReport,
   type CommandReportChannel,
   createCommandReport,
+  formatReport,
+  type ReportParts,
+  type ReportRow,
   styleReport,
 } from "./commands/report.js";
 export { pluralize } from "./text.js";

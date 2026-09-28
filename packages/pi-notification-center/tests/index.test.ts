@@ -380,8 +380,8 @@ describe("/notifications status", () => {
     harness.notify.mockClear();
     await harness.run("status");
 
-    expect(harness.notify.mock.calls[0]?.[0]).toMatch(
-      /\nWarnings:\n- Setting "toast\.width" must be an integer from 20 through 80, not 1\. Using the default value 64\.$/u,
+    expect(harness.notify.mock.calls[0]?.[0]).toContain(
+      '\n- Setting "toast.width" must be an integer from 20 through 80, not 1. Using the default value 64.',
     );
   });
 

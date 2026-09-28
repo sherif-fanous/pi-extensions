@@ -195,11 +195,10 @@ list the same warnings without `extras`.
 ### Requirement: Status reports show a Config block
 
 The outcome's `statusLines` SHALL be a `Config:` line followed, User before
-Project, by each file's `alignLabelRows` row `<Scope>: <state>` and a line
-holding its path aligned under the state. States SHALL read `loaded`,
-`not found`, `invalid: <reason>`, and `skipped (untrusted)`. `statusWarnings`
-SHALL list migration warnings, then value warnings, leaving file problems to
-`statusLines`.
+Project, by each file's aligned label row `<Scope>: <state>` and a line holding
+its path aligned under the state. States SHALL read `loaded`, `not found`,
+`invalid: <reason>`, and `skipped (untrusted)`. `statusWarnings` SHALL list
+migration warnings, then value warnings, leaving file problems to `statusLines`.
 
 #### Scenario: A loaded user file and an untrusted project file
 

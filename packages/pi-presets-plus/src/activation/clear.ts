@@ -3,12 +3,9 @@
  * activation, leaving any field the user changed since then untouched.
  */
 import type { ActivePresetState, ThinkingLevel } from "../types.js";
-import {
-  formatModel,
-  formatTools,
-  renderClearSummary,
-} from "../ui/clear-summary.js";
-import { deliverCommandReport } from "../ui/command-report.js";
+import { clearReport } from "../ui/clear-report.js";
+import type { PresetsReport } from "../ui/command-report.js";
+import { formatModel, formatTools } from "../ui/overlay-wording.js";
 import { assessOverlay } from "./overlay-assessment.js";
 import type { ActivePresetSession } from "./session.js";
 import type {
@@ -36,12 +33,6 @@ export interface ClearPart {
    * carries the baseline value the clear could not reach.
    */
   readonly value: string;
-}
-
-/** Name of the cleared preset and the per-field outcomes to report. */
-export interface ClearResult {
-  readonly name: string;
-  readonly parts: readonly ClearPart[];
 }
 
 /** Active preset plus the Pi values a clear decision compares it against. */
@@ -75,39 +66,14 @@ export type ClearAction =
 export type ClearField = "model" | "thinking" | "tools";
 
 /**
- * Run a clear and deliver its summary as a command report, or say that no
- * preset is active.
+ * Run a clear and return its report, or `undefined` when no preset is
+ * active.
  */
 export async function clear(
   ctx: ExtensionCommandContext,
   pi: ExtensionAPI,
   session: ActivePresetSession,
-): Promise<void> {
-  const result = await clearReturning(ctx, pi, session);
-
-  if (!result) {
-    ctx.ui.notify("No preset is active.", "info");
-
-    return;
-  }
-
-  deliverCommandReport(ctx, pi, {
-    body: renderClearSummary(result.name, result.parts),
-    severity: result.parts.some(
-      (part) =>
-        part.action === "restore-failed" || part.action === "restored-partial",
-    )
-      ? "warning"
-      : "info",
-  });
-}
-
-/** Run a clear and return its outcome, or `undefined` when none is active. */
-export async function clearReturning(
-  ctx: ExtensionCommandContext,
-  pi: ExtensionAPI,
-  session: ActivePresetSession,
-): Promise<ClearResult | undefined> {
+): Promise<PresetsReport | undefined> {
   const active = session.current();
 
   if (!active) return undefined;
@@ -133,7 +99,7 @@ export async function clearReturning(
 
   session.clear(ctx, pi);
 
-  return { name: active.name, parts: finalParts };
+  return clearReport(active.name, finalParts);
 }
 
 /** Decide the writes and per-field outcomes for a clear, writing nothing. */

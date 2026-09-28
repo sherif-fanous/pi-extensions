@@ -1,20 +1,20 @@
 /**
- * Renders the summary shown after a preset is cleared: a heading, a lead
- * sentence, the preset's name, and one row per managed field.
+ * Builds the report shown after a preset is cleared: a lead sentence, the
+ * preset's name, and one row per managed field.
  */
 import type {
   ClearAction,
   ClearField,
   ClearPart,
 } from "../activation/clear.js";
+import { presetsReport, type PresetsReport } from "./command-report.js";
 import {
-  CLEAR_DIALOG_TITLE,
   MODEL_LABEL,
   PRESET_LABEL,
   THINKING_LABEL,
   TOOLS_LABEL,
 } from "./labels.js";
-import { alignLabelRows } from "@sherif-fanous/pi-extensions-core";
+import { OVERLAY_FIELD_WORDING } from "./overlay-wording.js";
 
 /** Row label for each field the clear summary reports on. */
 const FIELD_LABELS: Record<ClearField, string> = {
@@ -24,6 +24,35 @@ const FIELD_LABELS: Record<ClearField, string> = {
 };
 
 /**
+ * Build the clear report for the cleared preset `name`. It is a warning
+ * when a field could not be restored in full.
+ */
+export function clearReport(
+  name: string,
+  parts: readonly ClearPart[],
+): PresetsReport {
+  return presetsReport(
+    "Cleared",
+    {
+      lead: chooseClearLead(parts),
+      rows: [
+        [`${PRESET_LABEL}:`, name],
+        ...parts.map(
+          (part) =>
+            [`${FIELD_LABELS[part.field]}:`, formatRowValue(part)] as const,
+        ),
+      ],
+    },
+    parts.some(
+      (part) =>
+        part.action === "restore-failed" || part.action === "restored-partial",
+    )
+      ? "warning"
+      : "info",
+  );
+}
+
+/**
  * Choose the plain-English lead sentence that sits under the title.
  *
  * The sentence describes the overall disposition so the per-row values
@@ -31,7 +60,7 @@ const FIELD_LABELS: Record<ClearField, string> = {
  * no saved baseline, a failed restore, everything already matching the
  * baseline, everything restored, everything kept, then a mixed result.
  */
-export function chooseClearLead(parts: readonly ClearPart[]): string {
+function chooseClearLead(parts: readonly ClearPart[]): string {
   if (parts.every((part) => part.action === "unknown")) {
     return "No saved baseline. Pi left your current settings unchanged.";
   }
@@ -57,15 +86,8 @@ export function chooseClearLead(parts: readonly ClearPart[]): string {
   return "Pi restored some settings and kept your manual changes for the rest.";
 }
 
-/** Format a model reference as `provider/id`, or `none` when unset. */
-export function formatModel(
-  model: { provider: string; id: string } | null,
-): string {
-  return model ? `${model.provider}/${model.id}` : "none";
-}
-
 /** Render the post-colon body for a single field row. */
-export function formatRowValue(part: ClearPart): string {
+function formatRowValue(part: ClearPart): string {
   switch (part.action) {
     case "already-baseline":
     case "restored":
@@ -87,34 +109,8 @@ export function formatRowValue(part: ClearPart): string {
         : part.value;
 
     case "user-override":
-      return `${part.value} (Left as-is because you changed it after activation)`;
+      return `${part.value} (${OVERLAY_FIELD_WORDING["user-override"]})`;
   }
-}
-
-/** Format a tool list as a comma-separated string, or `none` when empty. */
-export function formatTools(tools: readonly string[]): string {
-  return tools.length > 0 ? tools.join(", ") : "none";
-}
-
-/**
- * Render the full clear summary as a plain report body: heading, lead
- * sentence, the cleared preset's name, and one row per field.
- */
-export function renderClearSummary(
-  name: string,
-  parts: readonly ClearPart[],
-): string {
-  return [
-    CLEAR_DIALOG_TITLE,
-    chooseClearLead(parts),
-    ...alignLabelRows([
-      [`${PRESET_LABEL}:`, name],
-      ...parts.map(
-        (part) =>
-          [`${FIELD_LABELS[part.field]}:`, formatRowValue(part)] as const,
-      ),
-    ]),
-  ].join("\n");
 }
 
 function isKeptLike(action: ClearAction): boolean {

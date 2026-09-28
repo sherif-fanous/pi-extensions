@@ -376,6 +376,21 @@ describe("runPresetsCommand", () => {
     );
   });
 
+  it("dispatches `clear` and says when no preset is active", async () => {
+    const { ctx, notify } = makeStubCtx();
+
+    await runPresetsCommand("clear", ctx, {
+      hotkeys: new HotkeyRegistry(),
+      pi: makeStubPi(),
+      session: new ActivePresetSession(),
+    });
+
+    expect(notify).toHaveBeenCalledExactlyOnceWith(
+      "No preset is active.",
+      "info",
+    );
+  });
+
   it("dispatches `show-prompt` to runShowPrompt", async () => {
     const { ctx, notify } = makeStubCtx();
 

@@ -2,10 +2,10 @@
 
 ## Purpose
 
-Give Pi extensions one way to show the plain-text report a command produces: a
-styled transcript entry in TUI mode that survives a reload, and a notification
-in every other mode, so every extension's reports look alike without each one
-redefining the delivery, rendering, and styling.
+Give Pi extensions one way to lay out and show the plain-text report a command
+produces: a styled transcript entry in TUI mode that survives a reload, and a
+notification in every other mode, so every extension's reports look alike
+without each one redefining the layout, delivery, rendering, and styling.
 
 ## Requirements
 
@@ -18,8 +18,9 @@ line of a plain report body:
 - A line that is exactly `Warnings:`, and every line after it, SHALL be
   warning-colored.
 - Any other line matching `label: value`, where the first colon is followed by
-  whitespace or ends the line, SHALL keep its leading whitespace and render the
-  text up to and including that colon muted, leaving the rest unchanged.
+  whitespace or ends the line, and that is not a `- ` list item, SHALL keep its
+  leading whitespace and render the text up to and including that colon muted,
+  leaving the rest unchanged.
 - Every remaining line SHALL be returned unchanged.
 
 #### Scenario: The heading
@@ -41,6 +42,12 @@ line of a plain report body:
   or `team:plan`
 - **THEN** it is returned unchanged
 
+#### Scenario: A list item
+
+- **WHEN** a line after the heading, and before any `Warnings:` line, starts
+  with `- ` after its leading whitespace, such as `  - key: value`
+- **THEN** it is returned unchanged
+
 #### Scenario: A warnings section
 
 - **WHEN** a body contains a `Warnings:` line
@@ -53,19 +60,41 @@ line of a plain report body:
   no colon
 - **THEN** it is returned unchanged
 
-### Requirement: Label rows are aligned
+### Requirement: Report bodies are laid out by one function
 
-The package SHALL export an `alignLabelRows(rows)` function that turns
-`[label, value]` pairs into lines of the form `  <label><padding> <value>`,
-where the padding brings every label to the length of the longest label in
-`rows`.
+The package SHALL export a `formatReport(displayName, thing, parts)` function
+that returns a plain report body from `{ lead?, rows, config?, warnings? }`:
 
-#### Scenario: Labels of different lengths
+- The heading `<displayName> <thing>`.
+- `lead`, when given, on the next line without indentation.
+- One line per row, indented by two spaces. A `[label, value]` row SHALL read
+  `  <label><padding> <value>`, where the padding brings every label to the
+  length of the longest label among the rows. A sentence row SHALL read
+  `  <sentence>` and SHALL take no part in the alignment.
+- When `config` is not empty, a blank line and then the `config` lines.
+- When `warnings` is not empty, a blank line, a `Warnings:` line, and one
+  `- <warning>` line per warning, in order.
 
-- **WHEN** `alignLabelRows` receives labels of different lengths
-- **THEN** every line starts with two spaces
-- **AND** every value starts in the same column, one space after the longest
-  label
+#### Scenario: Every part
+
+- **WHEN** `formatReport` receives a lead, label and sentence rows, config
+  lines, and warnings
+- **THEN** the body is the heading, the lead, the rows with every label's value
+  starting in the same column, a blank line, the config lines, a blank line,
+  `Warnings:`, and the `- ` warning lines
+
+#### Scenario: Empty parts
+
+- **WHEN** `formatReport` receives no lead and empty `config` and `warnings`
+- **THEN** the body is the heading followed by the rows, with no blank line
+
+#### Scenario: Styling agrees with the shown-text checker
+
+- **WHEN** a body built by `formatReport` is styled by `styleReport` and checked
+  by the testing package's `findShownTextViolations`
+- **THEN** the lines `styleReport` gives a muted label are the ones whose labels
+  the checker reads, and neither treats the lead, a sentence row, or a list item
+  as a label
 
 ### Requirement: Reports are delivered by mode
 

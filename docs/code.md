@@ -35,9 +35,9 @@ README for the full API.
   handle (`load`, `read`, `update`, `write`, `migrateKeys`, `path`); see
   [config.md](config.md). An old layout a migration reads sits beside the
   handle's `path`, and the migration saves the new file with `write`.
-- Reports: `createCommandReport` to show a command's report (transcript entry in
-  TUI mode, notification otherwise), `styleReport` for other surfaces,
-  `alignLabelRows` for `Label: value` rows.
+- Reports: `formatReport` to lay out a report body, `createCommandReport` to
+  show it (transcript entry in TUI mode, notification otherwise), and
+  `styleReport` for other surfaces.
 - Completions: `subcommandCompletions([{ name, description? }])` for fixed
   subcommands.
 - Mode checks: `isInteractiveTui(ctx)` rather than comparing `ctx.mode`.

@@ -538,7 +538,7 @@ height.
 When the user presses `c` (clear) inside the picker and no preset is currently
 active, the package SHALL NOT open the "Clear Active Preset?" confirm dialog.
 Instead, the package SHALL open an info-dialog overlay (using the same shared
-overlay surface as the existing clear-summary and status dialogs) with the title
+overlay surface as the existing clear-report and status dialogs) with the title
 "Clear Unavailable" and the body "No preset is active.", then return to the
 picker without invoking any clear flow.
 

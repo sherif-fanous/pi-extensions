@@ -13,7 +13,7 @@ import {
 import { EXTENSION_NAME } from "./extension-name.js";
 import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import {
-  alignLabelRows,
+  formatReport,
   notifyWarnings,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -200,14 +200,13 @@ export function createRtkRuntime({
           pathText.length > 0 ? `${versionText} at ${pathText}` : versionText;
       }
 
-      return [
-        `${EXTENSION_NAME} Status`,
-        ...alignLabelRows([
+      return formatReport(EXTENSION_NAME, "Status", {
+        rows: [
           ["Rewriting:", processState.sessionEnabled ? "on" : "off"],
           ["Binary:", binary],
           ["Tip:", "Bypass rtk for one command with !RTK_DISABLED=1 <cmd>."],
-        ]),
-      ].join("\n");
+        ],
+      });
     },
     setNotifyContext(ctx) {
       notifyContext = ctx;

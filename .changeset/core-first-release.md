@@ -12,8 +12,8 @@
   transcript entry in TUI mode and as a notification in other modes
 - Added: Add `styleReport`, which styles a report's heading, labels, and
   warnings
-- Added: Add `alignLabelRows`, which aligns `label value` rows on the longest
-  label
+- Added: Add `formatReport`, which lays out a report body: the heading, rows
+  aligned on the longest label, the `Config:` block, and the warnings
 - Added: Add `guardCommand` and `guardEvent`, which turn a failing command or
   event handler into an error notification with one wording across extensions
 - Added: Add `notifyWarnings`, which shows the warnings one operation produced

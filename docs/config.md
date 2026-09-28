@@ -67,9 +67,9 @@ resolves the location and project trust itself.
   `Ctrl+R Reload` hint in a form's footer, or a `Reload now?` confirmation after
   a save from a picker), which calls `ctx.reload()`. A failed reload reads
   `Could not reload Pi: <message>`.
-- Status: every extension with a configuration file puts the outcome's
-  `statusLines`, the `Config:` block, in its status report, after the main rows
-  and a blank line, and before `Warnings:`, which lists `statusWarnings`
+- Status: every extension with a configuration file passes the outcome's
+  `statusLines`, the `Config:` block, to `formatReport` as `config`, which puts
+  it after the main rows and before `Warnings:`. Those list `statusWarnings`
   (migration warnings, then invalid values) and the extension's own. States read
   `loaded`, `not found`, `invalid: <reason>`, and `skipped (untrusted)`. File
   problems show there, not again under `Warnings:`.

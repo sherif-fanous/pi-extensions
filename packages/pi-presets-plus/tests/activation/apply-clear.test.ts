@@ -483,25 +483,23 @@ describe("clear", () => {
       harness.pi,
       harness.session,
     );
-    await clear(harness.ctx, harness.pi, harness.session);
+
+    const report = await clear(harness.ctx, harness.pi, harness.session);
 
     expect(harness.setModelCalls.at(-1)).toBe("anthropic/old");
     expect(harness.pi.getThinkingLevel()).toBe("medium");
     expect(harness.setToolsCalls.at(-1)).toEqual(["bash"]);
     expect(harness.session.current()).toBeUndefined();
-    expect(harness.notifications.at(-1)).toContain("Presets Plus Cleared");
-    expect(harness.notifications.at(-1)).toContain("Preset:         plan");
-    expect(harness.notifications.at(-1)).toContain(
-      "Pi restored your previous settings.",
-    );
+    expect(report?.body).toContain("Presets Plus Cleared");
+    expect(report?.body).toContain("Preset:         plan");
+    expect(report?.body).toContain("Pi restored your previous settings.");
 
-    expect(harness.notifications.at(-1)).toContain(
-      "Model:          anthropic/old",
-    );
+    expect(report?.body).toContain("Model:          anthropic/old");
 
-    expect(harness.notifications.at(-1)).toContain("Thinking level: medium");
+    expect(report?.body).toContain("Thinking level: medium");
 
-    expect(harness.notifications.at(-1)).toContain("Tools:          bash");
+    expect(report?.body).toContain("Tools:          bash");
+    expect(report?.severity).toBe("info");
   });
 
   it("restores to pre-chain baseline for sequential applies", async () => {
@@ -532,10 +530,11 @@ describe("clear", () => {
 
     await apply(basePreset, harness.ctx, harness.pi, harness.session);
     harness.pi.setActiveTools(["read"]);
-    await clear(harness.ctx, harness.pi, harness.session);
+
+    const report = await clear(harness.ctx, harness.pi, harness.session);
 
     expect(harness.setToolsCalls).toEqual([["read"]]);
-    expect(harness.notifications.at(-1)).toContain(
+    expect(report?.body).toContain(
       "Tools:          read (Not managed by cleared preset)",
     );
   });
@@ -550,12 +549,13 @@ describe("clear", () => {
       harness.session,
     );
     harness.ctx.model = model("openai", "gpt", true);
-    await clear(harness.ctx, harness.pi, harness.session);
+
+    const report = await clear(harness.ctx, harness.pi, harness.session);
 
     expect(harness.setModelCalls).toEqual(["anthropic/claude"]);
     expect(harness.pi.getThinkingLevel()).toBe("medium");
     expect(harness.setToolsCalls.at(-1)).toEqual(["bash"]);
-    expect(harness.notifications.at(-1)).toContain(
+    expect(report?.body).toContain(
       "Model:          openai/gpt (Left as-is because you changed it after activation)",
     );
   });
@@ -570,11 +570,12 @@ describe("clear", () => {
       harness.session,
     );
     harness.pi.setThinkingLevel("high");
-    await clear(harness.ctx, harness.pi, harness.session);
+
+    const report = await clear(harness.ctx, harness.pi, harness.session);
 
     expect(harness.setModelCalls.at(-1)).toBe("anthropic/old");
     expect(harness.pi.getThinkingLevel()).toBe("high");
-    expect(harness.notifications.at(-1)).toContain(
+    expect(report?.body).toContain(
       "Thinking level: high (Left as-is because you changed it after activation)",
     );
   });
@@ -589,10 +590,11 @@ describe("clear", () => {
       harness.session,
     );
     harness.pi.setActiveTools(["bash", "read"]);
-    await clear(harness.ctx, harness.pi, harness.session);
+
+    const report = await clear(harness.ctx, harness.pi, harness.session);
 
     expect(harness.setToolsCalls).toEqual([["read"], ["bash", "read"]]);
-    expect(harness.notifications.at(-1)).toContain(
+    expect(report?.body).toContain(
       "Tools:          bash, read (Left as-is because you changed it after activation)",
     );
   });
@@ -606,12 +608,14 @@ describe("clear", () => {
       harness.pi,
       harness.session,
     );
-    await clear(harness.ctx, harness.pi, harness.session);
+
+    const report = await clear(harness.ctx, harness.pi, harness.session);
 
     expect(harness.session.current()).toBeUndefined();
-    expect(harness.notifications.at(-1)).toContain(
+    expect(report?.body).toContain(
       "Model:          Pi could not switch back to anthropic/old.",
     );
+    expect(report?.severity).toBe("warning");
     expect(harness.pi.getThinkingLevel()).toBe("medium");
   });
 
@@ -624,12 +628,13 @@ describe("clear", () => {
       harness.pi,
       harness.session,
     );
-    await clear(harness.ctx, harness.pi, harness.session);
+
+    const report = await clear(harness.ctx, harness.pi, harness.session);
 
     expect(harness.session.current()).toBeUndefined();
     expect(harness.pi.getThinkingLevel()).toBe("medium");
     expect(harness.setToolsCalls.at(-1)).toEqual(["bash"]);
-    expect(harness.notifications.at(-1)).toContain(
+    expect(report?.body).toContain(
       "Model:          Pi could not switch back to anthropic/old.",
     );
   });
@@ -643,12 +648,12 @@ describe("clear", () => {
       harness.pi,
       harness.session,
     );
-    await clear(harness.ctx, harness.pi, harness.session);
+
+    const report = await clear(harness.ctx, harness.pi, harness.session);
 
     expect(harness.setToolsCalls.at(-1)).toEqual([]);
-    expect(harness.notifications.at(-1)).toContain(
-      "Tools:          none (Unavailable: bash)",
-    );
+    expect(report?.body).toContain("Tools:          none (Unavailable: bash)");
+    expect(report?.severity).toBe("warning");
   });
 
   it("restores tools changed only by the first preset in a chain", async () => {
@@ -676,22 +681,24 @@ describe("clear", () => {
     const harness = makeHarness();
 
     restoreUnknown(harness);
-    await clear(harness.ctx, harness.pi, harness.session);
+
+    const report = await clear(harness.ctx, harness.pi, harness.session);
 
     expect(harness.setModelCalls).toEqual([]);
     expect(harness.setToolsCalls).toEqual([]);
     expect(harness.session.current()).toBeUndefined();
-    expect(harness.notifications.at(-1)).toContain(
+    expect(report?.body).toContain(
       "Model:          anthropic/old (No baseline saved for this field)",
     );
   });
 
-  it("notifies when no preset is active", async () => {
+  it("returns no report when no preset is active", async () => {
     const harness = makeHarness();
 
-    await clear(harness.ctx, harness.pi, harness.session);
-
-    expect(harness.notifications).toEqual(["No preset is active."]);
+    expect(
+      await clear(harness.ctx, harness.pi, harness.session),
+    ).toBeUndefined();
+    expect(harness.notifications).toEqual([]);
   });
 });
 

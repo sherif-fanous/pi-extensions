@@ -2,27 +2,24 @@
  * Runs the dialog flows behind the picker's action keys: new, edit,
  * duplicate, delete, reorder, clear, and status.
  */
-import { clearReturning } from "../activation/clear.js";
+import { clear } from "../activation/clear.js";
 import type { ActivationResult } from "../activation/request.js";
 import type { ActivePresetSession } from "../activation/session.js";
-import { formatStatusBody } from "../commands/presets/status.js";
+import { statusReport } from "../commands/presets/status.js";
 import type { HotkeyRegistry } from "../hotkey-registry.js";
 import { removePreset, reorderWithinScope } from "../store/api.js";
 import type { LoadedPreset } from "../types.js";
-import { renderClearSummary } from "./clear-summary.js";
-import { appendReportWarnings } from "./command-report.js";
+import type { PresetsReport } from "./command-report.js";
 import { openConfirm } from "./confirm.js";
 import { openEditor } from "./editor.js";
 import { openInfoDialog } from "./info-dialog.js";
 import {
-  CLEAR_DIALOG_TITLE,
   CLEAR_LABEL,
   DELETE_LABEL,
   DUPLICATE_LABEL,
   EDIT_LABEL,
   NEW_LABEL,
   STATUS_ACTION_LABEL,
-  STATUS_DIALOG_TITLE,
 } from "./labels.js";
 import { loadedPresetKey } from "./picker-state.js";
 import { serializeForCopy, uniqueCopyName } from "./preset-copy.js";
@@ -159,23 +156,13 @@ export class PickerCommands {
 
     if (!confirmed) return;
 
-    const result = await clearReturning(ctx, pi, session);
+    const report = await clear(ctx, pi, session);
 
-    if (result) {
+    if (report) {
       await this.host.runWithHiddenOverlay(() =>
         openInfoDialog(ctx, {
-          body: reportDialogBody(
-            renderClearSummary(result.name, result.parts),
-            theme,
-            result.parts.some(
-              (part) =>
-                part.action === "restore-failed" ||
-                part.action === "restored-partial",
-            )
-              ? "warning"
-              : "info",
-          ),
-          title: CLEAR_DIALOG_TITLE,
+          body: reportDialogBody(report, theme),
+          title: report.title,
         }),
       );
     }
@@ -315,16 +302,12 @@ export class PickerCommands {
       return;
     }
 
-    const result = await formatStatusBody(ctx, pi, session);
+    const report = await statusReport(ctx, pi, session);
 
     await this.host.runWithHiddenOverlay(() =>
       openInfoDialog(ctx, {
-        body: reportDialogBody(
-          appendReportWarnings(result.body, result.warnings),
-          this.host.theme,
-          result.severity,
-        ),
-        title: STATUS_DIALOG_TITLE,
+        body: reportDialogBody(report, this.host.theme),
+        title: report.title,
       }),
     );
   }
@@ -403,17 +386,16 @@ export class PickerCommands {
 }
 
 /**
- * A command report as an info-dialog body: styled like the transcript
- * report, without the heading line the dialog title already shows, and
- * dedented to the frame's padding. A `warning` report colors its first
- * line, so the problem shows without the heading.
+ * A report as an info-dialog body: styled like the transcript report,
+ * without the heading line the dialog title already shows, and dedented
+ * to the frame's padding. A `warning` report colors its first line, so
+ * the problem shows without the heading.
  */
 function reportDialogBody(
-  report: string,
+  report: PresetsReport,
   theme: Pick<Theme, "bold" | "fg">,
-  severity: "info" | "warning",
 ): string {
-  const lines = styleReport(report, theme).split("\n").slice(1);
+  const lines = styleReport(report.body, theme).split("\n").slice(1);
   const indent = Math.min(
     ...lines
       .filter((line) => line.trim().length > 0)
@@ -423,7 +405,7 @@ function reportDialogBody(
     line.slice(Number.isFinite(indent) ? indent : 0),
   );
 
-  if (severity === "warning" && body[0] !== undefined) {
+  if (report.severity === "warning" && body[0] !== undefined) {
     body[0] = theme.fg("warning", body[0]);
   }
 

@@ -3,7 +3,6 @@
  * activation by preset name, and answers the host's autocomplete requests
  * for the same argument.
  */
-import { clear } from "../../activation/clear.js";
 import { requestActivation } from "../../activation/request.js";
 import type { ActivePresetSession } from "../../activation/session.js";
 import { EXTENSION_NAME } from "../../extension-name.js";
@@ -11,6 +10,7 @@ import type { HotkeyRegistry } from "../../hotkey-registry.js";
 import { loadAll } from "../../store/api.js";
 import { notifyApplyResult } from "../../ui/apply-result.js";
 import { openPicker } from "../../ui/picker.js";
+import { runClear } from "./clear.js";
 import { runPolicy } from "./policy.js";
 import { runReload } from "./reload.js";
 import { runShowPrompt } from "./show-prompt.js";
@@ -59,7 +59,7 @@ const SUBCOMMANDS: readonly Subcommand[] = [
   {
     name: "clear",
     description: "Clear the active preset",
-    run: (ctx, _args, { pi, session }) => clear(ctx, pi, session),
+    run: (ctx, _args, { pi, session }) => runClear(ctx, pi, session),
   },
   {
     name: "status",

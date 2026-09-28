@@ -1,8 +1,23 @@
 /**
- * Delivers a command report as a durable transcript entry in TUI mode and
- * as a notification everywhere else.
+ * Builds Presets Plus reports and delivers them as a durable transcript
+ * entry in TUI mode and as a notification everywhere else.
  */
-import { createCommandReport } from "@sherif-fanous/pi-extensions-core";
+import { EXTENSION_NAME } from "../extension-name.js";
+import {
+  createCommandReport,
+  formatReport,
+  type CommandReport,
+  type ReportParts,
+} from "@sherif-fanous/pi-extensions-core";
+
+/**
+ * A finished report: the plain body, its severity, and its heading as a
+ * title for a dialog that shows the body without the heading.
+ */
+export interface PresetsReport extends CommandReport {
+  readonly severity: "info" | "warning";
+  readonly title: string;
+}
 
 const commandReport = createCommandReport("presets-plus:command-report");
 
@@ -18,15 +33,15 @@ export const deliverCommandReport = commandReport.deliver;
 /** Register the report renderer so stored entries survive a reload. */
 export const registerCommandReportRenderer = commandReport.register;
 
-/**
- * End a report body with its warnings as one `Warnings:` block of `- `
- * lines, or return the body unchanged when there are none.
- */
-export function appendReportWarnings(
-  body: string,
-  warnings: readonly string[],
-): string {
-  if (warnings.length === 0) return body;
-
-  return `${body}\n\nWarnings:\n${warnings.map((warning) => `- ${warning}`).join("\n")}`;
+/** Build the report headed `Presets Plus <thing>` from its parts. */
+export function presetsReport(
+  thing: string,
+  parts: ReportParts,
+  severity: PresetsReport["severity"],
+): PresetsReport {
+  return {
+    body: formatReport(EXTENSION_NAME, thing, parts),
+    severity,
+    title: `${EXTENSION_NAME} ${thing}`,
+  };
 }

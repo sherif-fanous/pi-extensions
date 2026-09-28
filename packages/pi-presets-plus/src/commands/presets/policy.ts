@@ -2,6 +2,7 @@
  * Reports which presets the policy allows, prohibits, and defaults to for
  * the current directory, and delivers that report to the user.
  */
+import { EXTENSION_NAME } from "../../extension-name.js";
 import { loadAll } from "../../store/api.js";
 import {
   isPermitted,
@@ -10,38 +11,67 @@ import {
   type CompiledPolicyRule,
 } from "../../store/policy.js";
 import type { LoadedPreset } from "../../types.js";
-import {
-  appendReportWarnings,
-  deliverCommandReport,
-} from "../../ui/command-report.js";
+import { deliverCommandReport } from "../../ui/command-report.js";
 import {
   ALLOWED_PRESETS_LABEL,
   DEFAULT_MATCHES_LABEL,
   DEFAULT_PRESET_LABEL,
   DIRECTORY_LABEL,
-  POLICY_DIALOG_TITLE,
   PROHIBITED_PRESETS_LABEL,
 } from "../../ui/labels.js";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-import { alignLabelRows } from "@sherif-fanous/pi-extensions-core";
+import {
+  formatReport,
+  type ReportRow,
+} from "@sherif-fanous/pi-extensions-core";
 
 /**
- * Format the effective policy for a cwd as a plain report body, without
- * performing I/O.
+ * Format the effective policy for a cwd as a plain report body ending with
+ * `warnings`, without performing I/O.
  */
 export function formatPolicy(
   cwd: string,
   presets: readonly LoadedPreset[],
   rules: readonly CompiledPolicyRule[],
+  warnings: readonly string[] = [],
 ): string {
+  return formatReport(EXTENSION_NAME, "Policy", {
+    rows: policyRows(cwd, presets, rules),
+    warnings,
+  });
+}
+
+/** Load the current effective policy and deliver it as one command report. */
+export async function runPolicy(
+  ctx: ExtensionCommandContext,
+  pi: Pick<ExtensionAPI, "appendEntry">,
+): Promise<void> {
+  const [policy, loaded] = await Promise.all([loadPolicy(ctx), loadAll(ctx)]);
+  const warnings = [...policy.warnings, ...loaded.config.warnings];
+
+  deliverCommandReport(ctx, pi, {
+    body: formatPolicy(ctx.cwd, loaded.presets, policy.rules, warnings),
+    severity: warnings.length > 0 ? "warning" : "info",
+  });
+}
+
+function formatNames(names: readonly string[]): string {
+  return names.length > 0 ? names.join(", ") : "none";
+}
+
+function policyRows(
+  cwd: string,
+  presets: readonly LoadedPreset[],
+  rules: readonly CompiledPolicyRule[],
+): ReportRow[] {
   const resolvedDefault = resolvePolicyDefault(cwd, presets, rules);
   const { matchedRules } = resolvedDefault;
 
   if (matchedRules.length === 0) {
-    return `${POLICY_DIALOG_TITLE}\n  No preset policy applies to ${cwd}.`;
+    return [`No preset policy applies to ${cwd}.`];
   }
 
   const usablePresets = presets.filter(
@@ -60,7 +90,7 @@ export function formatPolicy(
     resolvedDefault.kind === "resolved"
       ? resolvedDefault.candidates.map(({ name }) => name)
       : [];
-  const rows: [label: string, value: string][] = [
+  const rows: ReportRow[] = [
     [`${DIRECTORY_LABEL}:`, cwd],
     [`${ALLOWED_PRESETS_LABEL}:`, formatNames(allowed)],
     [`${PROHIBITED_PRESETS_LABEL}:`, formatNames(prohibited)],
@@ -71,27 +101,5 @@ export function formatPolicy(
     rows.push([`${DEFAULT_MATCHES_LABEL}:`, formatNames(defaultNames)]);
   }
 
-  return [POLICY_DIALOG_TITLE, ...alignLabelRows(rows)].join("\n");
-}
-
-/** Load the current effective policy and deliver it as one command report. */
-export async function runPolicy(
-  ctx: ExtensionCommandContext,
-  pi: Pick<ExtensionAPI, "appendEntry">,
-): Promise<void> {
-  const [policy, loaded] = await Promise.all([loadPolicy(ctx), loadAll(ctx)]);
-  const warnings = [...policy.warnings, ...loaded.config.warnings];
-  const body = appendReportWarnings(
-    formatPolicy(ctx.cwd, loaded.presets, policy.rules),
-    warnings,
-  );
-
-  deliverCommandReport(ctx, pi, {
-    body,
-    severity: warnings.length > 0 ? "warning" : "info",
-  });
-}
-
-function formatNames(names: readonly string[]): string {
-  return names.length > 0 ? names.join(", ") : "none";
+  return rows;
 }

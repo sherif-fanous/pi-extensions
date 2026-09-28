@@ -18,25 +18,10 @@ import {
 } from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const clearReturning = vi.fn();
-const formatStatusBody = vi.fn();
 const loadAll = vi.fn();
 const openConfirm = vi.fn();
 const openInfoDialog = vi.fn();
-const renderClearSummary = vi.fn();
 const reorderWithinScope = vi.fn();
-
-vi.mock("../../src/activation/clear.js", () => ({
-  clearReturning,
-}));
-
-vi.mock("../../src/ui/clear-summary.js", () => ({
-  renderClearSummary,
-}));
-
-vi.mock("../../src/commands/presets/status.js", () => ({
-  formatStatusBody,
-}));
 
 vi.mock("../../src/store/api.js", async (importOriginal) => {
   const actual =
@@ -72,6 +57,7 @@ const selected: LoadedPreset = {
 };
 
 interface PickerHarness {
+  readonly appendEntry: ReturnType<typeof vi.fn>;
   readonly done: ReturnType<typeof vi.fn>;
   readonly focus: ReturnType<typeof vi.fn>;
   readonly handleInput: (input: string) => void;
@@ -83,8 +69,24 @@ interface RunPickerOptions {
   readonly active?: boolean;
   readonly onActivate?: (preset: LoadedPreset) => Promise<ApplyResult>;
   readonly presets?: LoadedPreset[];
+  /** Replaces the status action's load, which follows the picker's own. */
+  readonly statusLoad?: () => Promise<unknown>;
+  readonly statusWarnings?: string[];
   readonly withPi?: boolean;
 }
+
+/** The `Config:` block every status report in these tests ends with. */
+const CONFIG_LINES = [
+  "Config:",
+  "  User: loaded",
+  "        /agent/presets-plus/config.json",
+];
+/** {@link CONFIG_LINES} as the marker theme styles them in a dialog. */
+const STYLED_CONFIG = [
+  "<muted>Config:</muted>",
+  "  <muted>User:</muted> loaded",
+  "        /agent/presets-plus/config.json",
+].join("\n");
 
 /**
  * Build an extension context whose overlay mounts the picker, feeds it the
@@ -93,6 +95,7 @@ interface RunPickerOptions {
 function makeCtx(
   input: string,
 ): PickerHarness & Parameters<typeof openPicker>[0] {
+  const appendEntry = vi.fn();
   const done = vi.fn();
   const focus = vi.fn();
   const notify = vi.fn();
@@ -111,7 +114,10 @@ function makeCtx(
   let picker: Component | undefined;
 
   return {
+    appendEntry,
     getActiveTools: () => [],
+    getAllTools: () => [],
+    getThinkingLevel: () => "medium",
     ui: {
       custom: createFakeCustom({
         keybindings: createPiKeybindings(),
@@ -148,12 +154,22 @@ async function runPicker(
     active = false,
     onActivate = () => Promise.resolve({ ok: true } as const),
     presets = [selected],
+    statusLoad,
+    statusWarnings = [],
     withPi = true,
   } = options;
   const ctx = makeCtx(input);
   const session = new ActivePresetSession();
+  const loaded = {
+    config: { statusLines: CONFIG_LINES, statusWarnings },
+    presets,
+  };
 
-  loadAll.mockResolvedValue({ presets, warnings: [] });
+  loadAll.mockResolvedValue(loaded);
+
+  if (statusLoad) {
+    loadAll.mockResolvedValueOnce(loaded).mockImplementationOnce(statusLoad);
+  }
 
   if (active) {
     session.restoreFromBranch(
@@ -183,23 +199,11 @@ async function runPicker(
   return ctx;
 }
 
-/** A status report as `formatStatusBody` returns it, heading first. */
-const STATUS_REPORT = "Presets Plus Status\n  Preset: plan\n  Scope:  User";
-
 beforeEach(() => {
   vi.resetAllMocks();
   vi.useFakeTimers();
-  formatStatusBody.mockResolvedValue({
-    body: STATUS_REPORT,
-    severity: "info",
-    warnings: [],
-  });
   openConfirm.mockResolvedValue(true);
   openInfoDialog.mockResolvedValue(undefined);
-  clearReturning.mockResolvedValue({ name: "plan", parts: [] });
-  renderClearSummary.mockReturnValue(
-    "Presets Plus Cleared\nYour settings already matched the saved baseline.\n  Preset: plan",
-  );
 });
 
 describe("openPicker info actions", () => {
@@ -229,7 +233,7 @@ describe("openPicker info actions", () => {
 
     // The dialog title replaces the report heading.
     expect(openInfoDialog).toHaveBeenCalledWith(ctx, {
-      body: "<muted>Preset:</muted> plan\n<muted>Scope:</muted>  User",
+      body: `  No preset is active.\n\n${STYLED_CONFIG}`,
       title: "Presets Plus Status",
     });
     expect(ctx.setHidden).toHaveBeenCalledWith(true);
@@ -237,19 +241,14 @@ describe("openPicker info actions", () => {
     expect(ctx.focus).toHaveBeenCalledOnce();
   });
 
-  it("prepends load warnings to picker status dialog output", async () => {
-    formatStatusBody.mockResolvedValue({
-      body: STATUS_REPORT,
-      severity: "info",
-      warnings: ["failed to read user presets"],
-    });
-
-    await runPicker("s");
+  it("ends the status dialog with the configuration's warnings", async () => {
+    await runPicker("s", { statusWarnings: ["failed to read user presets"] });
 
     expect(openInfoDialog).toHaveBeenCalledWith(expect.anything(), {
       body: [
-        "  <muted>Preset:</muted> plan",
-        "  <muted>Scope:</muted>  User",
+        "  No preset is active.",
+        "",
+        STYLED_CONFIG,
         "",
         "<warning>Warnings:</warning>",
         "<warning>- failed to read user presets</warning>",
@@ -259,16 +258,10 @@ describe("openPicker info actions", () => {
   });
 
   it("colors the first line of a warning status report", async () => {
-    formatStatusBody.mockResolvedValue({
-      body: 'Presets Plus Status\n  Active preset "plan" is no longer loaded.',
-      severity: "warning",
-      warnings: [],
-    });
-
-    await runPicker("s");
+    await runPicker("s", { active: true, presets: [] });
 
     expect(openInfoDialog).toHaveBeenCalledWith(expect.anything(), {
-      body: '<warning>Active preset "plan" is no longer loaded.</warning>',
+      body: `<warning>  Active preset "plan" is no longer loaded.</warning>\n\n${STYLED_CONFIG}`,
       title: "Presets Plus Status",
     });
   });
@@ -286,7 +279,7 @@ describe("openPicker info actions", () => {
     const ctx = await runPicker("c");
 
     expect(openConfirm).not.toHaveBeenCalled();
-    expect(clearReturning).not.toHaveBeenCalled();
+    expect(ctx.appendEntry).not.toHaveBeenCalled();
     expect(openInfoDialog).toHaveBeenCalledWith(ctx, {
       body: "No preset is active.",
       title: "Clear Unavailable",
@@ -301,9 +294,19 @@ describe("openPicker info actions", () => {
     const ctx = await runPicker("c", { active: true });
 
     expect(openConfirm).toHaveBeenCalledOnce();
-    expect(clearReturning).toHaveBeenCalledOnce();
+    expect(ctx.appendEntry).toHaveBeenCalledWith(
+      "presets-plus:active",
+      expect.objectContaining({ name: null }),
+    );
+
     expect(openInfoDialog).toHaveBeenCalledWith(ctx, {
-      body: "Your settings already matched the saved baseline.\n  <muted>Preset:</muted> plan",
+      body: [
+        "No saved baseline. Pi left your current settings unchanged.",
+        "  <muted>Preset:</muted>         plan",
+        "  <muted>Model:</muted>          none (No baseline saved for this field)",
+        "  <muted>Thinking level:</muted> medium (No baseline saved for this field)",
+        "  <muted>Tools:</muted>          none (No baseline saved for this field)",
+      ].join("\n"),
       title: "Presets Plus Cleared",
     });
     expect(ctx.notify).not.toHaveBeenCalled();
@@ -321,9 +324,9 @@ describe("openPicker info actions", () => {
   it("does not open info-dialog when clear confirm is declined", async () => {
     openConfirm.mockResolvedValue(false);
 
-    await runPicker("c", { active: true });
+    const ctx = await runPicker("c", { active: true });
 
-    expect(clearReturning).not.toHaveBeenCalled();
+    expect(ctx.appendEntry).not.toHaveBeenCalled();
     expect(openInfoDialog).not.toHaveBeenCalled();
   });
 
@@ -332,16 +335,13 @@ describe("openPicker info actions", () => {
     const next = { ...selected, name: "ship" };
     const onActivate = vi.fn().mockResolvedValue({ ok: true });
 
-    formatStatusBody.mockImplementation(
-      () =>
-        new Promise((_resolve, reject) => {
-          rejectStatus = reject;
-        }),
-    );
-
     const ctx = await runPicker("s", {
       onActivate,
       presets: [selected, next],
+      statusLoad: () =>
+        new Promise((_resolve, reject) => {
+          rejectStatus = reject;
+        }),
     });
 
     ctx.handleInput("\u001b[B");

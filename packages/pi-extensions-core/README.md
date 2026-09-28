@@ -127,8 +127,8 @@ when it is shown.
 
 ```ts
 import {
-  alignLabelRows,
   createCommandReport,
+  formatReport,
 } from "@sherif-fanous/pi-extensions-core";
 
 const statusReport = createCommandReport("theme-sync:status-report");
@@ -137,13 +137,12 @@ export default function themeSync(pi: ExtensionAPI): void {
   statusReport.register(pi);
   pi.registerCommand("theme-sync", {
     handler: async (_args, ctx) => {
-      const body = [
-        "Theme Sync Status",
-        ...alignLabelRows([
+      const body = formatReport("Theme Sync", "Status", {
+        rows: [
           ["Appearance:", "dark"],
           ["Applied theme:", "solarized-dark"],
-        ]),
-      ].join("\n");
+        ],
+      });
 
       statusReport.deliver(ctx, pi, { body });
     },
@@ -151,18 +150,55 @@ export default function themeSync(pi: ExtensionAPI): void {
 }
 ```
 
+### `formatReport(displayName: string, thing: string, parts: ReportParts): string`
+
+Lays out a plain report body from `{ lead?, rows, config?, warnings? }`:
+
+- the heading `<displayName> <thing>`, such as `Theme Sync Status`;
+- `lead`, a sentence on the next line, not indented;
+- `rows`, each a `[label, value]` pair or a sentence. Every row is indented by
+  two spaces, and each pair's label is padded to the longest label so the values
+  line up;
+- `config`, the `Config:` block, such as a `ConfigOutcome`'s `statusLines`;
+- `warnings`, as a `Warnings:` line and one `- <warning>` line each.
+
+A blank line separates the rows, the `Config:` block, and the warnings. An
+absent lead and an empty `config` or `warnings` are left out.
+
+```ts
+formatReport("Presets Plus", "Status", {
+  config: outcome.statusLines,
+  rows: [
+    ["Preset:", "plan"],
+    ["Scope:", "User"],
+  ],
+  warnings: outcome.statusWarnings,
+});
+```
+
+```text
+Presets Plus Status
+  Preset: plan
+  Scope:  User
+
+Config:
+  User:    loaded
+           /Users/me/.pi/agent/presets-plus/config.json
+  Project: not found
+           /repo/.pi/presets-plus/config.json
+
+Warnings:
+- Skipped preset 1 in /Users/me/.pi/agent/presets-plus/config.json: It needs a name.
+```
+
 ### `styleReport(body: string, theme: Pick<Theme, "bold" | "fg">): string`
 
 Styles a plain report body line by line. The first line is the heading, in bold
 accent. A `Warnings:` line and every line after it are warning-colored. On any
-other line, the text up to and including the first colon is a muted label.
-Remaining lines are unchanged. `createCommandReport` applies these rules; call
+other line that is not a `- ` list item, the text up to and including the first
+colon, when whitespace or the line end follows it, is a muted label. Remaining
+lines are unchanged. `createCommandReport` applies these rules; call
 `styleReport` directly to show a report on another surface, such as a dialog.
-
-### `alignLabelRows(rows: readonly (readonly [label: string, value: string])[]): string[]`
-
-Turns `[label, value]` pairs into lines of the form `  <label> <value>`, with
-every label padded to the longest one so the values line up.
 
 ### `guardCommand(extensionName: string, handler): handler`
 
@@ -424,7 +460,7 @@ What `load` found, immutable:
   without a `Config:` block.
 - `statusLines`: the `Config:` block of a status report, User before Project,
   each scope's state on its label row and its path on the next line, aligned
-  under the state. Put it after the report's main rows and a blank line.
+  under the state. Pass it to `formatReport` as `config`.
 - `statusWarnings`: migration warnings, then value warnings, for the report's
   `Warnings:` block; file problems show in `statusLines` instead.
 

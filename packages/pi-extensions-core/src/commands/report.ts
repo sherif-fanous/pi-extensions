@@ -1,6 +1,6 @@
 /**
- * Command reports: plain-text bodies that show as a styled transcript entry
- * in TUI mode and as a notification everywhere else.
+ * Command reports: the plain-text body format, and delivery as a styled
+ * transcript entry in TUI mode and as a notification everywhere else.
  */
 
 import { isInteractiveTui } from "./interactive.js";
@@ -44,21 +44,47 @@ export interface CommandReportChannel {
   readonly render: EntryRenderer<CommandReport>;
 }
 
+/** The parts of a report body {@link formatReport} lays out. */
+export interface ReportParts {
+  /**
+   * The `Config:` block, such as a config outcome's `statusLines`. Left
+   * out when empty.
+   */
+  readonly config?: readonly string[];
+  /** A sentence on the line under the heading, not indented. */
+  readonly lead?: string;
+  /** The rows under the heading and lead. */
+  readonly rows: readonly ReportRow[];
+  /** Warnings, listed last under `Warnings:`. Left out when empty. */
+  readonly warnings?: readonly string[];
+}
+
+/**
+ * One row of a report: a `[label, value]` pair, with the label ending in a
+ * colon, or a sentence on its own.
+ */
+export type ReportRow = readonly [label: string, value: string] | string;
+
 /**
  * Align `label value` rows by padding every label to the longest one.
  *
  * Each row is indented by two spaces and its value follows the padded
- * label after one space.
+ * label after one space. A sentence row is indented the same way and
+ * takes no part in the alignment.
  */
-export function alignLabelRows(
-  rows: readonly (readonly [label: string, value: string])[],
-): string[] {
-  const width = Math.max(0, ...rows.map(([label]) => label.length));
-
-  return rows.map(
-    ([label, value]) =>
-      `  ${label}${" ".repeat(width - label.length)} ${value}`,
+export function alignLabelRows(rows: readonly ReportRow[]): string[] {
+  const width = Math.max(
+    0,
+    ...rows.map((row) => (typeof row === "string" ? 0 : row[0].length)),
   );
+
+  return rows.map((row) => {
+    if (typeof row === "string") return `  ${row}`;
+
+    const [label, value] = row;
+
+    return `  ${label}${" ".repeat(width - label.length)} ${value}`;
+  });
 }
 
 /**
@@ -96,12 +122,41 @@ export function createCommandReport(entryType: string): CommandReportChannel {
 }
 
 /**
+ * Lay out a plain report body headed `<displayName> <thing>`.
+ *
+ * The heading is followed by the lead, then the rows with their labels
+ * aligned, then the `Config:` block, then a `Warnings:` line with one
+ * `- <warning>` line per warning. A blank line separates the rows, the
+ * config block, and the warnings.
+ */
+export function formatReport(
+  displayName: string,
+  thing: string,
+  { config = [], lead, rows, warnings = [] }: ReportParts,
+): string {
+  const lines = [
+    `${displayName} ${thing}`,
+    ...(lead === undefined ? [] : [lead]),
+    ...alignLabelRows(rows),
+  ];
+
+  if (config.length > 0) lines.push("", ...config);
+
+  if (warnings.length > 0) {
+    lines.push("", "Warnings:", ...warnings.map((warning) => `- ${warning}`));
+  }
+
+  return lines.join("\n");
+}
+
+/**
  * Style a plain report body.
  *
  * The first line is the heading, in bold accent. A `Warnings:` line and
- * every line after it are warning-colored. On any other line, the text up
- * to and including the first colon is a muted label, keeping its leading
- * whitespace. Remaining lines are unchanged.
+ * every line after it are warning-colored. On any other line that is not
+ * a `- ` list item, the text up to and including the first colon is a
+ * muted label, keeping its leading whitespace. Remaining lines are
+ * unchanged.
  */
 export function styleReport(
   body: string,
@@ -120,7 +175,7 @@ export function styleReport(
 
       // A label ends at the first colon, which must be followed by
       // whitespace or end the line, so `C:\path` or `a:b` is not a label.
-      const match = line.match(/^(\s*)([^:]+:)(\s.*)?$/);
+      const match = line.match(/^(?!\s*- )(\s*)([^:]+:)(\s.*)?$/);
 
       return match
         ? `${match[1] ?? ""}${theme.fg("muted", match[2] ?? "")}${match[3] ?? ""}`
