@@ -1,4 +1,4 @@
-# Preset Picker Specification
+# preset-picker Specification
 
 ## Purpose
 

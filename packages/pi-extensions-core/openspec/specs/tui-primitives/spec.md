@@ -140,9 +140,9 @@ user's bound keys SHALL match: a remap replaces the default keys.
 
 `matchesHelpKey(data)` SHALL return `true` for an F1 press in the legacy
 encodings `matchesKey` recognizes and in the Kitty keyboard protocol's press
-encodings (`CSI 1 P` and `CSI 57364 u`, with or without the unmodified
-modifier and press event subfields), and `false` for an F1 release, a modified
-F1, and any other key.
+encodings (`CSI 1 P` and `CSI 57364 u`, with or without the unmodified modifier
+and press event subfields), and `false` for an F1 release, a modified F1, and
+any other key.
 
 #### Scenario: Ghostty's F1
 

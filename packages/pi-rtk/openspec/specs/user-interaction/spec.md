@@ -1,4 +1,4 @@
-# User Interaction Specification
+# user-interaction Specification
 
 ## Purpose
 
@@ -7,44 +7,45 @@ normal operation and resilience when shell optimization fails.
 
 ## Requirements
 
-### Requirement: Non-Disruptive Fallback
+### Requirement: Non-disruptive fallback
 
 Failures in the shell optimization layer MUST NOT interrupt normal shell tool
 usage.
 
 #### Scenario: Optimization failure
 
-- GIVEN a command submitted to the `bash` tool
-- WHEN shell optimization fails before command execution
-- THEN the command MUST still execute using normal shell behavior
-- AND the optimization failure MUST NOT crash, block, or disable the host agent
+- **GIVEN** a command submitted to the `bash` tool
+- **WHEN** shell optimization fails before command execution
+- **THEN** the command MUST still execute using normal shell behavior
+- **AND** the optimization failure MUST NOT crash, block, or disable the host
+  agent
 
-### Requirement: Transparent Operation
+### Requirement: Transparent operation
 
 The optimization layer MUST remain invisible during normal use.
 
 #### Scenario: Standard command execution
 
-- GIVEN normal shell command execution through the `bash` tool
-- THEN the system MUST NOT add user-facing notifications solely to report
+- **GIVEN** normal shell command execution through the `bash` tool
+- **THEN** the system MUST NOT add user-facing notifications solely to report
   optimization activity
-- AND the user experience MUST remain consistent whether optimization is applied
-  or bypassed
+- **AND** the user experience MUST remain consistent whether optimization is
+  applied or bypassed
 
-### Requirement: Graceful Operation Without `rtk`
+### Requirement: Graceful operation without `rtk`
 
 The system MUST continue to provide normal shell execution when `rtk` is
 unavailable.
 
 #### Scenario: `rtk` is unavailable
 
-- GIVEN `rtk` is not installed, not resolvable on `PATH`, or otherwise
+- **GIVEN** `rtk` is not installed, not resolvable on `PATH`, or otherwise
   unavailable to the optimization layer
-- WHEN a command is submitted to the `bash` tool
-- THEN the system MUST execute the original command unchanged
-- AND the user MUST retain normal shell tool functionality
+- **WHEN** a command is submitted to the `bash` tool
+- **THEN** the system MUST execute the original command unchanged
+- **AND** the user MUST retain normal shell tool functionality
 
-### Requirement: Respect For User Context Visibility Choice
+### Requirement: Respect for user context visibility choice
 
 The system MUST preserve the semantic distinction between Pi's context-visible
 and context-excluded user shell command modes.
@@ -65,7 +66,7 @@ and context-excluded user shell command modes.
 - **AND** the user's choice to exclude output from model context MUST be
   respected
 
-### Requirement: Transparent User Bash Optimization
+### Requirement: Transparent user bash optimization
 
 The system MUST keep user bash optimization non-disruptive during normal
 operation.
@@ -78,7 +79,7 @@ operation.
   interaction solely for optimization reporting
 - **AND** the user experience MUST remain consistent with normal shell execution
 
-### Requirement: Session-Scoped Rewrite Toggle
+### Requirement: Session-scoped rewrite toggle
 
 The extension MUST expose an in-memory, session-scoped toggle that controls
 whether `pi-rtk` performs rewrites. The toggle's default state MUST be
@@ -101,24 +102,24 @@ toggle MUST NOT be persisted to disk.
 - **AND** the extension MUST surface a user-facing confirmation
 - **AND** the footer indicator MUST update to reflect the enabled state
 
-#### Scenario: toggle survives a session switch
+#### Scenario: Toggle survives a session switch
 
 - **GIVEN** the user has invoked `/rtk disable`
 - **WHEN** the user switches session with `/new`, `/resume`, or `/fork`
 - **THEN** the rewriting toggle MUST remain `disabled`
 
-#### Scenario: toggle resets on new Pi process
+#### Scenario: Toggle resets on new Pi process
 
 - **WHEN** Pi exits and is launched again
 - **THEN** the rewriting toggle MUST start in the `enabled` state
 - **AND** no toggle state MUST be read from disk
 
-### Requirement: Persistent Footer State Indicator
+### Requirement: Persistent footer state indicator
 
 The extension MUST register a single footer status entry via
 `ctx.ui.setStatus("rtk", ...)` and MUST keep that entry present for the lifetime
-of the extension. The entry MUST reflect both the rewriting toggle and whether the
-`rtk` binary runs:
+of the extension. The entry MUST reflect both the rewriting toggle and whether
+the `rtk` binary runs:
 
 - `RTK: on` in the theme's `dim` color when the toggle is `enabled` and the last
   spawn of `rtk` succeeded (or none has failed yet).
@@ -127,31 +128,31 @@ of the extension. The entry MUST reflect both the rewriting toggle and whether t
 - `RTK: unavailable` in the theme's `warning` color when the toggle is `enabled`
   and the last spawn of `rtk` failed with `ENOENT` or `EACCES`.
 
-The entry MUST update immediately when the rewriting toggle changes and whenever a
-spawn of `rtk` (the `session_start` probe, a rewrite, or `/rtk status`) changes
-the binary's availability. Other spawn failures, such as a timeout, MUST NOT
-change the entry.
+The entry MUST update immediately when the rewriting toggle changes and whenever
+a spawn of `rtk` (the `session_start` probe, a rewrite, or `/rtk status`)
+changes the binary's availability. Other spawn failures, such as a timeout, MUST
+NOT change the entry.
 
-#### Scenario: indicator present on load
+#### Scenario: Indicator present on load
 
 - **GIVEN** `rtk` runs
 - **WHEN** Pi fires `session_start`
 - **THEN** the footer MUST display the `rtk` status entry as dim `RTK: on`
 
-#### Scenario: indicator shows a missing binary at session start
+#### Scenario: Indicator shows a missing binary at session start
 
 - **GIVEN** `rtk` is not on PATH or not executable
 - **WHEN** Pi fires `session_start`
 - **THEN** the footer entry MUST read `RTK: unavailable` in warning color
 
-#### Scenario: indicator updates on toggle
+#### Scenario: Indicator updates on toggle
 
 - **WHEN** the user invokes `/rtk disable`
 - **THEN** the footer entry MUST read dim `RTK: off`
 - **AND** when the user then invokes `/rtk enable`, the entry MUST return to
   `RTK: on` or `RTK: unavailable` according to the binary's availability
 
-#### Scenario: indicator follows availability detected mid-session
+#### Scenario: Indicator follows availability detected mid-session
 
 - **GIVEN** the footer entry reads `RTK: on`
 - **WHEN** a rewrite spawn of `rtk` fails with `ENOENT` or `EACCES`
@@ -159,7 +160,7 @@ change the entry.
 - **AND** when a later spawn of `rtk` succeeds, the entry MUST return to dim
   `RTK: on`
 
-### Requirement: /rtk Bare Invocation Opens Settings Overlay
+### Requirement: /rtk bare invocation opens settings overlay
 
 The extension MUST treat the bare `/rtk` invocation (no arguments) as a request
 for a settings overlay. The overlay MUST allow the user to select among the same
@@ -174,7 +175,7 @@ subcommand's completion description:
 The menu opens wherever Pi has a UI (TUI and RPC mode). In print and JSON mode,
 bare `/rtk` MUST NOT open it and MUST deliver the `/rtk status` report instead.
 
-#### Scenario: bare /rtk opens overlay
+#### Scenario: Bare /rtk opens overlay
 
 - **WHEN** the user invokes `/rtk` with no arguments in TUI or RPC mode
 - **THEN** the extension MUST display an interactive selection overlay titled
@@ -182,13 +183,13 @@ bare `/rtk` MUST NOT open it and MUST deliver the `/rtk status` report instead.
 - **AND** selecting an item MUST execute the corresponding subcommand
 - **AND** dismissing the overlay MUST NOT change any state
 
-#### Scenario: bare /rtk in print or JSON mode
+#### Scenario: Bare /rtk in print or JSON mode
 
 - **WHEN** the user invokes `/rtk` with no arguments in print or JSON mode
 - **THEN** the extension MUST NOT open the selection overlay
 - **AND** the extension MUST deliver the same report as `/rtk status`
 
-### Requirement: /rtk Status Report
+### Requirement: /rtk status report
 
 `/rtk status` MUST report the current rewriting toggle state and the detected
 `rtk` binary identity, and MUST include a static educational tip about rtk's
@@ -211,18 +212,18 @@ mode the report MUST be delivered as one info-level notification. In both cases
 the heading MUST render bold and accent-colored and each row label MUST render
 muted; the toggle value MUST NOT carry its own color.
 
-#### Scenario: status reports current state
+#### Scenario: Status reports current state
 
 - **WHEN** the user invokes `/rtk status`
 - **THEN** the report MUST start with the `RTK Status` heading
-- **AND** the `Rewriting:` row MUST identify the current rewriting toggle
-  state (`on` or `off`)
+- **AND** the `Rewriting:` row MUST identify the current rewriting toggle state
+  (`on` or `off`)
 - **AND** the `Binary:` row MUST identify the detected `rtk` binary version and
   path, or MUST clearly indicate when `rtk` is not on PATH
 - **AND** the `Tip:` row MUST mention the per-command `!RTK_DISABLED=1 <cmd>`
   bypass
 
-#### Scenario: status in TUI mode
+#### Scenario: Status in TUI mode
 
 - **WHEN** the user invokes `/rtk status` in TUI mode
 - **THEN** the report MUST appear as a transcript entry instead of a
@@ -231,19 +232,19 @@ muted; the toggle value MUST NOT carry its own color.
 - **AND** the entry MUST still render, styled with the current theme, after the
   session is reloaded
 
-#### Scenario: status outside TUI mode
+#### Scenario: Status outside TUI mode
 
 - **WHEN** the user invokes `/rtk status` in a mode other than TUI
 - **THEN** the report MUST be delivered as one info-level notification
 
-#### Scenario: status does not inspect process environment
+#### Scenario: Status does not inspect process environment
 
 - **WHEN** the user invokes `/rtk status`
 - **THEN** the extension MUST NOT read `process.env.RTK_DISABLED` or any other
   process environment variable as part of building the status output
 - **AND** the per-command tip MUST appear regardless of the host environment
 
-### Requirement: No Refusal On rtk Permission Verdict
+### Requirement: No refusal on rtk permission verdict
 
 The system MUST NOT refuse to execute a shell command based on a permission
 verdict surfaced by `rtk rewrite`. Command-level refusal is the responsibility
@@ -265,7 +266,7 @@ installed by the user.
 - **THEN** existing rewrite and fall-through behavior MUST apply unchanged
 - **AND** the new requirement MUST NOT alter handling of those verdicts
 
-### Requirement: User Notification When rtk Is Unavailable
+### Requirement: User notification when rtk is unavailable
 
 The system MUST emit at most one user-visible warning-level notification per
 transition from "rtk works" to "rtk does not work" within a single Pi process.
@@ -328,7 +329,7 @@ signal interruption, MUST remain silent.
 - **THEN** the extension MUST emit one fresh warning-level notification for the
   new unavailability transition
 
-#### Scenario: repeated unavailable spawns within one transition
+#### Scenario: Repeated unavailable spawns within one transition
 
 - **GIVEN** a notification has already fired for the current unavailability
   transition and no successful spawn has occurred since
@@ -337,7 +338,7 @@ signal interruption, MUST remain silent.
 - **THEN** the extension MUST NOT emit additional notifications for those
   repeated failures
 
-#### Scenario: non-availability spawn failures remain silent
+#### Scenario: Non-availability spawn failures remain silent
 
 - **WHEN** a `rtkRewriteCommand` `spawnSync` call fails with a reason other than
   `ENOENT` or `EACCES` (such as timeout, EPIPE, signal interrupt, or any unknown

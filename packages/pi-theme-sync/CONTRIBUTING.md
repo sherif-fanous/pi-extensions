@@ -22,8 +22,9 @@ mise run lint-fix    # fix most lint violations
 
 ## Planning
 
-Behavior changes are planned as [OpenSpec](https://github.com/Fission-AI/OpenSpec)
-changes under `openspec/changes/`. A small fix does not need one.
+Behavior changes are planned as
+[OpenSpec](https://github.com/Fission-AI/OpenSpec) changes under
+`openspec/changes/`. A small fix does not need one.
 
 ## Before you open a pull request
 
@@ -33,4 +34,7 @@ changes under `openspec/changes/`. A small fix does not need one.
    `openspec validate "<name>"` passes.
 4. Commit messages follow
    [Conventional Commits](https://www.conventionalcommits.org/).
-5. `AGENTS.md` has the conventions the linters do not enforce.
+5. The change follows the repository's root `AGENTS.md`, including the
+   conventions the linters do not enforce.
+6. A change users can see has a changeset from `mise run changeset`, run at the
+   repository root.

@@ -2,304 +2,25 @@
 
 ## Purpose
 
-The `presets-package` capability defines the shape of the `pi-presets-plus` npm
-package itself: its repository layout, manifest (identity, peer deps, dev-dep
-toolchain, scripts), TypeScript / ESLint / Prettier configuration, license,
-changelog, README, ignore rules, and the extension entry point that registers
-the `/presets` command. Subsequent changes in the project plan extend this
-capability rather than introducing new packages; this specification therefore
-captures the constraints every later change must continue to satisfy on top of
-the package shell.
+The `presets-package` capability defines how the `pi-presets-plus` package is
+put together: its extension entry point, the voice of the text it shows, and the
+modules that own the active preset, the hotkey bindings, preset identity, and
+the clear summary. The package shape it shares with the other extensions
+(manifest, dependencies, published files, README, changelog, license, and
+tooling) is in the repository's `extension-packaging` spec.
 
 ## Requirements
 
-### Requirement: Repository-root package layout
-
-The repository root SHALL contain the following files after this change:
-`package.json`, `tsconfig.json`, `eslint.config.mjs`, `LICENSE`, `CHANGELOG.md`,
-`.gitignore`, `README.md`, `src/index.ts`, `src/types.ts`. There SHALL NOT be a
-nested `pi-presets-plus/` subdirectory; the repository root _is_ the package
-root.
-
-#### Scenario: Required files present
-
-- **WHEN** the repository is inspected after the change
-- **THEN** every file listed above SHALL be present at the repository root (or,
-  for `src/`, inside the `src/` directory)
-
-#### Scenario: No nested package subdirectory
-
-- **WHEN** the repository is inspected
-- **THEN** there SHALL NOT be a directory named `pi-presets-plus/` inside the
-  repository root
-
-### Requirement: Package manifest identifies a pi extension package
-
-The `package.json` at the repository root SHALL identify the package as a pi
-extension package with `name: "pi-presets-plus"`, `version: "0.1.0"`,
-`license: "MIT"`, `type: "module"`, and a non-empty author. It SHALL declare a
-`pi.extensions` array that lists the source entry point used by the package
-(i.e. `./src/index.ts`). It SHALL include `keywords` containing at minimum
-`pi-package` plus enough discoverability keywords to convey that the package
-targets pi and provides presets where each preset bundles a model, thinking
-level, tools, and system prompt (the `*-presets` shorthand — e.g.
-`model-presets`, `thinking-presets`, `tools-presets`, `system-prompt-presets` —
-is the natural keyword shape and is permitted; it does not imply four separate
-kinds of presets). It SHALL declare a `files` allowlist that limits `npm pack`
-output to runtime artifacts: `src`, `README.md`, `LICENSE`, `CHANGELOG.md`, and
-`package.json` (no `tsconfig.json`, `eslint.config.mjs`, `node_modules`, or dev
-configs).
-
-#### Scenario: Manifest declares package identity
-
-- **WHEN** `package.json` is inspected
-- **THEN** it SHALL declare `name: "pi-presets-plus"`, `version: "0.1.0"`,
-  `license: "MIT"`, `type: "module"`, and a non-empty author
-
-#### Scenario: Manifest declares the extension entry
-
-- **WHEN** the package is loaded by pi
-- **THEN** pi SHALL find the source entry file under `pi.extensions` and load it
-  as the package's extension
-
-#### Scenario: Package keyword present
-
-- **WHEN** the package is inspected for the `pi-package` keyword
-- **THEN** the keyword SHALL be present in `package.json`'s `keywords` array
-
-#### Scenario: Files allowlist limits the published surface
-
-- **WHEN** `package.json` is inspected
-- **THEN** `files` SHALL contain `src`, `README.md`, `LICENSE`, `CHANGELOG.md`,
-  and `package.json`
-- **AND** `files` SHALL NOT contain `tsconfig.json`, `eslint.config.mjs`,
-  `node_modules`, or dev/test directories
-
-### Requirement: Pi runtime modules are declared as peer dependencies
-
-The `package.json` SHALL declare `@earendil-works/pi-coding-agent`,
-`@earendil-works/pi-tui`, `@earendil-works/pi-ai`, and `@sinclair/typebox` as
-`peerDependencies` (per `docs/packages.md`) so that installing this package does
-not bundle pi's own runtime modules.
-
-#### Scenario: Peer dependencies declared
-
-- **WHEN** `package.json` is inspected
-- **THEN** `peerDependencies` SHALL contain `@earendil-works/pi-coding-agent`,
-  `@earendil-works/pi-tui`, `@earendil-works/pi-ai`, and `@sinclair/typebox`
-
-#### Scenario: Peer dependencies are not bundled
-
-- **WHEN** the package is packed via `npm pack`
-- **THEN** the resulting tarball SHALL NOT include any `node_modules` directory
-- **AND** SHALL NOT include any files belonging to
-  `@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui`,
-  `@earendil-works/pi-ai`, or `@sinclair/typebox`
-
-### Requirement: Dev-dependency toolchain is self-sufficient
-
-The `package.json` SHALL declare `devDependencies` sufficient to run every
-script defined in `scripts` against the empty package without any
-`MODULE_NOT_FOUND` errors. Concretely, the `devDependencies` SHALL include the
-toolchain root packages (`@biomejs/biome`, `prettier` plus an import-sorting
-plugin such as `@ianvs/prettier-plugin-sort-imports`, `eslint`, `typescript`,
-`sort-package-json`) and SHALL also include every package that the lint/format
-configuration files import directly so that running the configured tooling
-against an empty `src/` succeeds.
-
-#### Scenario: Toolchain root packages declared
-
-- **WHEN** `package.json` is inspected
-- **THEN** `devDependencies` SHALL include `@biomejs/biome`, `prettier`, an
-  import-sorting Prettier plugin, `eslint`, `typescript`, and
-  `sort-package-json`
-
-#### Scenario: Lint/format config imports are resolvable
-
-- **WHEN** `npm install` followed by `npm run lint` and `npm run format-check`
-  is run on a clean checkout
-- **THEN** neither command SHALL fail with `ERR_MODULE_NOT_FOUND` or
-  `Cannot find package` for any package imported by `eslint.config.mjs` or by
-  Prettier configuration
-
-### Requirement: Package scripts expose lint, format, type-check, and helpers
-
-The `package.json` `scripts` object SHALL define exactly the following script
-names (subsequent changes' tasks rely on them, including the hyphen in
-`type-check`):
-
-- `format` — runs Prettier in write mode
-- `format-check` — runs Prettier in check mode
-- `lint` — runs Biome on `src/.` followed by ESLint on `src/.`
-- `sort-package-json` — runs `sort-package-json` against `package.json`
-- `type-check` — runs `tsc --noEmit`
-
-The Prettier paths used by `format` / `format-check` SHALL include the package
-manifest, the `src/` directory, the TypeScript configuration, and the ESLint
-configuration file. Every literal path passed to Prettier SHALL exist on disk
-(Prettier 3.x errors on missing literal paths rather than silently skipping
-them).
-
-#### Scenario: Script names match exactly
-
-- **WHEN** `package.json` is inspected
-- **THEN** `scripts` SHALL contain keys `format`, `format-check`, `lint`,
-  `sort-package-json`, and `type-check`
-
-#### Scenario: Type-check script available
-
-- **WHEN** `npm run type-check` is run in the repository root
-- **THEN** `tsc --noEmit` SHALL execute against the source using the
-  explicitly-listed `typescript` devDependency
-- **AND** SHALL exit with code 0 against the empty package
-
-#### Scenario: Lint script available
-
-- **WHEN** `npm run lint` is run in the repository root
-- **THEN** Biome SHALL execute on `src/.` followed by ESLint on `src/.`
-- **AND** both tools SHALL exit with code 0 against the empty package
-
-#### Scenario: Format-check script available
-
-- **WHEN** `npm run format-check` is run in the repository root
-- **THEN** Prettier SHALL execute in check mode against the configured paths
-  (including `package.json`, `src/.`, the TypeScript configuration, and the
-  ESLint configuration file)
-- **AND** every literal path passed to Prettier SHALL exist on disk
-- **AND** Prettier SHALL exit with code 0 against the empty package
-
-### Requirement: ESLint configuration is type-aware
-
-The `eslint.config.mjs` at the repository root SHALL use ESLint flat-config and
-SHALL extend `typescript-eslint`'s **type-checked** recommended preset (not the
-non-type-aware `recommended` preset) so that type-aware rules — including
-`no-floating-promises` — are enforced. It SHALL declare
-`languageOptions.parserOptions.projectService: true` together with
-`tsconfigRootDir: import.meta.dirname` so type-aware rules can resolve the
-project's `tsconfig.json` automatically from any cwd. The configuration SHALL
-also extend `eslint:recommended` and SHALL disable the `no-control-regex` rule.
-
-#### Scenario: ESLint config matches the type-aware shape
-
-- **WHEN** `eslint.config.mjs` is inspected
-- **THEN** it SHALL extend `typescript-eslint`'s type-checked recommended preset
-  (not the non-type-aware variant)
-- **AND** it SHALL declare `parserOptions.projectService: true`
-- **AND** it SHALL declare `parserOptions.tsconfigRootDir: import.meta.dirname`
-- **AND** it SHALL extend `eslint:recommended`
-- **AND** it SHALL set `"no-control-regex": "off"`
-
-#### Scenario: Lint catches floating promises
-
-- **WHEN** subsequent code introduces an un-awaited Promise-returning call
-- **THEN** `npm run lint` SHALL fail (because `no-floating-promises` is enabled
-  by the type-checked preset)
-
-#### Scenario: Lint succeeds on the empty package
-
-- **WHEN** `npm run lint` is run on the empty package
-- **THEN** ESLint SHALL execute and exit with code 0
-
-### Requirement: TypeScript configuration enforces strict, jiti-friendly settings
-
-The `tsconfig.json` at the repository root SHALL configure TypeScript with the
-following compiler options enabled (or set to the listed values), and SHALL
-scope compilation to `src`:
-
-- `strict: true`
-- `noUncheckedIndexedAccess: true`
-- `noFallthroughCasesInSwitch: true`
-- `verbatimModuleSyntax: true`
-- `isolatedModules: true`
-- `esModuleInterop: true`
-- `forceConsistentCasingInFileNames: true`
-- `module: "Node16"` and `moduleResolution: "Node16"`
-- `noEmit: true`
-- `lib: ["ES2022"]` and `target: "ES2022"`
-- `skipLibCheck: true`
-- `include: ["src"]`
-
-#### Scenario: tsconfig has the required options
-
-- **WHEN** `tsconfig.json` is inspected
-- **THEN** every compiler option listed above SHALL be set to the listed value
-- **AND** `include` SHALL be `["src"]`
-
-#### Scenario: Type-check succeeds on the empty package
-
-- **WHEN** `tsc --noEmit` is run inside the repository root
-- **THEN** the type-check SHALL succeed with no errors
-
-### Requirement: LICENSE is the MIT license
-
-The `LICENSE` file at the repository root SHALL contain the standard MIT license
-text with the copyright line `Copyright (c) 2026 Sherif Fanous`. The exact body
-wording is unconstrained as long as the license is recognizable as MIT.
-
-#### Scenario: LICENSE is MIT with the correct copyright
-
-- **WHEN** `LICENSE` is inspected
-- **THEN** the file SHALL be a recognizable MIT license
-- **AND** it SHALL include the line `Copyright (c) 2026 Sherif Fanous`
-
-### Requirement: CHANGELOG.md initialized for Common Changelog
-
-The `CHANGELOG.md` at the repository root SHALL be initialized for
-[Common Changelog](https://common-changelog.org/) with a top-level `# Changelog`
-heading and a one-line statement that the file follows Common Changelog (linking
-the spec). No `## Unreleased` section SHALL be present. Subsequent changes in
-the series SHALL NOT add per-version entries; the first version-tagged entry is
-added when `v0.1.0` is published in change 7.
-
-#### Scenario: CHANGELOG has Common Changelog header and no entries
-
-- **WHEN** `CHANGELOG.md` is inspected
-- **THEN** the file SHALL begin with a `# Changelog` heading
-- **AND** SHALL include a line indicating the file follows Common Changelog
-  (linking the spec)
-- **AND** SHALL NOT contain any `##` or deeper-level sections
-
-### Requirement: README.md skeleton
-
-The `README.md` at the repository root SHALL contain at minimum: the package
-name and a one-line description of its purpose. The description SHALL make clear
-that the package provides presets and that each preset bundles a model, thinking
-level, tools, and system prompt (i.e. one preset is a combo of all four
-configurable aspects — not four separate kinds of presets).
-
-#### Scenario: README has the required content
-
-- **WHEN** `README.md` is inspected
-- **THEN** it SHALL include the package name and a one-line description that
-  conveys the package provides presets bundling a model, thinking level, tools,
-  and system prompt
-
-### Requirement: .gitignore covers expected artifacts
-
-The `.gitignore` at the repository root SHALL ignore at minimum `node_modules/`
-and `.DS_Store`. Additional ignore patterns (editor/workspace files, scratch
-patterns, etc.) MAY be present.
-
-#### Scenario: gitignore patterns present
-
-- **WHEN** `.gitignore` is inspected
-- **THEN** it SHALL contain entries for `node_modules/` and `.DS_Store`
-
-### Requirement: Extension entry point registers the /presets stub command
+### Requirement: Extension entry point registers the /presets command
 
 The package's extension entry point (`src/index.ts`) SHALL be a default-exported
-factory of pi's `ExtensionFactory` shape — i.e.
-`(pi: ExtensionAPI) => void | Promise<void>` — and the `ExtensionAPI` import
-SHALL be a type-only import (`import type ...`), as required by
-`verbatimModuleSyntax: true`. When invoked by pi, the factory SHALL register
-exactly one command named `presets` and SHALL NOT register any other commands,
-hotkeys, flags, message renderers, or event handlers in this change. The
-registered command's `description` string SHALL be
-`Browse, activate, and manage presets`, following the family's description
-style: sentence case, starting with a verb, no trailing period, and at most 60
-characters. The handler SHALL be lint-clean under the type-checked ESLint preset
-(no `async` keyword without an `await`); it MAY return `Promise<void>`
-explicitly.
+factory of Pi's `ExtensionFactory` shape, `(pi: ExtensionAPI) => void`, and the
+`ExtensionAPI` import SHALL be a type-only import (`import type ...`), as
+`verbatimModuleSyntax: true` requires. When Pi invokes it, the factory SHALL
+register one command, `presets`, and the `--preset` flag. The command's
+`description` SHALL be `Browse, activate, and manage presets`, following the
+family's description style: sentence case, starting with a verb, no trailing
+period, and at most 60 characters.
 
 #### Scenario: Entry point shape
 
@@ -307,48 +28,13 @@ explicitly.
 - **THEN** it SHALL have a default export that is a function taking
   `pi: ExtensionAPI`
 - **AND** the `ExtensionAPI` import SHALL be a type-only import
-- **AND** no other registrations beyond a single
-  `registerCommand("presets", ...)` SHALL be present
 
 #### Scenario: Command registration
 
-- **WHEN** pi loads the package
+- **WHEN** Pi loads the package
 - **THEN** `/presets` SHALL appear in the command list
 - **AND** the registered command's `description` SHALL be
   `Browse, activate, and manage presets`
-
-#### Scenario: Invocation
-
-- **WHEN** the user runs `/presets` (with or without arguments)
-- **THEN** an info-level notification SHALL be displayed via `ctx.ui.notify`
-  describing that the package is installed and that storage/activation/UI arrive
-  in subsequent changes
-- **AND** no other side effects SHALL occur (no model change, no file I/O, no UI
-  opened, no further extension events)
-
-### Requirement: Empty types module
-
-The package SHALL include `src/types.ts` containing only an empty re-export
-(`export {};`) so that subsequent changes can add type definitions without
-restructuring imports.
-
-#### Scenario: types.ts exists
-
-- **WHEN** the package is built or type-checked
-- **THEN** `src/types.ts` SHALL be present and SHALL parse without errors
-
-### Requirement: Local install round-trip
-
-The package SHALL install successfully via
-`pi install <absolute-path-to-repository-root>` against a working pi
-installation, and the `/presets` command SHALL register on the next pi startup.
-
-#### Scenario: Install and invoke
-
-- **WHEN** the user runs `pi install <repository-root>` and then starts a new pi
-  session
-- **THEN** the `/presets` command SHALL be available
-- **AND** invoking it SHALL emit the informational notification described above
 
 ### Requirement: User-facing strings adhere to a single voice convention
 
@@ -359,9 +45,9 @@ warnings, router error messages, `--preset` flag messages, hotkey activation
 messages, session-restore messages, and `/presets reload` summaries — SHALL
 follow this voice convention:
 
-1. **Labels** (dialog row labels, status/clear field labels, footer keybinding
-   labels): Title-Case with a trailing colon. Examples: `Preset:`, `Scope:`,
-   `Baseline model:`, `Status:`.
+1. **Labels** (dialog row labels, status/clear field labels): sentence case with
+   a trailing colon. Examples: `Preset:`, `Scope:`, `Baseline model:`,
+   `Status:`.
 2. **Prose** (notification bodies, dialog bodies, multi-sentence inline notices,
    lead sentences in clear summaries): sentence-case English with terminal
    periods. Each sentence is a complete thought ending in `.`. Examples:
@@ -378,14 +64,14 @@ follow this voice convention:
    `Cancel`, `Test (apply temporarily)`, `Status`, `Reload`).
 6. Single-line labels SHALL NOT carry trailing periods. Multi-sentence prose
    blocks SHALL.
-7. Two-voice mixing (e.g. a Title-Case label followed by lowercase prose) is
-   allowed within the same string only when the prose follows a colon:
+7. Two-voice mixing (e.g. a label followed by lowercase prose) is allowed within
+   the same string only when the prose follows a colon:
    `Status: Restored your previous settings.`. Otherwise sentences begin
    uppercase.
 
-The convention SHALL be documented in `AGENTS.md` under a "User-facing strings"
-subsection of the existing "Code conventions" heading. Reviewers SHALL enforce
-the convention on new contributions.
+The convention SHALL follow the "Text and naming" section of the repository's
+root `AGENTS.md`, the family text standard. Reviewers SHALL enforce the
+convention on new contributions.
 
 Repeated label fragments and dialog titles that appear across multiple surfaces
 SHALL be defined in one shared module so a future tweak edits one location. The
@@ -395,19 +81,15 @@ shared module SHALL include at minimum:
   `Thinking level`, `Tools`, `Preset`, `Scope`, `Status`).
 - Per-surface composed forms used by status (`Baseline model`, `Preset model`,
   `Current model`, etc.).
-- Dialog titles surfaced by overlays from the four concurrent changes that this
-  change finalizes the voice of:
-  - `Presets Plus Status` (picker `s` action's info-dialog from
-    `route-picker-info-output-through-overlay`).
-  - `Presets Plus Cleared` (picker `c` action's info-dialog and prompt-invoked
-    clear's report heading — same string sourced once).
+- Dialog titles and report headings:
+  - `Presets Plus Status` (the picker `s` action's info dialog and the
+    `/presets status` report heading).
+  - `Presets Plus Cleared` (the picker `c` action's info dialog and the
+    `/presets clear` report heading, the same string sourced once).
   - `Presets Plus Policy` (`/presets policy` report heading).
-  - `Activation Failed` (picker error info-dialog from
-    `surface-picker-activation-errors-in-overlay`).
-  - `Reload Pi?` (post-Save and post-Delete confirm overlay from
-    `prompt-reload-on-hotkey-mutation`).
-  - `Move Preset?`, `Hotkey shadows pi`, `Hotkey conflict` (existing editor
-    confirm overlays).
+  - `Activation Failed` (the picker's error info dialog).
+  - `Reload Pi?` (the post-Save and post-Delete confirmation).
+  - `Move Preset?` (the editor's scope-move confirmation).
 - Footer action labels used by the picker (`Activate`, `Filter`, `Status`,
   `Close`).
 
@@ -418,15 +100,15 @@ requirement is that no two surfaces hold their own copy of the same string.
 
 - **WHEN** the editor renders any form row (Name, Scope, Provider, Model,
   Thinking, Tools, Prompt, Hotkey, Actions)
-- **THEN** the row label SHALL be Title-Case followed by a trailing space (the
+- **THEN** the row label SHALL be in sentence case without a trailing colon (the
   colon variant lives only in dialogs that show key/value pairs)
 - **AND** the label SHALL NOT carry a trailing period
 
 #### Scenario: Status formatter labels follow the convention
 
 - **WHEN** `formatStatus` renders any field row in its output
-- **THEN** the field label SHALL be Title-Case with a trailing colon: `Preset:`,
-  `Scope:`, `Baseline model:`, `Preset model:`, `Current model:`,
+- **THEN** the field label SHALL be sentence case with a trailing colon:
+  `Preset:`, `Scope:`, `Baseline model:`, `Preset model:`, `Current model:`,
   `Baseline thinking level:`, `Preset thinking level:`,
   `Current thinking level:`, `Baseline tools:`, `Preset tools:`,
   `Current tools:`
@@ -444,8 +126,8 @@ requirement is that no two surfaces hold their own copy of the same string.
 #### Scenario: Activation-failure reason follows the convention
 
 - **WHEN** `apply()` (or its `failureReason` helper) produces a refusal string
-- **THEN** the string SHALL begin with a Title-Case sentence and end with a
-  terminal period
+- **THEN** the string SHALL be a sentence-case sentence ending with a terminal
+  period
 - **AND** the string SHALL spell `Pi` (when used as a noun) with a capital P
 
 #### Scenario: Inline editor notices follow the convention
@@ -471,8 +153,8 @@ requirement is that no two surfaces hold their own copy of the same string.
 - **THEN** the message SHALL be sentence-case English with a terminal period
 - **AND** any embedded preset names, model identifiers, or command names SHALL
   retain their literal spelling
-- **AND** any embedded label-style prefixes SHALL be Title-Case with a trailing
-  colon
+- **AND** any embedded label-style prefixes SHALL be sentence case with a
+  trailing colon
 
 #### Scenario: Store-layer warnings follow the convention
 
@@ -482,14 +164,12 @@ requirement is that no two surfaces hold their own copy of the same string.
 - **AND** it SHALL NOT name the extension, because the notification heading
   `Presets Plus: <n> warning(s)` already does
 
-#### Scenario: Overlay titles introduced by concurrent changes follow the convention
+#### Scenario: Dialog titles follow the convention
 
-- **WHEN** the package opens any of the overlays introduced by
-  `route-picker-info-output-through-overlay` (Presets Plus Status, Presets Plus
-  Clear), `surface-picker-activation-errors-in-overlay` (Activation failed), or
-  `prompt-reload-on-hotkey-mutation` (Reload Pi?)
-- **THEN** the overlay title SHALL be sourced from the shared labels module
-- **AND** the title SHALL follow the Title-Case convention
+- **WHEN** the package opens the `Presets Plus Status`, `Presets Plus Cleared`,
+  `Activation Failed`, or `Reload Pi?` dialog
+- **THEN** the dialog title SHALL be sourced from the shared labels module
+- **AND** the title SHALL be in Title Case
 - **AND** the body text SHALL be sentence-case English with terminal periods
 
 #### Scenario: failureReason helper output follows the convention
@@ -504,9 +184,9 @@ requirement is that no two surfaces hold their own copy of the same string.
 
 #### Scenario: AGENTS.md captures the convention
 
-- **WHEN** a contributor reads `AGENTS.md`
-- **THEN** the file SHALL contain a "User-facing strings" subsection under "Code
-  conventions" listing the rules above
+- **WHEN** a contributor reads the repository's root `AGENTS.md`
+- **THEN** its "Text and naming" section SHALL state the label, prose, and title
+  rules above
 
 #### Scenario: Repeated labels share one source of truth
 
@@ -851,43 +531,6 @@ consumer for the lifetime of the extension.
 - **WHEN** the source tree is searched for `new ActivePresetSession(`
 - **THEN** there SHALL be exactly one occurrence in `src/`, inside the
   `presetsPlus(pi)` default export of `src/index.ts`
-
-### Requirement: No user-visible behavior change
-
-This refactor SHALL preserve every user-visible behavior of the extension.
-Concretely:
-
-1. Every existing test golden in `tests/` for `/presets *` output,
-   notifications, status-badge text, clear-summary text, and editor / picker
-   rendering SHALL continue to match without string edits.
-2. The on-disk preset file format ( `{ version: 1, presets: Preset[] }`) and
-   field set SHALL be unchanged.
-3. The persistent session-entry shape on the `presets-plus:active` channel
-   (`{ version: 1; name: string; scope: PresetScope } | { version: 1; name: null }`)
-   SHALL be unchanged.
-4. The pi extension API surface registered by the package (`/presets` command,
-   `--preset` flag, message renderer for `ACTIVATED_MESSAGE_TYPE`, lifecycle
-   handlers) SHALL be unchanged.
-5. CLI flags, command names, command argument completions, and subcommand
-   routing SHALL be unchanged.
-
-#### Scenario: Existing tests pass without golden edits
-
-- **WHEN** `mise run check` is run after the change
-- **THEN** all tests SHALL pass
-- **AND** no golden assertion in `tests/user-facing-strings.test.ts`,
-  `tests/activation/apply-clear.test.ts`,
-  `tests/commands/presets/status.test.ts`,
-  `tests/commands/presets/router.test.ts`, or any picker / editor test SHALL
-  require a string update as part of this change
-
-#### Scenario: On-disk and session-entry shapes are unchanged
-
-- **WHEN** a preset is applied or cleared after the change
-- **THEN** the JSON written to either scope file SHALL match the pre-change
-  format byte-for-byte for the same input
-- **AND** the entry written to the `presets-plus:active` channel SHALL carry the
-  same payload shape
 
 ### Requirement: Overlays follow Pi's list keybindings
 

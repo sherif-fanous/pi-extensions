@@ -1,4 +1,4 @@
-# Preset Editor Specification
+# preset-editor Specification
 
 ## Purpose
 

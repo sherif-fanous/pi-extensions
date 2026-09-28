@@ -1,10 +1,42 @@
 # pi-extensions-core
 
-Shared runtime helpers for the
-[pi-extensions](https://github.com/sherif-fanous/pi-extensions) packages.
+A [Pi](https://github.com/earendil-works/pi) extension library that provides
+shared helpers for errors, config files, reports, and TUI surfaces.
 
+The extensions in
+[pi-extensions](https://github.com/sherif-fanous/pi-extensions) depend on it.
 Every export is stateless. Each installed extension may load its own copy of
 this package, so nothing here keeps module-level state.
+
+## Requirements
+
+- Pi 0.80.4 or newer
+
+`@earendil-works/pi-coding-agent` and `@earendil-works/pi-tui` are peer
+dependencies, so the extension uses the copies Pi provides.
+
+## Install
+
+```shell
+pnpm add @sherif-fanous/pi-extensions-core
+```
+
+Inside the pi-extensions workspace, depend on it as `workspace:*`.
+
+## Usage
+
+Import the helpers by name. The package ships TypeScript sources, which Pi loads
+directly.
+
+```ts
+import { EXTENSION_NAME } from "./extension-name.js";
+import { guardCommand } from "@sherif-fanous/pi-extensions-core";
+
+pi.registerCommand("slice", {
+  description: "Start a new session from a range of this one",
+  handler: guardCommand(EXTENSION_NAME, runSlice),
+});
+```
 
 ## API
 
@@ -383,7 +415,7 @@ Returns `<agentDir>/<extension>/config.json` for `"user"` and
 
 Reads the extension's `config.json` in each scope of `options.scopes` and
 returns one `ConfigFile` per scope. `ctx` needs `cwd` and `isProjectTrusted()`
-(Pi 0.79.1 or later), which is consulted only when the project scope is read.
+(Pi 0.79.1 or newer), which is consulted only when the project scope is read.
 The options are:
 
 - `extension`: the slug, which names the configuration directory.
@@ -730,4 +762,4 @@ one: `No presets yet. Press n to create one.`
 
 ## License
 
-MIT
+[MIT](LICENSE)

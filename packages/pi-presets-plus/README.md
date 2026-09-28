@@ -1,8 +1,7 @@
 # pi-presets-plus
 
-A [Pi](https://github.com/badlogic/pi) extension that lets you bundle a model,
-thinking level, tools, and system prompt into a named preset, then switch
-between presets with one hotkey.
+A [Pi](https://github.com/earendil-works/pi) extension that bundles a model,
+thinking level, tools, and system prompt into switchable presets.
 
 ## Why
 
@@ -14,6 +13,12 @@ prompt; or separate planning and implementation modes.
 
 Presets Plus saves those settings together as a named preset. You can switch
 presets with one keystroke.
+
+## Requirements
+
+- Pi 0.80.5 or newer
+
+The `max` thinking level needs Pi 0.80.6 or newer.
 
 ## Install
 
@@ -33,7 +38,7 @@ To uninstall:
 pi remove npm:@sherif-fanous/pi-presets-plus
 ```
 
-## Quick start
+## Usage
 
 1. Run `/presets` in any Pi session to open the preset picker.
 2. Press `n` to create a new preset, or `e` to edit an existing one.
@@ -43,8 +48,29 @@ pi remove npm:@sherif-fanous/pi-presets-plus
    the hotkey switches to the preset. Run `/presets clear` to go back to Pi's
    defaults.
 
-The picker can also filter by name, switch scopes, reorder presets, make copies,
-and delete them. Its footer lists the keys that work at that moment.
+### Commands
+
+| Command                       | What it does                                                                                 |
+| ----------------------------- | -------------------------------------------------------------------------------------------- |
+| `/presets`                    | Opens the picker.                                                                            |
+| `/presets <name>`             | Activates the named preset.                                                                  |
+| `/presets clear`              | Clears the active preset and returns to Pi's defaults.                                       |
+| `/presets reload`             | Re-reads your configuration files after you edit them by hand.                               |
+| `/presets status`             | Shows the active preset compared to Pi's defaults, and the state of each configuration file. |
+| `/presets policy`             | Shows allowed and prohibited presets for the current directory.                              |
+| `/presets show-prompt [name]` | Shows the active preset's prompt, or the named preset's prompt.                              |
+
+Start Pi with `--preset <name>` to activate a preset at startup:
+
+```shell
+pi --preset plan
+```
+
+### The picker
+
+The picker lists your presets and activates the one you choose. It can also
+filter by name, switch scopes, reorder presets, make copies, and delete them.
+Its footer lists the keys that work at that moment.
 
 | Key                 | Action                              |
 | :------------------ | :---------------------------------- |
@@ -65,6 +91,8 @@ and delete them. Its footer lists the keys that work at that moment.
 While you type a filter, `↑` / `↓` and `PgUp` / `PgDn` still move the selection,
 and `Enter` or `Esc` goes back to the list. If you have remapped Pi's keys, the
 picker follows your bindings.
+
+### The preset editor
 
 The preset editor opens from the picker. Its footer lists the keys for the
 focused row.
@@ -207,20 +235,20 @@ inspect the effective policy.
 - Automatic presets apply only in Pi's interactive terminal interface. They do
   not apply in print, JSON, or RPC mode.
 - If Pi starts with a different provider, model, or thinking level than your
-  saved defaults, the extension leaves them unchanged. This helps prevent a
+  saved defaults, Presets Plus leaves them unchanged. This helps prevent a
   directory preset from replacing a choice supplied on the command line or by
   another tool. The comparison includes any project overrides you have allowed
   Pi to load.
 - `--preset` and restoration of an existing preset take precedence over the
   directory default. These paths remain available in every mode.
-- If the extension cannot read your saved defaults or find the saved model, it
+- If Presets Plus cannot read your saved defaults or find the saved model, it
   skips automatic activation without a warning.
 
 ### Set your Pi defaults
 
 Pi stores your personal defaults in `~/.pi/agent/settings.json`, separately from
-this extension's preset configuration. A directory default requires a saved
-provider and model.
+Presets Plus's configuration. A directory default requires a saved provider and
+model.
 
 - In current Pi versions, open `/model` and press Ctrl+S on the model you want
   as your startup default.
@@ -237,40 +265,39 @@ and `defaultThinkingLevel`. Each project value replaces the corresponding
 personal value; omitted fields keep their personal defaults.
 
 Pi loads these overrides only when you allow it to trust the project and load
-its local settings. The extension uses that same trust decision when comparing
+its local settings. Presets Plus uses that same trust decision when comparing
 startup values. Without permission, it uses only your personal defaults.
 
 See [Pi's project trust documentation][pi-project-trust] for how to grant or
 change that permission.
 
-### Known limitation
-
-If you explicitly select the same provider, model, and thinking level as your
-saved defaults, the directory preset can still replace that selection. The
-extension cannot distinguish those matching values from an ordinary startup.
-
 ### SDK compatibility
 
 Applications that create Pi sessions through its SDK can supply settings in
-memory without saving them to a file. In an interactive session, this extension
+memory without saving them to a file. In an interactive session, Presets Plus
 still compares startup values against the settings files described above. For
 example, if an application uses model B while your saved default is model A,
 automatic preset activation is skipped. Non-interactive sessions always skip it,
 regardless of where their settings come from.
 
+## Limitations
+
+If you explicitly select the same provider, model, and thinking level as your
+saved defaults, a directory default can still replace that selection. Presets
+Plus cannot tell those matching values apart from an ordinary startup.
+
+## Troubleshooting
+
+Run `/presets status` to compare the active preset with Pi's defaults and see
+the state of each configuration file and any warnings. Run `/presets policy` to
+see which presets the directory policy allows, prohibits, or picks by default
+here.
+
+## License
+
+[MIT](LICENSE)
+
 [pi-settings]:
   https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/settings.md
 [pi-project-trust]:
   https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/settings.md#project-trust
-
-## Commands
-
-| Command                       | What it does                                                                                 |
-| ----------------------------- | -------------------------------------------------------------------------------------------- |
-| `/presets`                    | Opens the picker.                                                                            |
-| `/presets <name>`             | Activates the named preset.                                                                  |
-| `/presets clear`              | Clears the active preset and returns to Pi's defaults.                                       |
-| `/presets reload`             | Re-reads your configuration files after you edit them by hand.                               |
-| `/presets status`             | Shows the active preset compared to Pi's defaults, and the state of each configuration file. |
-| `/presets policy`             | Shows allowed and prohibited presets for the current directory.                              |
-| `/presets show-prompt [name]` | Shows the active preset's prompt, or the named preset's prompt.                              |

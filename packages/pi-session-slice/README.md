@@ -1,7 +1,7 @@
 # pi-session-slice
 
-A [Pi](https://github.com/badlogic/pi) extension that lets you take part of a
-conversation into a new session and continue from there.
+A [Pi](https://github.com/earendil-works/pi) extension that starts a new session
+from a chosen range of the current one.
 
 ## Why
 
@@ -10,8 +10,12 @@ you find a bug in another and spend a few turns investigating it. You want to
 continue that investigation separately without bringing the rest of the
 conversation along or explaining everything again.
 
-`pi-session-slice` copies the part you choose into a new session, including the
+Session Slice copies the part you choose into a new session, including the
 replies and tool results. Your original session stays unchanged.
+
+## Requirements
+
+- Pi 0.80.4 or newer
 
 ## Install
 
@@ -31,9 +35,7 @@ To uninstall:
 pi remove npm:@sherif-fanous/pi-session-slice
 ```
 
-## Quick start
-
-`/slice` does not work in sessions started with `--no-session`.
+## Usage
 
 1. Run `/slice` when Pi has finished replying.
 2. Choose the first message you want to keep.
@@ -44,7 +46,24 @@ Pi opens the new session. If you chose a message to leave out, its text appears
 in the editor so you can edit or send it again. Press `Esc` in either picker to
 cancel without creating a session.
 
-Both pickers use the same keys:
+For example, choosing your third message as the start and your fifth as the end
+keeps your third and fourth messages, along with Pi's replies and any tool
+activity between them. Your fifth message goes into the editor; it is not part
+of the copied conversation.
+
+Use `/resume` to return to the original session. The new session starts without
+a name; use `/name` to give it one.
+
+### Commands
+
+| Command  | What it does                                                                            |
+| :------- | :-------------------------------------------------------------------------------------- |
+| `/slice` | Opens the pickers that choose the range to copy. It needs Pi's interactive terminal UI. |
+
+### The pickers
+
+The start and end pickers list your messages in the current conversation. Both
+use the same keys:
 
 | Key             | Action                            |
 | :-------------- | :-------------------------------- |
@@ -55,10 +74,18 @@ Both pickers use the same keys:
 
 If you have remapped Pi's keys, the pickers follow your bindings.
 
-For example, choosing your third message as the start and your fifth as the end
-keeps your third and fourth messages, along with Pi's replies and any tool
-activity between them. Your fifth message goes into the editor; it is not part
-of the copied conversation.
+## Configuration
 
-Use `/resume` to return to the original session. The new session starts without
-a name; use `/name` to give it one.
+Session Slice has no configuration file. Each slice is a new Pi session, and
+your original session stays unchanged.
+
+## Troubleshooting
+
+`/slice` explains in a notification when it can't run. It needs a saved session,
+so it doesn't work in sessions started with `--no-session`. Wait until Pi has
+finished replying, and make sure the conversation has at least one of your
+messages.
+
+## License
+
+[MIT](LICENSE)

@@ -1,3 +1,5 @@
+# notification-center Specification
+
 ## Purpose
 
 Provide a quiet, session-aware notification experience for Pi extensions by
@@ -142,11 +144,11 @@ Cards SHALL stay in the top-right corner at every card width.
 The extension SHALL load optional User settings from
 `<agent-dir>/notification-center/config.json` when a session starts. It SHALL
 have no Project scope, so it SHALL NOT read a project file or consult Pi's
-project trust. The supported settings SHALL be a top-level integer `version`
-and a `toast` object containing `maxVisible`, `timeoutMs`, `maxLines`, and
-`width`, where `width` is the widest a card may be drawn rather than a fixed
-size. Defaults SHALL be 5 visible toasts, 3000 milliseconds, 5 body rows, and
-64 columns. The file's version SHALL be 2.
+project trust. The supported settings SHALL be a top-level integer `version` and
+a `toast` object containing `maxVisible`, `timeoutMs`, `maxLines`, and `width`,
+where `width` is the widest a card may be drawn rather than a fixed size.
+Defaults SHALL be 5 visible toasts, 3000 milliseconds, 5 body rows, and 64
+columns. The file's version SHALL be 2.
 
 #### Scenario: No configuration file exists
 
@@ -174,7 +176,8 @@ size. Defaults SHALL be 5 visible toasts, 3000 milliseconds, 5 body rows, and
 
 #### Scenario: A project configuration file exists
 
-- **WHEN** the directory Pi starts in holds `.pi/notification-center/config.json`
+- **WHEN** the directory Pi starts in holds
+  `.pi/notification-center/config.json`
 - **THEN** the extension ignores it and never asks whether the project is
   trusted
 
@@ -196,10 +199,10 @@ size. Defaults SHALL be 5 visible toasts, 3000 milliseconds, 5 body rows, and
 ### Requirement: Renamed settings migrate at session start
 
 The extension SHALL read `maxToastsVisible` as `toast.maxVisible` and
-`toast.timeout` as `toast.timeoutMs` while the new key is absent. When a
-session starts and the User file uses either old key, the extension SHALL
-rewrite the file atomically with the new keys and `"version": 2`, keeping every
-other key, and SHALL show one info notification
+`toast.timeout` as `toast.timeoutMs` while the new key is absent. When a session
+starts and the User file uses either old key, the extension SHALL rewrite the
+file atomically with the new keys and `"version": 2`, keeping every other key,
+and SHALL show one info notification
 `Notification Center migrated its configuration to <path>.`
 
 #### Scenario: File uses the old key names
@@ -236,10 +239,10 @@ description `Show Notification Center status`. It SHALL show a report headed
 `Notification Center Status` with whether toasts are on in this session, how
 many notifications the active branch holds, and the toast settings the session
 uses, then a blank line and a `Config:` block naming the User file's path and
-its state: `loaded`, `not found`, or `invalid: <reason>`. Warnings about
-invalid values and a failed migration SHALL follow under `Warnings:`; file
-problems SHALL show only in the `Config:` block. In the interactive TUI the
-report SHALL be a transcript entry; in other modes it SHALL be a notification.
+its state: `loaded`, `not found`, or `invalid: <reason>`. Warnings about invalid
+values and a failed migration SHALL follow under `Warnings:`; file problems
+SHALL show only in the `Config:` block. In the interactive TUI the report SHALL
+be a transcript entry; in other modes it SHALL be a notification.
 
 #### Scenario: User asks for status in the TUI
 
@@ -280,9 +283,9 @@ closing unrelated overlays.
 The extension SHALL store every captured notification as Pi session data
 containing the complete message, severity, capture timestamp, and `version` 1.
 It SHALL read a stored payload without a `version` as version 1 and skip one
-with any other version. It SHALL
-rebuild history from the active session branch after session start or reload and
-SHALL NOT maintain cross-session global history.
+with any other version. It SHALL rebuild history from the active session branch
+after session start or reload and SHALL NOT maintain cross-session global
+history.
 
 #### Scenario: Stored payload has no version
 
@@ -339,8 +342,8 @@ SHALL warn with the standard usage reply and do nothing else.
 
 - **WHEN** the active branch holds more notifications than the list pane has
   rows
-- **THEN** the list pane's header shows the selection's position as `(n/m)`,
-  and the header shows no position while every notification fits
+- **THEN** the list pane's header shows the selection's position as `(n/m)`, and
+  the header shows no position while every notification fits
 
 #### Scenario: Severities are distinguishable
 
@@ -358,8 +361,8 @@ SHALL warn with the standard usage reply and do nothing else.
 - **WHEN** the user runs `/notifications` before any notification has been
   captured in the active session
 - **THEN** the command opens the same titled frame with no panes, showing the
-  empty-state message `No notifications have been captured in this session
-  yet.` and the close key
+  empty-state message `No notifications have been captured in this session yet.`
+  and the close key
 
 #### Scenario: User passes an argument
 
@@ -419,10 +422,11 @@ hints rather than cut a hint off.
 ### Requirement: History browser is sized to the notification being read
 
 The history browser SHALL open centered in the terminal at 80% of its width,
-widened to 60 columns where the terminal allows. It SHALL size itself to whichever of its panes needs
-the most rows, bounded by 80% of the terminal height so its own header and
-footer remain on screen. A notification whose complete message fits within that
-bound SHALL be shown in full without requiring the user to scroll.
+widened to 60 columns where the terminal allows. It SHALL size itself to
+whichever of its panes needs the most rows, bounded by 80% of the terminal
+height so its own header and footer remain on screen. A notification whose
+complete message fits within that bound SHALL be shown in full without requiring
+the user to scroll.
 
 #### Scenario: Selected message fits the available height
 
@@ -532,19 +536,11 @@ stale session UI state when the session shuts down or extensions reload.
 - **THEN** the old runtime removes its surface and timers without later changing
   the new runtime's UI
 
-### Requirement: Package follows Pi installation conventions
+### Requirement: Output stays inside Pi's terminal UI
 
-The repository SHALL expose the extension through the `pi.extensions` package
-manifest and SHALL support installation through Pi's npm package mechanism. It
-SHALL use only terminal UI output and SHALL NOT issue operating-system
-notifications.
-
-#### Scenario: Package is installed through Pi
-
-- **WHEN** a user installs the published npm package with
-  `pi install npm:@sherif-fanous/pi-notification-center`
-- **THEN** Pi discovers and loads the extension entry point declared by the
-  package
+The extension SHALL use only terminal UI output and SHALL NOT issue
+operating-system notifications. The package shape it shares with the other
+extensions is in the repository's `extension-packaging` spec.
 
 #### Scenario: Captured notification is displayed
 

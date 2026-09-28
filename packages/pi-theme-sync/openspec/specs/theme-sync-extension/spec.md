@@ -1,4 +1,4 @@
-# theme-sync-extension
+# theme-sync-extension Specification
 
 ## Purpose
 

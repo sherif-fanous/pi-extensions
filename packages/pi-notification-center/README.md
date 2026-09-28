@@ -1,11 +1,16 @@
 # pi-notification-center
 
-A notification center for [Pi](https://github.com/earendil-works/pi).
+A [Pi](https://github.com/earendil-works/pi) extension that shows notifications
+as toasts and keeps a browsable session history.
 
-Extension notifications normally become permanent rows in Pi's chat
-transcript, where they crowd out the conversation. This extension shows
-them as toasts in the top-right corner instead, then keeps them in a
-browsable history for the rest of the session.
+Extension notifications normally become permanent rows in Pi's chat transcript,
+where they crowd out the conversation. Notification Center shows them as toasts
+in the top-right corner instead, then keeps them in a browsable history for the
+rest of the session.
+
+## Requirements
+
+- Pi 0.80.4 or newer
 
 ## Install
 
@@ -13,56 +18,64 @@ browsable history for the rest of the session.
 pi install npm:@sherif-fanous/pi-notification-center
 ```
 
-To try it from a clone of this repository without installing:
+Or try it without installing:
 
 ```shell
-pi -e .
+pi -e npm:@sherif-fanous/pi-notification-center
 ```
 
-To remove it:
+To uninstall:
 
 ```shell
 pi remove npm:@sherif-fanous/pi-notification-center
 ```
 
-Old history entries stay in your session files after you remove the
-extension, but nothing reads them any more.
+Old history entries stay in your session files after you uninstall Notification
+Center, but nothing reads them any more.
 
-## What you will see
+## Usage
 
-When an extension sends a notification, a small card appears at the
-top-right instead of a transcript row. Cards stack downward, oldest at the
-top, and each one disappears a few seconds after it arrives. Every
-notification gets its own card.
+When an extension sends a notification, a small card appears at the top-right
+instead of a transcript row. Cards stack downward, oldest at the top, and each
+one disappears a few seconds after it arrives. Every notification gets its own
+card.
 
-Toasts never take keyboard focus. You can keep typing, and a card that
-arrives while a dialog or picker is open will not disturb it.
+Toasts never take keyboard focus. You can keep typing, and a card that arrives
+while a dialog or picker is open will not disturb it.
 
-Long messages are shortened to fit the card, and a card that runs out of
-room ends with `…`. `/notifications` always has the full text. On a
-terminal too small to show a card safely, nothing appears, but the
-notification is still recorded.
+Long messages are shortened to fit the card, and a card that runs out of room
+ends with `…`. `/notifications` always has the full text. On a terminal too
+small to show a card safely, nothing appears, but the notification is still
+recorded.
 
-Only interactive sessions show toasts. In print (`-p`), JSON, and RPC
-mode, notifications behave exactly as they did before you installed this.
+Only interactive sessions show toasts. In print (`-p`), JSON, and RPC mode,
+notifications behave exactly as they did before you installed Notification
+Center.
 
-Everything stays inside Pi's terminal UI. The extension never sends
+Everything stays inside Pi's terminal UI. Notification Center never sends
 operating-system notifications.
 
-## `/notifications`
+### Commands
 
-Run `/notifications` to browse what this session has captured. The left
-pane lists notifications newest first, showing the time, the severity, and
-the first line. The right pane shows the selected one in full, with its
-date, time, severity, and complete message.
+| Command                 | What it does                                                                                                                    |
+| :---------------------- | :------------------------------------------------------------------------------------------------------------------------------ |
+| `/notifications`        | Opens the history of this session's notifications.                                                                              |
+| `/notifications status` | Shows whether toasts are on, how many notifications this session has captured, the toast settings, and your configuration file. |
 
-Severities are colored to match your theme: `ERROR` red, `WARN` amber,
-`INFO` accent.
+### The history browser
 
-Moving past the last notification wraps around to the first. Picking a
-different notification scrolls the detail pane back to the top. The
-footer shows the keys that work, and offers `PgUp` / `PgDn` only when the
-selected message is too long to fit.
+`/notifications` opens the history of what this session has captured. The left
+pane lists notifications newest first, showing the time, the severity, and the
+first line. The right pane shows the selected one in full, with its date, time,
+severity, and complete message.
+
+Severities are colored to match your theme: `ERROR` red, `WARN` amber, `INFO`
+accent.
+
+Moving past the last notification wraps around to the first. Picking a different
+notification scrolls the detail pane back to the top. The footer shows the keys
+that work, and offers `PgUp` / `PgDn` only when the selected message is too long
+to fit.
 
 | Key             | Action                 |
 | :-------------- | :--------------------- |
@@ -71,10 +84,6 @@ selected message is too long to fit.
 | `Esc`           | Close                  |
 
 If you have remapped Pi's keys, the browser follows your bindings.
-
-Run `/notifications status` to see whether toasts are on, how many notifications
-this session has captured, the toast settings in use, and the state of your
-configuration file.
 
 ## Configuration
 
@@ -133,14 +142,20 @@ and still uses your settings for the session. Fix the problem, for example the
 file's permissions, and run `/reload` to migrate it, or rename the keys
 yourself.
 
-## What it does not catch
+## Limitations
 
-Not every message in that corner of the screen is a notification. Pi draws
-its own status, warning, and error rows directly, and some extensions
-write to the transcript instead of sending a notification. Those messages
-keep appearing as they always have.
+Not every message in that corner of the screen is a notification. Pi draws its
+own status, warning, and error rows directly, and some extensions write to the
+transcript instead of sending a notification. Those messages keep appearing as
+they always have.
 
-Notifications sent before the extension loads also go to the transcript.
+Notifications sent before Notification Center loads also go to the transcript.
+
+## Troubleshooting
+
+Run `/notifications status` when toasts don't show up or look wrong. It shows
+whether toasts are on, the toast settings in use, and the state of your
+configuration file with any warnings.
 
 ## License
 

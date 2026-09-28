@@ -1,4 +1,4 @@
-# theme-sync-configuration
+# theme-sync-configuration Specification
 
 ## Purpose
 

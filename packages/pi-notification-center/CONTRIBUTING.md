@@ -22,17 +22,21 @@ mise run lint-fix    # fix most lint violations
 
 ## Planning
 
-Behavior changes are planned as [OpenSpec](https://github.com/Fission-AI/OpenSpec)
-changes under `openspec/changes/`. A small fix does not need one.
+Behavior changes are planned as
+[OpenSpec](https://github.com/Fission-AI/OpenSpec) changes under
+`openspec/changes/`. A small fix does not need one.
 
 ## Before you open a pull request
 
 1. `mise run check` passes.
 2. New behavior has a test.
-3. If you touched the toast surface or the capture wrapper, run the manual
-   TUI check in the `examples/emitter.ts` module JSDoc.
+3. If you touched the toast surface or the capture wrapper, run the manual TUI
+   check in the `examples/emitter.ts` module JSDoc.
 4. If the work has an OpenSpec change, its tasks are checked off and
    `openspec validate "<name>"` passes.
 5. Commit messages follow
    [Conventional Commits](https://www.conventionalcommits.org/).
-6. `AGENTS.md` has the conventions the linters do not enforce.
+6. The change follows the repository's root `AGENTS.md`, including the
+   conventions the linters do not enforce.
+7. A change users can see has a changeset from `mise run changeset`, run at the
+   repository root.

@@ -1,4 +1,4 @@
-# theme-sync-debugging
+# theme-sync-debugging Specification
 
 ## Purpose
 

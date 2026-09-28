@@ -1,4 +1,4 @@
-# theme-sync-config-ui
+# theme-sync-config-ui Specification
 
 ## Purpose
 

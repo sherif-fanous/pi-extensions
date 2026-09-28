@@ -1,17 +1,29 @@
 # pi-theme-sync
 
-A [Pi](https://github.com/badlogic/pi) coding agent extension that automatically switches Pi's theme to match your terminal or operating system appearance.
+A [Pi](https://github.com/earendil-works/pi) extension that switches Pi's theme
+to match your terminal or system appearance.
+
+## Requirements
+
+- Pi 0.80.4 or newer
+
+On an older Pi, install an earlier release line instead. Versions 0.4.0 to 0.5.x
+need Pi 0.79.7 or newer:
+
+```shell
+pi install npm:@sherif-fanous/pi-theme-sync@0.5.x
+```
+
+Version 0.3.x runs on Pi versions before 0.79.7:
+
+```shell
+pi install npm:@sherif-fanous/pi-theme-sync@0.3.x
+```
 
 ## Install
 
 ```shell
 pi install npm:@sherif-fanous/pi-theme-sync
-```
-
-Version 0.4.0 and later supports Pi 0.79.7 or newer. If you run an older Pi version, pin the previous release line instead:
-
-```shell
-pi install npm:@sherif-fanous/pi-theme-sync@0.3.x
 ```
 
 Or try it without installing:
@@ -26,33 +38,53 @@ To uninstall:
 pi remove npm:@sherif-fanous/pi-theme-sync
 ```
 
-## Quick start
+## Usage
 
-No configuration is needed. Once installed, Theme Sync detects your current appearance and switches Pi between its built-in `light` and `dark` themes automatically.
+No configuration is needed. Once installed, Theme Sync detects your current
+appearance and switches Pi between its built-in `light` and `dark` themes
+automatically.
 
-Run `/theme-sync` to open the configuration overlay. Run `/theme-sync status` to add the current runtime status to the transcript.
+### Commands
 
-The overlay lists the light and dark mode themes, the polling interval, and whether sync is on, each with the source of its value. Press `Enter` to change a setting, `F1` to read about it, and `Ctrl+S` to save your changes to the User or Project configuration. The footer shows the keys that work in the current step.
+| Command              | What it does                                                                                                   |
+| :------------------- | :------------------------------------------------------------------------------------------------------------- |
+| `/theme-sync`        | Opens the configuration overlay. It needs Pi's interactive terminal UI.                                        |
+| `/theme-sync status` | Shows the current appearance, the applied theme, how Theme Sync detects changes, and your configuration files. |
 
-| Key             | Action                                    |
-| :-------------- | :---------------------------------------- |
-| `↑` / `↓`       | Move the selection                        |
-| `PgUp` / `PgDn` | Move one page                             |
-| `Enter`         | Change the selected setting               |
-| `F1`            | Show help for the selected setting        |
-| `Ctrl+S`        | Save changes to the User or Project file  |
-| `Ctrl+R`        | Close the overlay and reload Pi           |
-| `Esc`           | Close, or go back from a nested step      |
+### The configuration overlay
+
+The overlay lists the light and dark mode themes, the polling interval, and
+whether sync is on, each with the source of its value. Press `Enter` to change a
+setting, `F1` to read about it, and `Ctrl+S` to save your changes to the User or
+Project configuration. The footer shows the keys that work in the current step.
+
+| Key             | Action                                   |
+| :-------------- | :--------------------------------------- |
+| `↑` / `↓`       | Move the selection                       |
+| `PgUp` / `PgDn` | Move one page                            |
+| `Enter`         | Change the selected setting              |
+| `F1`            | Show help for the selected setting       |
+| `Ctrl+S`        | Save changes to the User or Project file |
+| `Ctrl+R`        | Close the overlay and reload Pi          |
+| `Esc`           | Close, or go back from a nested step     |
 
 If you have remapped Pi's keys, the overlay follows your bindings.
 
-### Relationship to Pi's built-in `auto` theme
+### Pi's built-in `auto` theme
 
-Pi has its own automatic theme setting of the form `auto:<light-theme>,<dark-theme>`. Theme Sync does the same job with per-project configuration, custom theme mapping, and a status report, so the two are alternatives rather than complements.
+Pi has its own automatic theme setting of the form
+`auto:<light-theme>,<dark-theme>`. Theme Sync does the same job with per-project
+configuration, custom theme mapping, and a status report, so the two are
+alternatives rather than complements.
 
-Use one or the other. When Theme Sync applies a theme it calls Pi's `setTheme`, which persists a concrete theme name into your Pi settings. If your Pi `theme` setting was `auto:...`, that value is replaced by the applied theme name and Pi's built-in auto-switching stops on its own.
+Use one or the other. When Theme Sync applies a theme it calls Pi's `setTheme`,
+which persists a concrete theme name into your Pi settings. If your Pi `theme`
+setting was `auto:...`, that value is replaced by the applied theme name and
+Pi's built-in auto-switching stops on its own.
 
-To go back to Pi's built-in behavior, set **Sync** to **off** in the `/theme-sync` overlay and save it (or uninstall the extension), then set your Pi `theme` setting back to `auto:<light-theme>,<dark-theme>`.
+To go back to Pi's built-in behavior, set **Sync** to **off** in the
+`/theme-sync` overlay and save it (or uninstall the extension), then set your Pi
+`theme` setting back to `auto:<light-theme>,<dark-theme>`.
 
 ## Configuration
 
@@ -122,7 +154,8 @@ yourself.
 
 ### Initial detection
 
-On startup, Theme Sync determines the current appearance by probing three detection methods in order and using the first one that returns a result:
+On startup, Theme Sync determines the current appearance by probing three
+detection methods in order and using the first one that returns a result:
 
 ```text
 Terminal Color Scheme  ← asks Pi's terminal API for light/dark mode
@@ -132,11 +165,13 @@ OSC 11                 ← reads terminal background color, classifies as light/
 System Appearance      ← reads system appearance (macOS, Linux/GNOME, Windows)
 ```
 
-These names appear in the `/theme-sync status` report's `Detection strategy:` and `Available detectors:` rows.
+These names appear in the `/theme-sync status` report's `Detection strategy:`
+and `Available detectors:` rows.
 
 ### Ongoing updates
 
-After determining the initial appearance, Theme Sync keeps Pi in sync using the best available method:
+After determining the initial appearance, Theme Sync keeps Pi in sync using the
+best available method:
 
 ```text
 Terminal Color Scheme (subscription) available?
@@ -144,8 +179,27 @@ Terminal Color Scheme (subscription) available?
     └─ no  → poll available detectors at the configured interval
 ```
 
-When real-time terminal notifications are available, Theme Sync also keeps Pi on the theme that matches the last detected appearance. If Pi's active theme is changed manually while the detected appearance stays the same, the extension switches it back automatically.
+When real-time terminal notifications are available, Theme Sync also keeps Pi on
+the theme that matches the last detected appearance. If Pi's active theme is
+changed manually while the detected appearance stays the same, the extension
+switches it back automatically.
 
-Pi's built-in `auto:light,dark` theme mode and Theme Sync can use the same terminal notifications safely. The extension removes only its own listener during `/reload`, `/new`, or shutdown and does not disable Pi's notification channel. While Theme Sync is active, the extension's configured theme mapping remains authoritative.
+Pi's built-in `auto:light,dark` theme mode and Theme Sync can use the same
+terminal notifications safely. The extension removes only its own listener
+during `/reload`, `/new`, or shutdown and does not disable Pi's notification
+channel. While Theme Sync is active, the extension's configured theme mapping
+remains authoritative.
 
-When polling, all available detectors are tried in priority order on each cycle. If a higher-priority detector fails transiently, lower-priority detectors still provide a result.
+When polling, all available detectors are tried in priority order on each cycle.
+If a higher-priority detector fails transiently, lower-priority detectors still
+provide a result.
+
+## Troubleshooting
+
+Run `/theme-sync status` when the theme doesn't follow your appearance. It shows
+the detected appearance, the detection strategy and available detectors, each
+configuration file with its state, and any warnings.
+
+## License
+
+[MIT](LICENSE)

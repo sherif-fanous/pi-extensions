@@ -1,4 +1,4 @@
-# theme-sync-detection
+# theme-sync-detection Specification
 
 ## Purpose
 

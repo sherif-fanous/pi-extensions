@@ -160,8 +160,8 @@ cut with a single-character ellipsis (`…`).
 
 - **WHEN** either picker is rendered narrower than a row's message text,
   secondary line, or scroll position line
-- **THEN** each of those lines is cut to the terminal width and ends in `…`,
-  and no rendered line is wider than the terminal
+- **THEN** each of those lines is cut to the terminal width and ends in `…`, and
+  no rendered line is wider than the terminal
 
 ### Requirement: Pickers show a title and key hints
 
@@ -184,8 +184,8 @@ hint. The selected row SHALL be marked with an accent `→ `.
 Navigation, confirm, and cancel SHALL follow Pi's `tui.select.*` keybindings,
 and a remapped key SHALL replace its default. ↑/↓ SHALL move one message and
 wrap around the ends; PgUp/PgDn SHALL move one page of visible messages and stop
-at the first or last message. A picker SHALL show at most ten messages at a time,
-like Pi's `/fork`. When not every message is shown, a muted `(n/m)`
+at the first or last message. A picker SHALL show at most ten messages at a
+time, like Pi's `/fork`. When not every message is shown, a muted `(n/m)`
 position line SHALL follow the list.
 
 #### Scenario: Page up
