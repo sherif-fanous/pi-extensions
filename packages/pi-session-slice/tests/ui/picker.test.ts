@@ -1,17 +1,18 @@
 /** Drives the real slice picker component through its focused input handler. */
 
+import type { SliceCandidate } from "../../src/slice.js";
 import {
   showEndPicker,
   showStartPicker,
   type PickerResult,
-} from "../src/picker.js";
-import type { SliceCandidate } from "../src/slice.js";
+} from "../../src/ui/picker.js";
 import type {
   ExtensionUIContext,
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import type { KeybindingsManager } from "@earendil-works/pi-tui";
 import {
+  createFakeContext,
   createFakeCustom,
   createFakeKeybindings,
   createMarkerTheme,
@@ -91,9 +92,8 @@ async function drivePicker(
     theme: render?.theme ?? THEME,
     width: render?.width,
   });
-  const ui = { custom } as unknown as ExtensionUIContext;
 
-  return invoke(ui);
+  return invoke(createFakeContext({ ui: { custom } }).ui);
 }
 
 describe("slice picker input", () => {

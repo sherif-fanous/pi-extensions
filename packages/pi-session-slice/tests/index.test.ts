@@ -1,16 +1,19 @@
 /** Covers `/slice` registration, preconditions, orchestration, and failure reporting. */
 
 import type {
-  ExtensionAPI,
   ExtensionCommandContext,
   ExtensionUIContext,
-  RegisteredCommand,
+  SessionEntry,
+  SessionHeader,
 } from "@earendil-works/pi-coding-agent";
 import {
+  createFakeContext,
   createFakeCustom,
   createFakeKeybindings,
+  createFakePi,
   createShownTextRecorder,
   findShownTextViolations,
+  type FakeCommand,
 } from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -20,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   writeSliceFile: vi.fn(),
 }));
 
-vi.mock("../src/picker.js", () => ({
+vi.mock("../src/ui/picker.js", () => ({
   showStartPicker: mocks.showStartPicker,
   showEndPicker: mocks.showEndPicker,
 }));
@@ -31,14 +34,32 @@ vi.mock("../src/slice.js", async (importOriginal) => ({
 }));
 
 const { default: sessionSlice } = await import("../src/index.js");
-const actualPicker =
-  await vi.importActual<typeof import("../src/picker.js")>("../src/picker.js");
+const actualPicker = await vi.importActual<
+  typeof import("../src/ui/picker.js")
+>("../src/ui/picker.js");
+
+/** The context Pi passes to the `withSession` callback of `switchSession`. */
+type ReplacedSessionContext = Parameters<
+  NonNullable<
+    NonNullable<
+      Parameters<ExtensionCommandContext["switchSession"]>[1]
+    >["withSession"]
+  >
+>[0];
 
 const SOURCE_PATH = import.meta.filename;
 
-const CANDIDATE_ENTRIES = [
+const SOURCE_HEADER: SessionHeader = {
+  cwd: "/project",
+  id: "source",
+  timestamp: "2026-03-10T11:58:00.000Z",
+  type: "session",
+  version: 3,
+};
+
+const CANDIDATE_ENTRIES: SessionEntry[] = [
   {
-    type: "model_change" as const,
+    type: "model_change",
     id: "model",
     parentId: null,
     timestamp: "2026-03-10T11:59:00.000Z",
@@ -46,23 +67,23 @@ const CANDIDATE_ENTRIES = [
     modelId: "claude-test",
   },
   {
-    type: "message" as const,
+    type: "message",
     id: "u1",
     parentId: "model",
     timestamp: "2026-03-10T12:00:00.000Z",
     message: {
-      role: "user" as const,
+      role: "user",
       content: "start",
       timestamp: 1,
     },
   },
   {
-    type: "message" as const,
+    type: "message",
     id: "u2",
     parentId: "u1",
     timestamp: "2026-03-10T12:01:00.000Z",
     message: {
-      role: "user" as const,
+      role: "user",
       content: "end",
       timestamp: 2,
     },
@@ -75,7 +96,7 @@ function makeContext(
     header: { version?: number } | null;
     idle: boolean;
     mode: ExtensionCommandContext["mode"];
-    contextEntries: typeof CANDIDATE_ENTRIES | [];
+    contextEntries: SessionEntry[];
     sessionFile: string | undefined;
   }> = {},
 ): {
@@ -88,15 +109,17 @@ function makeContext(
   const notify = vi.fn();
   const setEditorText = vi.fn();
   const newNotify = vi.fn();
-  const newCtx = {
-    ui: { notify: newNotify, setEditorText },
-  } as unknown as ExtensionCommandContext;
+  const newCtx: ReplacedSessionContext = {
+    ...createFakeContext({ ui: { notify: newNotify, setEditorText } }),
+    sendMessage: () => Promise.resolve(),
+    sendUserMessage: () => Promise.resolve(),
+  };
   let stale = false;
   const switchSession = vi.fn(
     async (
       _path: string,
       options?: {
-        withSession?: (ctx: ExtensionCommandContext) => Promise<void>;
+        withSession?: (ctx: ReplacedSessionContext) => Promise<void>;
       },
     ) => {
       await options?.withSession?.(newCtx);
@@ -106,14 +129,14 @@ function makeContext(
       return { cancelled: false };
     },
   );
-  const ctx = {
+  const header = "header" in overrides ? overrides.header : {};
+  const ctx = createFakeContext({
     isIdle: () => overrides.idle ?? true,
     mode: overrides.mode ?? "tui",
     sessionManager: {
       getSessionFile: () =>
         "sessionFile" in overrides ? overrides.sessionFile : SOURCE_PATH,
-      getHeader: () =>
-        "header" in overrides ? overrides.header : { version: 3 },
+      getHeader: () => (header ? { ...SOURCE_HEADER, ...header } : null),
       buildContextEntries: () => overrides.contextEntries ?? CANDIDATE_ENTRIES,
       getBranch: () => overrides.contextEntries ?? CANDIDATE_ENTRIES,
       getSessionDir: () => "/sessions",
@@ -121,40 +144,24 @@ function makeContext(
     },
     switchSession,
     ui: {
-      custom: overrides.custom,
-      notify: (message: string, type?: string) => {
+      ...(overrides.custom && { custom: overrides.custom }),
+      notify: (message, type) => {
         if (stale) throw new Error("This extension ctx is stale");
 
         notify(message, type);
       },
     },
-  } as unknown as ExtensionCommandContext;
+  });
 
   return { ctx, newNotify, notify, setEditorText, switchSession };
 }
 
-function registeredCommand(): Pick<
-  RegisteredCommand,
-  "description" | "handler" | "name"
-> {
-  let command:
-    Pick<RegisteredCommand, "description" | "handler" | "name"> | undefined;
-  const pi = {
-    registerCommand: vi.fn(
-      (
-        name: string,
-        options: Pick<RegisteredCommand, "description" | "handler">,
-      ) => {
-        command = { ...options, name };
-      },
-    ),
-  } as unknown as ExtensionAPI;
+function registeredCommand(): FakeCommand {
+  const fake = createFakePi();
 
-  sessionSlice(pi);
+  sessionSlice(fake.pi);
 
-  if (!command) throw new Error("Command was not registered.");
-
-  return command;
+  return fake.command("slice");
 }
 
 beforeEach(() => {
@@ -168,10 +175,12 @@ beforeEach(() => {
 
 describe("sessionSlice", () => {
   it("registers the slice command", () => {
-    const command = registeredCommand();
+    const fake = createFakePi();
 
-    expect(command.name).toBe("slice");
-    expect(command.description).toBe(
+    sessionSlice(fake.pi);
+
+    expect([...fake.commands.keys()]).toEqual(["slice"]);
+    expect(fake.command("slice").description).toBe(
       "Start a new session from a range of this one",
     );
   });

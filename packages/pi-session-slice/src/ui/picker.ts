@@ -3,8 +3,8 @@
  * `/fork` picker, with the family's title, list model, and key hints.
  */
 
-import type { SliceCandidate } from "./slice.js";
-import { formatAgo } from "./time.js";
+import type { SliceCandidate } from "../slice.js";
+import { formatAgo } from "../time.js";
 import {
   DynamicBorder,
   type ExtensionUIContext,
