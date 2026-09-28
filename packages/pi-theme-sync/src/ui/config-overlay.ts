@@ -45,7 +45,7 @@ export interface ConfigOverlayOptions {
   /** Pi's keybindings; list movement, confirm, and cancel follow them. */
   readonly keybindings: Pick<KeybindingsManager, "getKeys" | "matches">;
   readonly requestRender: () => void;
-  /** Saves changes to one scope's file; throws when the save fails. */
+  /** Save changes to one scope's file. Throws when the save fails. */
   readonly save: (
     scope: ConfigScope,
     changes: EditableConfigChanges,

@@ -62,7 +62,7 @@ const defaultFs: MigrationFs = {
 };
 
 /**
- * Migrates old files and renamed keys, then loads the configuration.
+ * Migrate old files and renamed keys, then load the configuration.
  * Migration warnings come before the load's file and value problems.
  */
 export async function loadStartupConfig(
@@ -85,8 +85,8 @@ export async function loadStartupConfig(
 }
 
 /**
- * Moves each scope's old file to `config.json`, with renamed keys moved and
- * `version` stamped, then deletes the old file.
+ * Move each scope's old file to `config.json`, with renamed keys moved and
+ * `version` stamped, then delete the old file.
  *
  * The old file is `theme-sync/settings.json`, or `theme-sync.json` one
  * directory up when that is missing, as the release before `config.json`

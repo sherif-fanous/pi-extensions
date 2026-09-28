@@ -82,7 +82,7 @@ const INVALID = { kind: "invalid" } as const;
 /** Scopes in the order their values take precedence. */
 const SCOPE_PRECEDENCE: readonly ConfigScope[] = ["project", "user"];
 
-/** Checks whether a polling interval is finite and within the supported range. */
+/** Check whether a polling interval is finite and within the supported range. */
 export function isValidPollIntervalMs(value: number): boolean {
   const { max, min } = CONFIG_LIMITS["detection.pollIntervalMs"];
 
@@ -90,7 +90,7 @@ export function isValidPollIntervalMs(value: number): boolean {
 }
 
 /**
- * Reads both scopes' files and resolves each setting from Project, then
+ * Read both scopes' files and resolve each setting from Project, then
  * User, then the default. `warnings` lists only invalid values; file
  * problems stay on `files`.
  */
@@ -191,7 +191,7 @@ export async function loadConfig(
 }
 
 /**
- * Resolves one setting from project, then user, then the default, skipping
+ * Resolve one setting from project, then user, then the default, skipping
  * a scope whose value is invalid. Each invalid value is warned about, ending
  * with the default outcome when no scope supplies a valid value, and otherwise
  * with `Ignored it.`, since another scope's value applies.

@@ -28,7 +28,7 @@ type ReportDetectorFailure = (
   detector: PollingDetector | SubscriptionDetector,
 ) => void;
 
-/** Runs one polling detector and reports failures as an unknown appearance. */
+/** Run one polling detector and report failures as an unknown appearance. */
 export async function detectAppearance(
   ctx: ExtensionContext,
   pollingDetector: PollingDetector,
@@ -53,7 +53,7 @@ export async function detectAppearance(
   }
 }
 
-/** Returns polling detectors that can report an appearance in this session. */
+/** Return polling detectors that can report an appearance in this session. */
 export async function probeAvailablePollingDetectors(
   ctx: ExtensionContext,
   tui: TUI | undefined,
@@ -78,7 +78,7 @@ export async function probeAvailablePollingDetectors(
   return availablePollingDetectors;
 }
 
-/** Returns subscription detectors supported by Pi and the terminal. */
+/** Return subscription detectors supported by Pi and the terminal. */
 export async function probeAvailableSubscriptionDetectors(
   ctx: ExtensionContext,
   tui: TUI | undefined,

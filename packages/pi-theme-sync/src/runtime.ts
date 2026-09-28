@@ -55,15 +55,15 @@ const scheduleRecurringCycle: ScheduleRecurringCycle = (cycle, intervalMs) => {
 
 /** Controls appearance monitoring and exposes its current status. */
 export type ThemeSyncRuntime = {
-  cleanup: () => void;
+  dispose: () => void;
   getStatus: (ctx: ExtensionContext) => RuntimeStatus;
-  setupAppearanceMonitoring: (
+  startSession: (
     ctx: ExtensionContext,
     schedule?: ScheduleRecurringCycle,
   ) => Promise<void>;
 };
 
-/** Creates an isolated theme sync runtime for one extension instance. */
+/** Create an isolated theme sync runtime for one extension instance. */
 export function createThemeSyncRuntime(): ThemeSyncRuntime {
   let runtimeConfig: RuntimeConfig = structuredClone(DEFAULT_CONFIG);
 
@@ -87,9 +87,9 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
   let isColorSchemeSubscriptionDemoted = false;
   let hasUnreportedAppearanceChange = false;
   let isShutDown = false;
-  // Counts cleanups, so a setup can tell that a later cleanup overtook it
-  // even after a newer setup cleared `isShutDown` again.
-  let cleanupCount = 0;
+  // Counts disposals, so a start can tell that a later dispose overtook it
+  // even after a newer start cleared `isShutDown` again.
+  let disposeCount = 0;
 
   const applyMappedTheme = (
     ctx: ExtensionContext,
@@ -190,7 +190,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     stopRecurringCycle = schedule(() => runRecurringCycle(cycle), intervalMs);
   };
 
-  const cleanup = () => {
+  const dispose = () => {
     stopRecurringCycle?.();
     stopRecurringCycle = undefined;
 
@@ -201,7 +201,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     hasUnreportedAppearanceChange = false;
     isRecurringCycleRunning = false;
     isShutDown = true;
-    cleanupCount += 1;
+    disposeCount += 1;
   };
 
   const startAppearanceMonitoring = async (
@@ -457,22 +457,22 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     detectionStrategy = "No available detectors";
   };
 
-  // Setup warnings are notified once. Warnings the recurring cycle adds
+  // Startup warnings are notified once. Warnings the recurring cycle adds
   // later appear only in the status report.
-  const setupAppearanceMonitoring = async (
+  const startSession = async (
     ctx: ExtensionContext,
     schedule: ScheduleRecurringCycle = scheduleRecurringCycle,
   ) => {
-    cleanup();
+    dispose();
     isShutDown = false;
 
-    const setupCleanupCount = cleanupCount;
+    const startDisposeCount = disposeCount;
 
     await startAppearanceMonitoring(ctx, schedule);
 
-    // Any cleanup since, from shutdown or a newer setup, means this
+    // Any dispose since, from shutdown or a newer start, means this
     // session is gone and its warnings are no longer current.
-    if (cleanupCount === setupCleanupCount) {
+    if (disposeCount === startDisposeCount) {
       notifyWarnings(ctx, EXTENSION_NAME, [
         ...migrationWarnings,
         ...configFileNotices,
@@ -507,8 +507,8 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
   };
 
   return {
-    cleanup,
+    dispose,
     getStatus,
-    setupAppearanceMonitoring,
+    startSession,
   };
 }

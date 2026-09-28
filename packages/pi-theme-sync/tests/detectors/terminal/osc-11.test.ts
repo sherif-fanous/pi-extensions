@@ -1,9 +1,7 @@
-import { detectAppearanceViaOsc11Background } from "../src/detectors/terminal/osc-11.js";
-import { DEFAULT_TERMINAL_QUERY_TIMEOUT_MS } from "../src/detectors/terminal/query.js";
-import type {
-  ExtensionContext,
-  TerminalInputHandler,
-} from "@earendil-works/pi-coding-agent";
+import { detectAppearanceViaOsc11Background } from "../../../src/detectors/terminal/osc-11.js";
+import { DEFAULT_TERMINAL_QUERY_TIMEOUT_MS } from "../../../src/detectors/terminal/query.js";
+import type { TerminalInputHandler } from "@earendil-works/pi-coding-agent";
+import { createFakeContext } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, expect, test, vi } from "vitest";
 
 afterEach(() => {
@@ -79,17 +77,15 @@ test("can receive a valid reply after unrelated or malformed input", async () =>
 function startQuery() {
   let handler: TerminalInputHandler | undefined;
   const unsubscribe = vi.fn();
-  const ctx = {
-    hasUI: true,
-    mode: "tui",
+  const ctx = createFakeContext({
     ui: {
-      onTerminalInput: (listener: TerminalInputHandler) => {
+      onTerminalInput: (listener) => {
         handler = listener;
 
         return unsubscribe;
       },
     },
-  } as unknown as ExtensionContext;
+  });
   const write = vi.spyOn(process.stdout, "write").mockReturnValue(true);
   const result = detectAppearanceViaOsc11Background(ctx);
 

@@ -7,7 +7,7 @@ const decMode2031Decrqm = "\x1b[?2031$p";
 
 type DecMode2031Support = "supported" | "unsupported" | "unknown";
 
-/** Reports whether the terminal recognizes color scheme notification mode. */
+/** Report whether the terminal recognizes color scheme notification mode. */
 export async function probeDecMode2031Support(
   ctx: ExtensionContext,
 ): Promise<DecMode2031Support> {

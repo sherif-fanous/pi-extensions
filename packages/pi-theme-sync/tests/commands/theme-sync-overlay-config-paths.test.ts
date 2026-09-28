@@ -1,10 +1,9 @@
 import path from "node:path";
 
-import { openThemeSyncOverlay } from "../src/command.js";
-import { CONFIG_VERSION } from "../src/config/load.js";
-import { createThemeSyncRuntime } from "../src/runtime.js";
-import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { openThemeSyncOverlay } from "../../src/commands/theme-sync.js";
+import { CONFIG_VERSION } from "../../src/config/load.js";
 import {
+  createFakeContext,
   createFakeCustom,
   createPiKeybindings,
   createTempConfigDirs,
@@ -107,18 +106,20 @@ async function withOverlay(
     },
   });
   const reload = vi.fn();
-  const ctx = {
+  const ctx = createFakeContext({
     cwd: dirs.cwd,
     isProjectTrusted: () => trusted,
-    mode: "tui",
     reload,
     ui: {
       custom,
-      getAllThemes: () => [{ name: "light" }, { name: "dark" }],
+      getAllThemes: () => [
+        { name: "light", path: undefined },
+        { name: "dark", path: undefined },
+      ],
       notify: vi.fn(),
     },
-  } as unknown as ExtensionCommandContext;
+  });
 
-  await openThemeSyncOverlay(createThemeSyncRuntime(), ctx);
+  await openThemeSyncOverlay(ctx);
   expect(reload).not.toHaveBeenCalled();
 }

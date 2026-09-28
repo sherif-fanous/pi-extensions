@@ -14,7 +14,7 @@ type RunSystemCommand = (
   options: { timeout: number },
 ) => Promise<{ stdout: string }>;
 
-/** Reads the current macOS, Linux, or Windows appearance preference. */
+/** Read the current macOS, Linux, or Windows appearance preference. */
 export async function detectAppearanceViaSystem(
   runCommand: RunSystemCommand = execFileAsync,
 ): Promise<Appearance> {

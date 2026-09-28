@@ -6,12 +6,11 @@ import { probeDecMode2031Support } from "../src/detectors/terminal/dec-mode-2031
 import { detectAppearanceViaOsc11Background } from "../src/detectors/terminal/osc-11.js";
 import { EXTENSION_NAME } from "../src/extension-name.js";
 import registerThemeSync from "../src/index.js";
-import type {
-  ExtensionCommandContext,
-  RegisteredCommand,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
+  createFakeContext,
   createFakeCustom,
+  createFakePi,
   createPiKeybindings,
   createPlainTheme,
   createShownTextRecorder,
@@ -40,8 +39,6 @@ vi.mock("../src/detectors/terminal/dec-mode-2031.js", () => ({
 vi.mock("../src/detectors/terminal/osc-11.js", () => ({
   detectAppearanceViaOsc11Background: vi.fn(),
 }));
-
-type CommandOptions = Omit<RegisteredCommand, "name" | "sourceInfo">;
 
 let dirs: TempConfigDirs;
 
@@ -73,13 +70,17 @@ afterEach(async () => {
 
 test("everything Theme Sync shows follows the family text standard", async () => {
   const shown = createShownTextRecorder();
-  const { command, emit } = registerWithRecorder(shown);
+  const fake = createFakePi({ appendEntry: shown.appendEntry });
+
+  registerThemeSync(fake.pi);
+
+  const command = fake.command("theme-sync");
 
   await shown.recordCommand(command);
 
   const tui = commandContext(shown, "tui");
 
-  await emit("session_start", tui);
+  await fake.emit({ reason: "startup", type: "session_start" }, tui);
   await command.handler("status", tui);
   await command.handler("status foo", tui);
   await command.handler("unknown", tui);
@@ -109,7 +110,7 @@ test("everything Theme Sync shows follows the family text standard", async () =>
       overlay.handleInput?.("\x1b");
     }),
   );
-  await emit("session_shutdown", tui);
+  await fake.emit({ reason: "quit", type: "session_shutdown" }, tui);
 
   expect(shown.texts.map(({ text }) => text)).toEqual(
     expect.arrayContaining([
@@ -140,9 +141,8 @@ function commandContext(
   mode: ExtensionCommandContext["mode"],
   onMount?: FakeCustomOptions["onMount"],
 ): ExtensionCommandContext {
-  return {
+  return createFakeContext({
     cwd: dirs.cwd,
-    hasUI: mode === "tui",
     isProjectTrusted: () => false,
     mode,
     reload: vi.fn(),
@@ -159,43 +159,7 @@ function commandContext(
       setStatus: shown.setStatus,
       setTheme: vi.fn(() => ({ success: true })),
       setWidget: shown.setWidget,
-      theme: { ...createPlainTheme(), name: "dark" },
+      theme: Object.assign(createPlainTheme(), { name: "dark" }),
     },
-  } as never;
-}
-
-function registerWithRecorder(shown: ShownTextRecorder): {
-  command: CommandOptions;
-  emit: (event: string, ctx: ExtensionCommandContext) => Promise<void>;
-} {
-  const commands: CommandOptions[] = [];
-  const handlers = new Map<
-    string,
-    (event: unknown, ctx: ExtensionCommandContext) => unknown
-  >();
-
-  registerThemeSync({
-    appendEntry: shown.appendEntry,
-    on: (
-      event: string,
-      handler: (event: unknown, ctx: ExtensionCommandContext) => unknown,
-    ) => {
-      handlers.set(event, handler);
-    },
-    registerCommand: (_name: string, options: CommandOptions) => {
-      commands.push(options);
-    },
-    registerEntryRenderer: vi.fn(),
-  } as never);
-
-  const [command] = commands;
-
-  if (command === undefined) throw new Error("No command was registered.");
-
-  return {
-    command,
-    emit: async (event, ctx) => {
-      await handlers.get(event)?.({ type: event }, ctx);
-    },
-  };
+  });
 }

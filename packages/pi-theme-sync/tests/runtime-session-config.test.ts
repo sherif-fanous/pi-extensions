@@ -162,8 +162,8 @@ async function startSession(trusted: boolean) {
   } as never;
   const runtime = createThemeSyncRuntime();
 
-  await runtime.setupAppearanceMonitoring(ctx, () => () => {});
-  runtime.cleanup();
+  await runtime.startSession(ctx, () => () => {});
+  runtime.dispose();
 
   return { notify, status: () => runtime.getStatus(ctx) };
 }

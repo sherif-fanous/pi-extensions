@@ -7,7 +7,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const osc11BackgroundQuery = "\x1b]11;?\x1b\\";
 
-/** Queries the terminal background color and classifies its appearance. */
+/** Query the terminal background color and classify its appearance. */
 export async function detectAppearanceViaOsc11Background(
   ctx: ExtensionContext,
 ): Promise<Appearance> {

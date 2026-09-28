@@ -1,8 +1,8 @@
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 
-import { oldConfigPaths } from "../src/config/migrate.js";
-import { configPath } from "../src/config/save.js";
+import { oldConfigPaths } from "../../src/config/migrate.js";
+import { configPath } from "../../src/config/save.js";
 import { afterEach, expect, test, vi } from "vitest";
 
 const project = { cwd: path.join(tmpdir(), "theme-sync-project") };

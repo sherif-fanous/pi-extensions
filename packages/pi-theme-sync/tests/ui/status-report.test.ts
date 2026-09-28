@@ -1,12 +1,12 @@
-import type { RuntimeStatus } from "../src/types.js";
+import type { RuntimeStatus } from "../../src/types.js";
 import {
   deliverStatusReport,
   formatStatusReport,
   renderStatusReport,
   STATUS_REPORT_ENTRY_TYPE,
-} from "../src/ui/status-report.js";
-import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
+} from "../../src/ui/status-report.js";
+import type { Theme } from "@earendil-works/pi-coding-agent";
+import { createFakeContext } from "@sherif-fanous/pi-extensions-testing";
 import { expect, test, vi } from "vitest";
 
 const status: RuntimeStatus = {
@@ -123,13 +123,7 @@ test.each(["rpc", "json", "print"] as const)(
     const appendEntry = vi.fn();
     const notify = vi.fn();
     const body = formatStatusReport(status, () => "now");
-    const ctx = {
-      mode,
-      ui: {
-        notify,
-        theme: createPlainTheme(),
-      },
-    } as unknown as ExtensionContext;
+    const ctx = createFakeContext({ mode, ui: { notify } });
 
     deliverStatusReport(ctx, { appendEntry }, { body });
 
@@ -142,7 +136,7 @@ test("persists plain report data in a TUI transcript entry", () => {
   const appendEntry = vi.fn();
   const notify = vi.fn();
   const body = formatStatusReport(status, () => "now");
-  const ctx = { mode: "tui", ui: { notify } } as unknown as ExtensionContext;
+  const ctx = createFakeContext({ ui: { notify } });
 
   deliverStatusReport(ctx, { appendEntry }, { body });
 

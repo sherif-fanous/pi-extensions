@@ -2,7 +2,7 @@
 
 import type { Appearance } from "./types.js";
 
-/** Classifies a six-digit RGB hex color using Rec. 709 luminance. */
+/** Classify a six-digit RGB hex color using Rec. 709 luminance. */
 export function classifyHexColor(hexColor: string): Appearance {
   if (hexColor.length !== 6) {
     return "unknown";

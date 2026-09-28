@@ -8,6 +8,10 @@ import { probeDecMode2031Support } from "../src/detectors/terminal/dec-mode-2031
 import { detectAppearanceViaOsc11Background } from "../src/detectors/terminal/osc-11.js";
 import { createThemeSyncRuntime } from "../src/runtime.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import {
+  createFakeContext,
+  createPlainTheme,
+} from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 vi.mock("../src/detectors/pi/color-scheme.js", () => ({
@@ -121,7 +125,7 @@ test("startup survives polling and subscription probe failures", async () => {
   const schedule = vi.fn(() => vi.fn());
 
   try {
-    await runtime.setupAppearanceMonitoring(ctx, schedule);
+    await runtime.startSession(ctx, schedule);
 
     expect(schedule).toHaveBeenCalledOnce();
     expect(runtime.getStatus(ctx)).toMatchObject({
@@ -133,7 +137,7 @@ test("startup survives polling and subscription probe failures", async () => {
       ],
     });
   } finally {
-    runtime.cleanup();
+    runtime.dispose();
   }
 });
 
@@ -147,7 +151,7 @@ test("a detector failing after discovery falls back and reports only one warning
   let cycle = () => {};
 
   try {
-    await runtime.setupAppearanceMonitoring(ctx, (callback) => {
+    await runtime.startSession(ctx, (callback) => {
       cycle = callback;
 
       return () => {};
@@ -167,7 +171,7 @@ test("a detector failing after discovery falls back and reports only one warning
       "Terminal Color Scheme query failed. Using the other available detectors.",
     ]);
   } finally {
-    runtime.cleanup();
+    runtime.dispose();
   }
 });
 
@@ -182,7 +186,7 @@ test("setup notifies its warnings once and leaves later cycle warnings to status
   let cycle = () => {};
 
   try {
-    await runtime.setupAppearanceMonitoring(ctx, (callback) => {
+    await runtime.startSession(ctx, (callback) => {
       cycle = callback;
 
       return () => {};
@@ -205,12 +209,12 @@ test("setup notifies its warnings once and leaves later cycle warnings to status
 
     expect(notify).toHaveBeenCalledOnce();
   } finally {
-    runtime.cleanup();
+    runtime.dispose();
   }
 });
 
 test.each(["reject", "unknown", "light"] as const)(
-  "cleanup during a startup probe prevents further work after %s",
+  "dispose during a startup probe prevents further work after %s",
   async (outcome) => {
     let finishProbe = () => {};
     const pendingProbe = new Promise<"unknown" | "light">((resolve, reject) => {
@@ -230,14 +234,14 @@ test.each(["reject", "unknown", "light"] as const)(
     const schedule = vi.fn(() => vi.fn());
     const setTheme = vi.spyOn(ctx.ui, "setTheme");
     const notify = vi.spyOn(ctx.ui, "notify");
-    const setup = runtime.setupAppearanceMonitoring(ctx, schedule);
+    const setup = runtime.startSession(ctx, schedule);
 
     try {
       await vi.waitFor(() =>
         expect(detectAppearanceViaColorScheme).toHaveBeenCalledOnce(),
       );
 
-      runtime.cleanup();
+      runtime.dispose();
       finishProbe();
       await setup;
 
@@ -249,7 +253,7 @@ test.each(["reject", "unknown", "light"] as const)(
       expect(runtime.getStatus(ctx).warnings).toEqual([]);
       expect(notify).not.toHaveBeenCalled();
     } finally {
-      runtime.cleanup();
+      runtime.dispose();
       finishProbe();
       await setup;
     }
@@ -274,7 +278,7 @@ test("all failed probes leave startup alive with no recurring timer", async () =
   const schedule = vi.fn(() => vi.fn());
 
   try {
-    await runtime.setupAppearanceMonitoring(ctx, schedule);
+    await runtime.startSession(ctx, schedule);
 
     expect(schedule).not.toHaveBeenCalled();
     expect(runtime.getStatus(ctx).currentAppearance).toBe("unknown");
@@ -284,22 +288,22 @@ test("all failed probes leave startup alive with no recurring timer", async () =
         .warnings.filter((warning) => warning.includes("query failed")),
     ).toHaveLength(3);
   } finally {
-    runtime.cleanup();
+    runtime.dispose();
   }
 });
 
 function createContext(): ExtensionContext {
-  return {
+  return createFakeContext({
     cwd: "/unused-detector-fallback-test",
-    hasUI: true,
-    isProjectTrusted: () => true,
-    mode: "tui",
     ui: {
-      getAllThemes: () => [{ name: "light" }, { name: "dark" }],
+      getAllThemes: () => [
+        { name: "light", path: undefined },
+        { name: "dark", path: undefined },
+      ],
       notify: vi.fn(),
       setTheme: vi.fn(),
       setWidget: vi.fn(),
-      theme: { name: "initial" },
+      theme: Object.assign(createPlainTheme(), { name: "initial" }),
     },
-  } as unknown as ExtensionContext;
+  });
 }

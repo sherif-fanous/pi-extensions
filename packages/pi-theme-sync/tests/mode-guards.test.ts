@@ -1,13 +1,19 @@
-import { openThemeSyncOverlay } from "../src/command.js";
+import { openThemeSyncOverlay } from "../src/commands/theme-sync.js";
 import { getTuiHandle } from "../src/detectors/pi/tui-handle.js";
 import { queryWithTerminalListener } from "../src/detectors/terminal/query.js";
-import { createThemeSyncRuntime } from "../src/runtime.js";
 import type {
-  ExtensionCommandContext,
   TerminalInputHandler,
+  Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { TUI } from "@earendil-works/pi-tui";
+import type { Component, TUI } from "@earendil-works/pi-tui";
+import {
+  createFakeContext,
+  createPlainTheme,
+} from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, expect, test, vi } from "vitest";
+
+/** A widget factory, as `ctx.ui.setWidget` receives it. */
+type WidgetFactory = (tui: TUI, theme: Theme) => Component;
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -22,18 +28,14 @@ test.each(["rpc", "json", "print"] as const)(
       onTerminalInput: vi.fn(),
       setWidget: vi.fn(),
     };
-    const ctx = {
-      hasUI: mode === "rpc",
-      mode,
-      ui,
-    } as unknown as ExtensionCommandContext;
+    const ctx = createFakeContext({ mode, ui });
     const write = vi.spyOn(process.stdout, "write").mockReturnValue(true);
 
     expect(
       await queryWithTerminalListener(ctx, "query", () => "reply"),
     ).toBeUndefined();
     expect(getTuiHandle(ctx)).toBeUndefined();
-    await openThemeSyncOverlay(createThemeSyncRuntime(), ctx);
+    await openThemeSyncOverlay(ctx);
 
     expect(write).not.toHaveBeenCalled();
     expect(ui.onTerminalInput).not.toHaveBeenCalled();
@@ -49,17 +51,15 @@ test.each(["rpc", "json", "print"] as const)(
 test("TUI queries still receive replies and remove their listener", async () => {
   let handler: TerminalInputHandler | undefined;
   const unsubscribe = vi.fn();
-  const ctx = {
-    hasUI: true,
-    mode: "tui",
+  const ctx = createFakeContext({
     ui: {
-      onTerminalInput: (listener: TerminalInputHandler) => {
+      onTerminalInput: (listener) => {
         handler = listener;
 
         return unsubscribe;
       },
     },
-  } as unknown as ExtensionCommandContext;
+  });
   const write = vi.spyOn(process.stdout, "write").mockReturnValue(true);
   const result = queryWithTerminalListener(ctx, "query", (data) =>
     data === "reply" ? "dark" : undefined,
@@ -74,15 +74,12 @@ test("TUI queries still receive replies and remove their listener", async () => 
 test("TUI mode still opens the custom overlay", async () => {
   const custom = vi.fn().mockResolvedValue(undefined);
   const notify = vi.fn();
-  const ctx = {
+  const ctx = createFakeContext({
     cwd: "/unused-mode-guard-test",
-    hasUI: true,
-    isProjectTrusted: () => true,
-    mode: "tui",
-    ui: { custom, getAllThemes: () => [], notify },
-  } as unknown as ExtensionCommandContext;
+    ui: { custom, notify },
+  });
 
-  await openThemeSyncOverlay(createThemeSyncRuntime(), ctx);
+  await openThemeSyncOverlay(ctx);
 
   expect(custom).toHaveBeenCalledOnce();
   expect(notify).not.toHaveBeenCalled();
@@ -91,16 +88,13 @@ test("TUI mode still opens the custom overlay", async () => {
 test("TUI handle acquisition still registers and removes its widget", () => {
   const tui = {} as TUI;
   const setWidget = vi.fn(
-    (_key: string, factory: ((candidate: TUI) => unknown) | undefined) => {
+    (_key: string, factory?: string[] | WidgetFactory) => {
       if (typeof factory === "function") {
-        factory(tui);
+        factory(tui, createPlainTheme());
       }
     },
   );
-  const ctx = {
-    mode: "tui",
-    ui: { setWidget },
-  } as unknown as ExtensionCommandContext;
+  const ctx = createFakeContext({ ui: { setWidget } });
 
   expect(getTuiHandle(ctx)).toBe(tui);
   expect(setWidget).toHaveBeenCalledTimes(2);

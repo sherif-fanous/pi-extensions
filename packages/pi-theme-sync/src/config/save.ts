@@ -35,7 +35,7 @@ export function configPath(
 }
 
 /**
- * Merges changed settings into one scope's file, keeping every other key.
+ * Merge changed settings into one scope's file, keeping every other key.
  *
  * Throws, leaving the file untouched, when the project is not trusted,
  * the file is invalid, or the write fails.
@@ -70,7 +70,7 @@ export async function writeConfigChanges(
   );
 }
 
-/** Sets a dot-separated key path, replacing any non-object on the way. */
+/** Set a dot-separated key path, replacing any non-object on the way. */
 function setValueAt(
   document: Record<string, unknown>,
   keyPath: string,

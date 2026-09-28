@@ -9,7 +9,7 @@ import { isInteractiveTui } from "@sherif-fanous/pi-extensions-core";
 /** Default time to wait for a terminal query response. */
 export const DEFAULT_TERMINAL_QUERY_TIMEOUT_MS = 300;
 
-/** Sends a terminal sequence and resolves with the first parsed response. */
+/** Send a terminal sequence and resolve with the first parsed response. */
 export async function queryWithTerminalListener<T>(
   ctx: ExtensionContext,
   sequence: string,

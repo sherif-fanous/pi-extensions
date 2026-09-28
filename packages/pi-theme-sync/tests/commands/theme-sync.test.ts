@@ -1,10 +1,10 @@
-import { runThemeSyncCommand } from "../src/command.js";
-import type { ThemeSyncRuntime } from "../src/runtime.js";
-import type { RuntimeStatus } from "../src/types.js";
-import { STATUS_REPORT_ENTRY_TYPE } from "../src/ui/status-report.js";
+import { runThemeSyncCommand } from "../../src/commands/theme-sync.js";
+import type { ThemeSyncRuntime } from "../../src/runtime.js";
+import type { RuntimeStatus } from "../../src/types.js";
+import { STATUS_REPORT_ENTRY_TYPE } from "../../src/ui/status-report.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { overlayOptions } from "@sherif-fanous/pi-extensions-core";
-import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
+import { createFakeContext } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, expect, test, vi } from "vitest";
 
 const status: RuntimeStatus = {
@@ -21,9 +21,9 @@ const status: RuntimeStatus = {
 };
 
 const runtime = {
-  cleanup: vi.fn(),
+  dispose: vi.fn(),
   getStatus: vi.fn(() => status),
-  setupAppearanceMonitoring: vi.fn(),
+  startSession: vi.fn(),
 } as unknown as ThemeSyncRuntime;
 
 afterEach(() => {
@@ -37,7 +37,7 @@ test("bare command opens configuration directly at the main overlay size", async
   const notify = vi.fn();
   const ctx = commandContext("tui", custom, notify);
 
-  await runThemeSyncCommand("   ", runtime, ctx, { appendEntry });
+  await runThemeSyncCommand("   ", ctx, { pi: { appendEntry }, runtime });
 
   expect(custom).toHaveBeenCalledOnce();
 
@@ -54,7 +54,7 @@ test("status appends a report and does not open an overlay", async () => {
   const appendEntry = vi.fn();
   const ctx = commandContext("tui", custom);
 
-  await runThemeSyncCommand(" status ", runtime, ctx, { appendEntry });
+  await runThemeSyncCommand(" status ", ctx, { pi: { appendEntry }, runtime });
 
   expect(custom).not.toHaveBeenCalled();
   expect(appendEntry).toHaveBeenCalledOnce();
@@ -73,7 +73,10 @@ test("unknown arguments report punctuated usage without opening an overlay", asy
   const notify = vi.fn();
   const ctx = commandContext("tui", custom, notify);
 
-  await runThemeSyncCommand("unknown", runtime, ctx, { appendEntry: vi.fn() });
+  await runThemeSyncCommand("unknown", ctx, {
+    pi: { appendEntry: vi.fn() },
+    runtime,
+  });
 
   expect(custom).not.toHaveBeenCalled();
   expect(notify).toHaveBeenCalledWith(
@@ -87,15 +90,9 @@ function commandContext(
   custom: ExtensionCommandContext["ui"]["custom"],
   notify = vi.fn(),
 ): ExtensionCommandContext {
-  return {
+  return createFakeContext({
     cwd: "/unused-command-routing",
-    isProjectTrusted: () => true,
     mode,
-    ui: {
-      custom,
-      getAllThemes: () => [],
-      notify,
-      theme: createPlainTheme(),
-    },
-  } as unknown as ExtensionCommandContext;
+    ui: { custom, notify },
+  });
 }

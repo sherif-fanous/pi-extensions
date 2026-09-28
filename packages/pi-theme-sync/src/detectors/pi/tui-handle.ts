@@ -6,7 +6,7 @@ import { isInteractiveTui } from "@sherif-fanous/pi-extensions-core";
 
 const TUI_HANDLE_WIDGET_KEY = "theme-sync:tui-handle";
 
-/** Gets the live TUI handle when Pi is running in interactive mode. */
+/** Get the live TUI handle when Pi is running in interactive mode. */
 export function getTuiHandle(
   ctx: Pick<ExtensionContext, "mode" | "ui">,
 ): TUI | undefined {

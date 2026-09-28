@@ -1,4 +1,4 @@
-import { detectAppearanceViaSystem } from "../src/detectors/system/appearance.js";
+import { detectAppearanceViaSystem } from "../../../src/detectors/system/appearance.js";
 import { afterEach, expect, test, vi } from "vitest";
 
 const missingPreference =

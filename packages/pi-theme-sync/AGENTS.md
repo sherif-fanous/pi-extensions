@@ -13,8 +13,8 @@ this package.
   through exported mutable bindings.
 - `getTuiHandle` gets Pi's live TUI through a transient zero-line `setWidget`
   factory, because `ExtensionUIContext` doesn't expose the color-scheme API.
-  Keep the workaround isolated, acquire the handle once per
-  `setupAppearanceMonitoring` call, and never cache it across sessions.
+  Keep the workaround isolated, acquire the handle once per `startSession` call,
+  and never cache it across sessions.
 - Pi's color-scheme API is the primary terminal source: Pi owns DSR 996/997
   parsing and the notification lifecycle, so never parse color-scheme reports
   from raw terminal input.

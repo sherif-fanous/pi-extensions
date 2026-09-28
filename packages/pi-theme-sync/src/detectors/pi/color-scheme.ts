@@ -9,7 +9,7 @@ export type ColorSchemeSubscription = {
   removeColorSchemeListener: () => void;
 };
 
-/** Queries Pi for the terminal's current color scheme. */
+/** Query Pi for the terminal's current color scheme. */
 export async function detectAppearanceViaColorScheme(
   tui: TUI | undefined,
 ): Promise<Appearance> {
@@ -24,7 +24,7 @@ export async function detectAppearanceViaColorScheme(
   );
 }
 
-/** Enables terminal color scheme reports and subscribes to them. */
+/** Enable terminal color scheme reports and subscribe to them. */
 export function enableColorSchemeSubscription(
   tui: TUI | undefined,
   onAppearanceDetected: (detectedAppearance: Appearance) => void,
@@ -41,7 +41,7 @@ export function enableColorSchemeSubscription(
   return { removeColorSchemeListener };
 }
 
-/** Checks whether a TUI handle provides Pi's color scheme API. */
+/** Check whether a TUI handle provides Pi's color scheme API. */
 export function hasColorSchemeApi(tui: TUI | undefined): tui is TUI {
   return (
     typeof tui?.queryTerminalColorScheme === "function" &&

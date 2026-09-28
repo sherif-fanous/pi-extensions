@@ -4,13 +4,12 @@ import path from "node:path";
 
 import { createThemeSyncRuntime } from "../src/runtime.js";
 import type { Appearance } from "../src/types.js";
-import type {
-  ExtensionContext,
-  TerminalInputHandler,
-} from "@earendil-works/pi-coding-agent";
-import type { TUI } from "@earendil-works/pi-tui";
+import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import type { Component, TUI } from "@earendil-works/pi-tui";
 import {
   createDeferred,
+  createFakeContext,
+  createPlainTheme,
   flushPromises,
   type Deferred,
 } from "@sherif-fanous/pi-extensions-testing";
@@ -25,6 +24,9 @@ type RuntimeHarness = {
   notifications: boolean[];
   reportAppearance: (appearance: Appearance) => void;
 };
+
+/** A widget factory, as `ctx.ui.setWidget` receives it. */
+type WidgetFactory = (tui: TUI, theme: Theme) => Component;
 
 async function createRuntimeHarness(
   mode: "polling" | "subscription",
@@ -44,7 +46,7 @@ async function createRuntimeHarness(
 
   const appliedThemes: string[] = [];
   const notifications: boolean[] = [];
-  const theme = { name: "initial-theme" };
+  const theme = Object.assign(createPlainTheme(), { name: "initial-theme" });
   let colorSchemeQueryCount = 0;
   let listenerRemovalCount = 0;
   let onAppearanceDetected: ((appearance: Appearance) => void) | undefined;
@@ -73,43 +75,39 @@ async function createRuntimeHarness(
     },
   } as unknown as TUI;
 
-  const ui = {
-    getAllThemes: () => [
-      { name: "light-theme" },
-      { name: "dark-theme" },
-      { name: "catppuccin-latte" },
-      { name: "catppuccin-macchiato" },
-    ],
-    onTerminalInput: (handler: TerminalInputHandler) => {
-      queueMicrotask(() => {
-        handler(
-          mode === "subscription"
-            ? "\u001B[?2031;1$y\u001B]11;rgb:00/00/00\u001B\\"
-            : "\u001B[?2031;0$y\u001B]11;rgb:00/00/00\u001B\\",
-        );
-      });
-
-      return () => {};
-    },
-    setTheme: (themeName: string) => {
-      appliedThemes.push(themeName);
-      theme.name = themeName;
-    },
-    setWidget: (
-      _key: string,
-      factory: ((candidate: TUI) => unknown) | undefined,
-    ) => {
-      factory?.(tui);
-    },
-    theme,
-  };
-  const ctx = {
+  const ctx = createFakeContext({
     cwd,
-    hasUI: true,
-    isProjectTrusted: () => true,
-    mode: "tui",
-    ui,
-  } as unknown as ExtensionContext;
+    ui: {
+      getAllThemes: () =>
+        [
+          "light-theme",
+          "dark-theme",
+          "catppuccin-latte",
+          "catppuccin-macchiato",
+        ].map((name) => ({ name, path: undefined })),
+      onTerminalInput: (handler) => {
+        queueMicrotask(() => {
+          handler(
+            mode === "subscription"
+              ? "\u001B[?2031;1$y\u001B]11;rgb:00/00/00\u001B\\"
+              : "\u001B[?2031;0$y\u001B]11;rgb:00/00/00\u001B\\",
+          );
+        });
+
+        return () => {};
+      },
+      setTheme: (themeName: string) => {
+        appliedThemes.push(themeName);
+        theme.name = themeName;
+
+        return { success: true };
+      },
+      setWidget: (_key: string, factory?: string[] | WidgetFactory) => {
+        if (typeof factory === "function") factory(tui, theme);
+      },
+      theme,
+    },
+  });
 
   return {
     appliedThemes,
@@ -123,7 +121,7 @@ async function createRuntimeHarness(
 }
 
 for (const mode of ["polling", "subscription"] as const) {
-  void test(`${mode} runtime excludes overlap, recovers after failure, and guards cleanup`, async () => {
+  void test(`${mode} runtime excludes overlap, recovers after failure, and guards dispose`, async () => {
     const slowFailure = createDeferred<Appearance>();
     const repeatedFailure = createDeferred<Appearance>();
     const lateResult = createDeferred<Appearance>();
@@ -139,7 +137,7 @@ for (const mode of ["polling", "subscription"] as const) {
     const runtime = createThemeSyncRuntime();
 
     try {
-      await runtime.setupAppearanceMonitoring(harness.ctx, (cycle) => {
+      await runtime.startSession(harness.ctx, (cycle) => {
         scheduledCycles.push(cycle);
 
         return () => {};
@@ -190,22 +188,22 @@ for (const mode of ["polling", "subscription"] as const) {
 
       const appliedThemeCountBeforeCleanup = harness.appliedThemes.length;
 
-      runtime.cleanup();
+      runtime.dispose();
       lateResult.resolve("light");
       await flushPromises();
       assert.equal(
         harness.appliedThemes.length,
         appliedThemeCountBeforeCleanup,
-        "cleanup must prevent a late theme update",
+        "dispose must prevent a late theme update",
       );
 
       assert.deepEqual(
         harness.notifications,
         mode === "subscription" ? [true] : [],
-        "cleanup must not disable shared host notifications",
+        "dispose must not disable shared host notifications",
       );
     } finally {
-      runtime.cleanup();
+      runtime.dispose();
       await harness.cleanup();
     }
   });
@@ -223,7 +221,7 @@ void test("recurring non-detector failures still release the cycle guard", async
   let runCycle = () => {};
 
   try {
-    await runtime.setupAppearanceMonitoring(harness.ctx, (cycle) => {
+    await runtime.startSession(harness.ctx, (cycle) => {
       runCycle = cycle;
 
       return () => {};
@@ -252,7 +250,7 @@ void test("recurring non-detector failures still release the cycle guard", async
     assert.equal(harness.getColorSchemeQueryCount(), 4);
     assert.equal(runtime.getStatus(harness.ctx).currentAppearance, "light");
   } finally {
-    runtime.cleanup();
+    runtime.dispose();
     await harness.cleanup();
   }
 });
@@ -269,7 +267,7 @@ void test("subscription reports retain grace recovery and one-way demotion", asy
   const runtime = createThemeSyncRuntime();
 
   try {
-    await runtime.setupAppearanceMonitoring(harness.ctx, (cycle) => {
+    await runtime.startSession(harness.ctx, (cycle) => {
       scheduledCycles.push(cycle);
 
       return () => {};
@@ -317,7 +315,7 @@ void test("subscription reports retain grace recovery and one-way demotion", asy
     );
     assert.deepEqual(harness.notifications, [true]);
   } finally {
-    runtime.cleanup();
+    runtime.dispose();
     await harness.cleanup();
   }
 });

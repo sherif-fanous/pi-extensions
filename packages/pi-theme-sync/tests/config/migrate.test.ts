@@ -1,12 +1,12 @@
 import { access, mkdir, open, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 
-import { CONFIG_VERSION } from "../src/config/load.js";
+import { CONFIG_VERSION } from "../../src/config/load.js";
 import {
   loadStartupConfig,
   migrateConfigLayout,
   type MigrationFs,
-} from "../src/config/migrate.js";
+} from "../../src/config/migrate.js";
 import type {
   AtomicWriteFs,
   ConfigScope,

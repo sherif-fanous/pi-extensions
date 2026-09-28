@@ -1,8 +1,8 @@
-import { openThemeSyncOverlay } from "../src/command.js";
-import { createThemeSyncRuntime } from "../src/runtime.js";
+import { openThemeSyncOverlay } from "../../src/commands/theme-sync.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
   createDeferred,
+  createFakeContext,
   createFakeCustom,
   createPiKeybindings,
 } from "@sherif-fanous/pi-extensions-testing";
@@ -17,11 +17,9 @@ test("closes the overlay before reloading and waits for reload completion", asyn
   const reload = vi.fn().mockReturnValue(pendingReload.promise);
   const ctx = createContext(["\x12"], reload);
   let completed = false;
-  const command = openThemeSyncOverlay(createThemeSyncRuntime(), ctx).then(
-    () => {
-      completed = true;
-    },
-  );
+  const command = openThemeSyncOverlay(ctx).then(() => {
+    completed = true;
+  });
 
   await vi.waitFor(() => expect(reload).toHaveBeenCalledOnce());
 
@@ -39,7 +37,7 @@ test("reports a failed reload as Could not reload Pi", async () => {
   const notify = vi.fn();
   const ctx = createContext(["\x12"], reload, notify);
 
-  await openThemeSyncOverlay(createThemeSyncRuntime(), ctx);
+  await openThemeSyncOverlay(ctx);
 
   expect(reload).toHaveBeenCalledOnce();
   expect(notify).toHaveBeenCalledExactlyOnceWith(
@@ -55,7 +53,7 @@ test.each([
   const reload = vi.fn();
   const ctx = createContext(input, reload);
 
-  await openThemeSyncOverlay(createThemeSyncRuntime(), ctx);
+  await openThemeSyncOverlay(ctx);
 
   expect(reload).not.toHaveBeenCalled();
 });
@@ -76,12 +74,9 @@ function createContext(
     },
   });
 
-  return {
+  return createFakeContext({
     cwd: "/unused-overlay-reload-test",
-    hasUI: true,
-    isProjectTrusted: () => true,
-    mode: "tui",
     reload,
-    ui: { custom, getAllThemes: () => [], notify },
-  } as unknown as ExtensionCommandContext;
+    ui: { custom, notify },
+  });
 }

@@ -1,11 +1,14 @@
 /** Routes `/theme-sync` and orchestrates configuration and status delivery. */
 
-import { loadConfig } from "./config/load.js";
-import { writeConfigChanges } from "./config/save.js";
-import { EXTENSION_NAME } from "./extension-name.js";
-import type { ThemeSyncRuntime } from "./runtime.js";
-import { ConfigOverlayComponent } from "./ui/config-overlay.js";
-import { deliverStatusReport, formatStatusReport } from "./ui/status-report.js";
+import { loadConfig } from "../config/load.js";
+import { writeConfigChanges } from "../config/save.js";
+import { EXTENSION_NAME } from "../extension-name.js";
+import type { ThemeSyncRuntime } from "../runtime.js";
+import { ConfigOverlayComponent } from "../ui/config-overlay.js";
+import {
+  deliverStatusReport,
+  formatStatusReport,
+} from "../ui/status-report.js";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
@@ -17,9 +20,14 @@ import {
   requireInteractiveTui,
 } from "@sherif-fanous/pi-extensions-core";
 
-/** Opens the interactive theme sync configuration overlay for a TUI session. */
+/** What `/theme-sync` needs besides its arguments and context. */
+export interface ThemeSyncCommandDeps {
+  readonly pi: Pick<ExtensionAPI, "appendEntry">;
+  readonly runtime: ThemeSyncRuntime;
+}
+
+/** Open the interactive theme sync configuration overlay for a TUI session. */
 export async function openThemeSyncOverlay(
-  _runtime: ThemeSyncRuntime,
   ctx: ExtensionCommandContext,
 ): Promise<void> {
   if (!requireInteractiveTui(ctx, EXTENSION_NAME, "/theme-sync")) return;
@@ -58,17 +66,16 @@ export async function openThemeSyncOverlay(
   }
 }
 
-/** Routes the command argument to configuration, status, or a usage warning. */
+/** Route the command argument to configuration, status, or a usage warning. */
 export async function runThemeSyncCommand(
   args: string,
-  runtime: ThemeSyncRuntime,
   ctx: ExtensionCommandContext,
-  pi: Pick<ExtensionAPI, "appendEntry">,
+  { pi, runtime }: ThemeSyncCommandDeps,
 ): Promise<void> {
   const argument = args.trim();
 
   if (argument.length === 0) {
-    await openThemeSyncOverlay(runtime, ctx);
+    await openThemeSyncOverlay(ctx);
 
     return;
   }

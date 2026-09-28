@@ -1,16 +1,16 @@
-import { openThemeSyncOverlay } from "../src/command.js";
-import { writeConfigChanges } from "../src/config/save.js";
-import { createThemeSyncRuntime } from "../src/runtime.js";
-import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { openThemeSyncOverlay } from "../../src/commands/theme-sync.js";
+import { writeConfigChanges } from "../../src/config/save.js";
 import {
   createDeferred,
+  createFakeContext,
   createFakeCustom,
   createPiKeybindings,
+  flushPromises,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, expect, test, vi } from "vitest";
 
-vi.mock("../src/config/save.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../src/config/save.js")>()),
+vi.mock("../../src/config/save.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/config/save.js")>()),
   writeConfigChanges: vi.fn(),
 }));
 
@@ -65,7 +65,7 @@ test.each(["success", "failure"] as const)(
       expect(overlay.done).not.toHaveBeenCalled();
 
       finishSave();
-      await new Promise<void>((resolve) => setImmediate(resolve));
+      await flushPromises();
       await overlay.input("\x13", "\r");
 
       expect(write).toHaveBeenCalledTimes(2);
@@ -75,7 +75,7 @@ test.each(["success", "failure"] as const)(
         outcome === "success" ? {} : { "themes.light": "dark" },
       );
 
-      await new Promise<void>((resolve) => setImmediate(resolve));
+      await flushPromises();
       await overlay.input("\x03");
       await overlay.closed;
 
@@ -83,7 +83,7 @@ test.each(["success", "failure"] as const)(
       expect(overlay.reload).not.toHaveBeenCalled();
     } finally {
       finishSave();
-      await new Promise<void>((resolve) => setImmediate(resolve));
+      await flushPromises();
       await overlay.input("\x03");
       await overlay.closed;
     }
@@ -103,19 +103,19 @@ async function startOverlay() {
       ready.resolve();
     },
   });
-  const ctx = {
+  const ctx = createFakeContext({
     cwd,
-    hasUI: true,
-    isProjectTrusted: () => true,
-    mode: "tui",
     reload,
     ui: {
       custom,
-      getAllThemes: () => [{ name: "light" }, { name: "dark" }],
+      getAllThemes: () => [
+        { name: "light", path: undefined },
+        { name: "dark", path: undefined },
+      ],
       notify: vi.fn(),
     },
-  } as unknown as ExtensionCommandContext;
-  const closed = openThemeSyncOverlay(createThemeSyncRuntime(), ctx);
+  });
+  const closed = openThemeSyncOverlay(ctx);
 
   await ready.promise;
 
@@ -125,7 +125,7 @@ async function startOverlay() {
     input: async (...events: string[]) => {
       for (const data of events) {
         acceptInput(data);
-        await new Promise<void>((resolve) => setImmediate(resolve));
+        await flushPromises();
       }
     },
     reload,

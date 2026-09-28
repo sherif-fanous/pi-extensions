@@ -1,5 +1,5 @@
-import type { LoadedRuntimeConfig } from "../src/types.js";
-import { ConfigOverlayComponent } from "../src/ui/config-overlay.js";
+import type { LoadedRuntimeConfig } from "../../src/types.js";
+import { ConfigOverlayComponent } from "../../src/ui/config-overlay.js";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, type KeybindingsConfig } from "@earendil-works/pi-tui";
 import { overlayMaxHeight } from "@sherif-fanous/pi-extensions-core";
