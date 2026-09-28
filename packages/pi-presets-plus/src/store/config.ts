@@ -11,9 +11,9 @@ import type {
   ScopeWarnings,
 } from "../types.js";
 import { parsePresetArray } from "./load.js";
+import { compilePolicy } from "./policy.js";
 import {
   defineConfigFile,
-  isRecord,
   type ConfigFile,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -39,7 +39,10 @@ export const PRESETS_PLUS_CONFIG = defineConfigFile({
   version: CONFIG_VERSION,
 });
 
-/** Validate one scope's file: its document, settings, presets, and policy section. */
+/**
+ * Validate one scope's file: its document, settings, presets, and policy
+ * section, compiling the policy of the user file.
+ */
 export function parseScope(scope: PresetScope, file: ConfigFile): ScopeConfig {
   const warnings: ScopeWarnings = {
     file:
@@ -51,7 +54,7 @@ export function parseScope(scope: PresetScope, file: ConfigFile): ScopeConfig {
   };
 
   if (file.state !== "loaded")
-    return { document: {}, file, presets: [], warnings };
+    return { document: {}, file, policyRules: [], presets: [], warnings };
 
   const { path } = file;
   const document = file.data as ConfigDocument;
@@ -81,21 +84,23 @@ export function parseScope(scope: PresetScope, file: ConfigFile): ScopeConfig {
     }
   }
 
-  if (scope === "project" && document.policy !== undefined) {
+  let policyRules: ScopeConfig["policyRules"] = [];
+
+  if (scope === "user") {
+    const policy = compilePolicy(document.policy, path);
+
+    policyRules = policy.rules;
+    warnings.policy.push(...policy.warnings);
+  } else if (document.policy !== undefined) {
     warnings.policy.push(
       `The project config file ${path} contains policy, but policy is supported only in the user configuration.`,
     );
-  } else if (scope === "user" && document.policy !== undefined) {
-    if (!isRecord(document.policy) || !Array.isArray(document.policy.rules)) {
-      warnings.policy.push(
-        `The config file ${path} has an invalid "policy" section; expected an object with a "rules" array.`,
-      );
-    }
   }
 
   return {
     document,
     file,
+    policyRules,
     presets,
     ...(showInactiveStatus === undefined ? {} : { showInactiveStatus }),
     ...(invalidShowInactiveStatus === undefined

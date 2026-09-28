@@ -20,14 +20,14 @@ import {
 } from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const loadAll = vi.fn();
+const loadPresetsConfig = vi.fn();
 const reorderWithinScope = vi.fn();
 
 vi.mock("../../src/store/api.js", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("../../src/store/api.js")>();
 
-  return { ...actual, loadAll, reorderWithinScope };
+  return { ...actual, loadPresetsConfig, reorderWithinScope };
 });
 
 const { openPicker } = await import("../../src/ui/picker.js");
@@ -124,9 +124,9 @@ function selectedLine(component: Component, width = 80): string | undefined {
 }
 
 beforeEach(() => {
-  loadAll.mockReset();
+  loadPresetsConfig.mockReset();
   reorderWithinScope.mockReset();
-  loadAll.mockResolvedValue({ presets: presets(12), warnings: [] });
+  loadPresetsConfig.mockResolvedValue({ presets: presets(12), warnings: [] });
 });
 
 describe("picker footer", () => {
@@ -187,7 +187,7 @@ describe("picker footer", () => {
   });
 
   it("leaves the position out when every preset fits", async () => {
-    loadAll.mockResolvedValue({ presets: presets(2), warnings: [] });
+    loadPresetsConfig.mockResolvedValue({ presets: presets(2), warnings: [] });
 
     const { lines, result } = open({ closeAfterKeys: true });
 
@@ -199,7 +199,7 @@ describe("picker footer", () => {
   });
 
   it("gives a new user the next step and leaves out keys that need a preset", async () => {
-    loadAll.mockResolvedValue({ presets: [], warnings: [] });
+    loadPresetsConfig.mockResolvedValue({ presets: [], warnings: [] });
 
     const { lines, result } = open({ closeAfterKeys: true });
 
@@ -249,7 +249,10 @@ describe("picker footer", () => {
       "a-preset-with-a-name-far-too-long-for-the-width",
     );
 
-    loadAll.mockResolvedValue({ presets: [long, ...presets(3)], warnings: [] });
+    loadPresetsConfig.mockResolvedValue({
+      presets: [long, ...presets(3)],
+      warnings: [],
+    });
 
     const { lines, picker } = open({ width });
 

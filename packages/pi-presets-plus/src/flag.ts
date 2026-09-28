@@ -4,6 +4,7 @@
  */
 import { requestActivation } from "./activation/request.js";
 import type { ActivePresetSession } from "./activation/session.js";
+import type { PresetsConfig } from "./store/api.js";
 import type { LoadedPreset } from "./types.js";
 import { notifyApplyResult } from "./ui/apply-result.js";
 import { reportWarnings } from "./warnings.js";
@@ -26,7 +27,7 @@ const PRESET_FLAG = "preset";
 export async function applyPresetFlag(
   pi: ExtensionAPI,
   ctx: ExtensionContext,
-  presets: readonly LoadedPreset[],
+  { policy, presets }: Pick<PresetsConfig, "policy" | "presets">,
   session: ActivePresetSession,
   warnings?: string[],
 ): Promise<boolean> {
@@ -52,7 +53,14 @@ export async function applyPresetFlag(
     return false;
   }
 
-  const result = await requestActivation(preset, ctx, pi, session, warnings);
+  const result = await requestActivation(
+    preset,
+    policy,
+    ctx,
+    pi,
+    session,
+    warnings,
+  );
 
   if (!result.ok && result.kind === "cancelled") return false;
 

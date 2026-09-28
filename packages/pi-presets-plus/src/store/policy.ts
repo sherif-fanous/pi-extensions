@@ -1,14 +1,19 @@
 /**
- * Loads the user-global preset access policy, compiles its patterns, and
- * evaluates them against the working directory to decide which presets a
- * directory permits and which one it defaults to.
+ * Compiles the user-global preset access policy's patterns and evaluates
+ * them against the working directory to decide which presets a directory
+ * permits and which one it defaults to.
  */
 import type { LoadedPreset } from "../types.js";
-import { parseScope, PRESETS_PLUS_CONFIG } from "./config.js";
-import {
-  isRecord,
-  type ConfigContext,
-} from "@sherif-fanous/pi-extensions-core";
+import { isRecord } from "@sherif-fanous/pi-extensions-core";
+
+/**
+ * A compiled policy section: its usable rules, and a warning for each part
+ * it skipped.
+ */
+export interface CompiledPolicy {
+  readonly rules: readonly CompiledPolicyRule[];
+  readonly warnings: readonly string[];
+}
 
 /** One allow, prohibit, or default pattern with its regex compiled. */
 export interface CompiledPolicyMatcher {
@@ -34,12 +39,6 @@ export interface CompiledPolicyRule {
 export interface MatchedPolicyRule {
   readonly matchLength: number;
   readonly rule: CompiledPolicyRule;
-}
-
-/** Compiled rules plus the warnings collected while reading the file. */
-export interface PolicyLoadResult {
-  readonly rules: readonly CompiledPolicyRule[];
-  readonly warnings: string[];
 }
 
 /**
@@ -68,46 +67,25 @@ export type PolicyDefaultResult =
 export type PolicyMatcherField = "model" | "name" | "provider";
 
 /**
- * Return whether the matched rules permit a preset.
- *
- * Allow entries union across the rules, so a rule set with no allow entry
- * permits everything, and a single prohibit match rejects the preset.
+ * Compile the user file's `policy` section, skipping each invalid rule or
+ * matcher with a warning. An absent section compiles to no rules; one that
+ * is not an object with a `rules` array compiles to no rules and one
+ * warning.
  */
-export function isPermitted(
-  preset: Pick<LoadedPreset, "model" | "name" | "provider">,
-  matchedRules: readonly MatchedPolicyRule[],
-): boolean {
-  const allow = matchedRules.flatMap(({ rule }) => rule.allow);
-  const prohibit = matchedRules.flatMap(({ rule }) => rule.prohibit);
+export function compilePolicy(section: unknown, path: string): CompiledPolicy {
+  if (section === undefined) return { rules: [], warnings: [] };
 
-  return (
-    (allow.length === 0 ||
-      allow.some((matcher) => matchesPreset(preset, matcher))) &&
-    !prohibit.some((matcher) => matchesPreset(preset, matcher))
-  );
-}
-
-/** Read and compile the user policy fresh on every call. */
-export async function loadPolicy(
-  ctx: ConfigContext,
-): Promise<PolicyLoadResult> {
-  const loaded = parseScope(
-    "user",
-    await PRESETS_PLUS_CONFIG.read(ctx, "user"),
-  );
-  const { path } = loaded.file;
-  const documentPolicy = loaded.document.policy;
-
-  if (documentPolicy === undefined) {
-    return { rules: [], warnings: policyWarnings(loaded) };
+  if (!isRecord(section) || !Array.isArray(section.rules)) {
+    return {
+      rules: [],
+      warnings: [
+        `The config file ${path} has an invalid "policy" section; expected an object with a "rules" array.`,
+      ],
+    };
   }
 
-  if (!isRecord(documentPolicy) || !Array.isArray(documentPolicy.rules)) {
-    return { rules: [], warnings: policyWarnings(loaded) };
-  }
-
-  const rawRules: readonly unknown[] = documentPolicy.rules;
-  const warnings: string[] = policyWarnings(loaded);
+  const rawRules: readonly unknown[] = section.rules;
+  const warnings: string[] = [];
   const rules: CompiledPolicyRule[] = [];
 
   for (let index = 0; index < rawRules.length; index++) {
@@ -164,6 +142,26 @@ export async function loadPolicy(
   }
 
   return { rules, warnings };
+}
+
+/**
+ * Return whether the matched rules permit a preset.
+ *
+ * Allow entries union across the rules, so a rule set with no allow entry
+ * permits everything, and a single prohibit match rejects the preset.
+ */
+export function isPermitted(
+  preset: Pick<LoadedPreset, "model" | "name" | "provider">,
+  matchedRules: readonly MatchedPolicyRule[],
+): boolean {
+  const allow = matchedRules.flatMap(({ rule }) => rule.allow);
+  const prohibit = matchedRules.flatMap(({ rule }) => rule.prohibit);
+
+  return (
+    (allow.length === 0 ||
+      allow.some((matcher) => matchesPreset(preset, matcher))) &&
+    !prohibit.some((matcher) => matchesPreset(preset, matcher))
+  );
 }
 
 /** Return whether a compiled matcher accepts a preset. */
@@ -314,8 +312,4 @@ function compileRegex(pattern: string): RegExp | undefined {
   } catch {
     return undefined;
   }
-}
-
-function policyWarnings(loaded: ReturnType<typeof parseScope>): string[] {
-  return [...loaded.warnings.policy];
 }

@@ -177,8 +177,8 @@ Within each group the input order SHALL be preserved.
 #### Scenario: Empty filter
 
 - **WHEN** the filter input is empty
-- **THEN** all presets SHALL be shown in their natural order (per `loadAll`'s
-  output)
+- **THEN** all presets SHALL be shown in their natural order (per
+  `loadPresetsConfig`'s output)
 
 #### Scenario: Filter focus has visual cursor
 
@@ -583,8 +583,8 @@ change, and SHALL keep the picker open.
 
 ### Requirement: Picker reads fresh data on each open
 
-Each time the picker opens, the package SHALL call `loadAll(ctx)` so that
-external edits between opens are reflected without requiring `/reload`.
+Each time the picker opens, the package SHALL call `loadPresetsConfig(ctx)` so
+that external edits between opens are reflected without requiring `/reload`.
 
 #### Scenario: External edit between picker opens
 

@@ -275,7 +275,8 @@ across these events.
 #### Scenario: External edit then reload
 
 - **WHEN** the user edits the JSON file directly and runs `/reload`
-- **THEN** the new contents SHALL be reflected on the next call to `loadAll`
+- **THEN** the new contents SHALL be reflected on the next call to
+  `loadPresetsConfig`
 
 ### Requirement: /presets reload subcommand
 

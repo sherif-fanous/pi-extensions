@@ -1,19 +1,20 @@
 /**
- * Covers the gate that checks a preset against the access policy before
- * activation, opening the override overlay for prohibited presets and
- * reporting loader warnings as a single notification.
+ * Covers the gate that checks a preset against the user access policy
+ * before activation, opening the override overlay for prohibited presets
+ * and reporting the policy's warnings as a single notification.
  */
+import { join } from "node:path";
+
+import { loadPresetsConfig } from "../../src/store/api.js";
 import type { LoadedPreset } from "../../src/types.js";
-import { createFakeContext } from "@sherif-fanous/pi-extensions-testing";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createFakeContext,
+  createTempConfigDirs,
+  type TempConfigDirs,
+} from "@sherif-fanous/pi-extensions-testing";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const loadPolicyMock = vi.hoisted(() => vi.fn());
 const openPolicyOverrideMock = vi.hoisted(() => vi.fn());
-
-vi.mock("../../src/store/policy.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../src/store/policy.js")>()),
-  loadPolicy: loadPolicyMock,
-}));
 
 vi.mock("../../src/ui/policy-overlay.js", () => ({
   openPolicyOverride: openPolicyOverrideMock,
@@ -28,27 +29,46 @@ const allowed: LoadedPreset = {
   scope: "user",
 };
 
+let dirs: TempConfigDirs;
+
 function context() {
   const notify = vi.fn();
 
   return {
-    ctx: createFakeContext({ cwd: "/work/project", ui: { notify } }),
+    ctx: createFakeContext({ cwd: dirs.cwd, ui: { notify } }),
     notify,
   };
 }
 
-beforeEach(() => {
-  loadPolicyMock.mockReset();
+/** Write `rules` as the user file's policy and load the configuration. */
+async function policyFromFile(rules: readonly unknown[]) {
+  await dirs.writeJson(join(dirs.agentDir, "presets-plus", "config.json"), {
+    version: 2,
+    policy: { rules },
+  });
+
+  return (await loadPresetsConfig(context().ctx)).policy;
+}
+
+beforeEach(async () => {
+  dirs = await createTempConfigDirs();
   openPolicyOverrideMock.mockReset();
-  loadPolicyMock.mockResolvedValue({ rules: [], warnings: [] });
+});
+
+afterEach(async () => {
+  await dirs.cleanup();
 });
 
 describe("gateActivation", () => {
   it("passes permitted activations without opening the overlay", async () => {
-    const { ctx } = context();
+    const { ctx, notify } = context();
+    const policy = await policyFromFile([
+      { allow: [{ pattern: "^allowed$" }], match: "project$" },
+    ]);
 
-    await expect(gateActivation(allowed, ctx)).resolves.toBe(true);
+    await expect(gateActivation(allowed, policy, ctx)).resolves.toBe(true);
     expect(openPolicyOverrideMock).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -58,38 +78,27 @@ describe("gateActivation", () => {
     "returns the %s overlay outcome for a prohibited preset",
     async (_label, outcome) => {
       const { ctx } = context();
+      const policy = await policyFromFile([
+        { match: "project$", prohibit: [{ pattern: "allowed" }] },
+      ]);
 
-      loadPolicyMock.mockResolvedValue({
-        rules: [
-          {
-            allow: [],
-            index: 0,
-            match: "work",
-            matchRegex: /work/,
-            prohibit: [{ field: "name", pattern: "allowed", regex: /allowed/ }],
-          },
-        ],
-        warnings: [],
-      });
       openPolicyOverrideMock.mockResolvedValue(outcome);
 
-      await expect(gateActivation(allowed, ctx)).resolves.toBe(outcome);
+      await expect(gateActivation(allowed, policy, ctx)).resolves.toBe(outcome);
       expect(openPolicyOverrideMock).toHaveBeenCalledWith(ctx, allowed);
     },
   );
 
-  it("surfaces loader warnings as one notification", async () => {
+  it("surfaces the policy's warnings as one notification", async () => {
     const { ctx, notify } = context();
+    const policy = await policyFromFile([{ match: "[" }, { match: 1 }]);
 
-    loadPolicyMock.mockResolvedValue({
-      rules: [],
-      warnings: ["First warning.", "Second warning."],
-    });
+    await gateActivation(allowed, policy, ctx);
 
-    await gateActivation(allowed, ctx);
-
-    expect(notify).toHaveBeenCalledWith(
-      "Presets Plus: 2 warnings\n- First warning.\n- Second warning.",
+    expect(notify).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(
+        /^Presets Plus: 2 warnings\n- Skipped policy rule 1 .+\n- Skipped policy rule 2 /u,
+      ),
       "warning",
     );
   });

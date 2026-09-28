@@ -39,7 +39,7 @@ let agentDir: string;
  * Build a fake `ExtensionCommandContext` whose `ui.notify` is a spy and
  * whose `ui.theme` leaves text unstyled for substring assertions. The
  * `cwd` points at a path that does not exist and `beforeEach` points
- * `PI_CODING_AGENT_DIR` at a fresh temporary directory, so `loadAll` sees
+ * `PI_CODING_AGENT_DIR` at a fresh temporary directory, so `loadPresetsConfig` sees
  * an empty store in both scopes instead of the developer's own presets
  * file.
  */
@@ -280,6 +280,7 @@ describe("runPresetsCommand", () => {
 
     expect(requestActivationMock).toHaveBeenCalledWith(
       expect.objectContaining(preset),
+      { rules: [], warnings: [] },
       ctx,
       pi,
       session,
@@ -362,6 +363,12 @@ describe("runPresetsCommand", () => {
       reason: "Activation cancelled.",
     });
 
+    // Written after the picker opened, so activation must read it.
+    await dirs.writeJson(join(agentDir, "presets-plus", "config.json"), {
+      version: 2,
+      policy: { rules: [{ match: "work" }] },
+    });
+
     await expect(options.onActivate(selected)).resolves.toEqual({
       kind: "cancelled",
       ok: false,
@@ -370,6 +377,10 @@ describe("runPresetsCommand", () => {
 
     expect(requestActivationMock).toHaveBeenCalledWith(
       selected,
+      {
+        rules: [expect.objectContaining({ match: "work" })],
+        warnings: [],
+      },
       ctx,
       pi,
       expect.any(ActivePresetSession),

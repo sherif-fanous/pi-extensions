@@ -6,7 +6,7 @@
 import { assessOverlay } from "../../activation/overlay-assessment.js";
 import type { ActivePresetSession } from "../../activation/session.js";
 import { findPreset } from "../../preset-identity.js";
-import { loadAll } from "../../store/api.js";
+import { loadPresetsConfig } from "../../store/api.js";
 import type { ActivePresetState } from "../../types.js";
 import {
   deliverCommandReport,
@@ -64,7 +64,7 @@ export async function statusReport(
   session: ActivePresetSession,
 ): Promise<PresetsReport> {
   const active = session.current();
-  const { config, presets } = await loadAll(ctx);
+  const { config, presets } = await loadPresetsConfig(ctx);
   const report = (
     rows: readonly ReportRow[],
     severity: PresetsReport["severity"],

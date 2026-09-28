@@ -608,9 +608,12 @@ The package SHALL ignore a `policy` section in
 `<cwd>/.pi/presets-plus/config.json` and emit one startup warning. Project
 policy SHALL NOT contribute rules, prohibit activation, or select a default.
 
-The package SHALL read user policy fresh whenever policy is loaded. Preset
-mutations MAY rewrite the containing user configuration file, but SHALL preserve
-the policy value unchanged.
+The package SHALL read user policy fresh, in the same read of the user
+configuration file as the user presets, each time it loads its configuration.
+The activation check, the startup default, and `/presets policy` SHALL use the
+policy from the same read as the presets they act on. Preset mutations MAY
+rewrite the containing user configuration file, but SHALL preserve the policy
+value unchanged.
 
 #### Scenario: No user policy present
 
@@ -633,6 +636,13 @@ the policy value unchanged.
 - **THEN** none of its rules SHALL apply
 - **AND** one startup warning SHALL state that policy is supported only in the
   user configuration
+
+#### Scenario: One read serves presets and policy
+
+- **WHEN** `/presets policy` runs, a preset is activated by name, hotkey, or the
+  picker, or a session starts
+- **THEN** the package SHALL take the presets and the policy that operation uses
+  from one read of the user configuration file
 
 #### Scenario: Preset mutation preserves policy
 

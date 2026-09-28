@@ -12,7 +12,7 @@ import {
 import { Key, type Component } from "@earendil-works/pi-tui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const loadAll = vi.fn();
+const loadPresetsConfig = vi.fn();
 
 /** Raw terminal byte sequence for the one key these tests drive. */
 const KEY_BYTES = {
@@ -27,13 +27,13 @@ vi.mock("../../src/store/api.js", async (importOriginal) => {
   return {
     ...actual,
     addPreset: vi.fn(),
-    loadAll,
+    loadPresetsConfig,
     removePreset: vi.fn(),
     reorderWithinScope: vi.fn().mockResolvedValue({ ok: true }),
   };
 });
 
-const mountPicker = pickerMounter(loadAll);
+const mountPicker = pickerMounter(loadPresetsConfig);
 
 /** Build numbered presets whose names are easy to find in rendered output. */
 function numberedPresets(count: number): LoadedPreset[] {

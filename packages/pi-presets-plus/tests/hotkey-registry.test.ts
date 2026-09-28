@@ -11,6 +11,7 @@ import {
   HotkeyRegistry,
 } from "../src/hotkey-registry.js";
 import type { LoadedPreset } from "../src/types.js";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   createFakeContext,
   createFakePi,
@@ -24,10 +25,17 @@ vi.mock("../src/activation/request.js", () => ({
   requestActivation: requestActivationMock,
 }));
 
+const policy = { rules: [], warnings: [] };
+
+/**
+ * Bind `presets` for a session whose shortcuts read the presets
+ * `loadCurrentPresets` returns, with an empty policy.
+ */
 function bind(
   registry: HotkeyRegistry,
   presets: LoadedPreset[],
-  loadCurrentPresets = () => Promise.resolve(presets),
+  loadCurrentPresets: (ctx: ExtensionContext) => Promise<LoadedPreset[]> = () =>
+    Promise.resolve(presets),
 ) {
   const notify = vi.fn();
   const ctx = createFakeContext({ cwd: "/tmp/project", ui: { notify } });
@@ -39,7 +47,10 @@ function bind(
     analyzeHotkeys(presets),
     ctx,
     pi,
-    loadCurrentPresets,
+    async (handlerCtx) => ({
+      policy,
+      presets: await loadCurrentPresets(handlerCtx),
+    }),
     session,
   );
 
@@ -269,6 +280,7 @@ describe("HotkeyRegistry.bindForSession", () => {
     expect(loadCurrentPresets).toHaveBeenCalledWith(ctx);
     expect(requestActivationMock).toHaveBeenCalledWith(
       current,
+      policy,
       ctx,
       pi,
       session,
@@ -311,6 +323,7 @@ describe("HotkeyRegistry.bindForSession", () => {
 
     expect(requestActivationMock).toHaveBeenCalledWith(
       current,
+      policy,
       ctx,
       pi,
       session,
@@ -342,6 +355,7 @@ describe("HotkeyRegistry.bindForSession", () => {
 
     expect(requestActivationMock).toHaveBeenCalledWith(
       current,
+      policy,
       ctx,
       pi,
       session,

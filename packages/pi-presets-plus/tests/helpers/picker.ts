@@ -52,11 +52,11 @@ export function makeLoadedPreset(
  * Return a function that opens the picker over fake presets and returns
  * the mounted component.
  *
- * Pass the test file's mocked `loadAll`. The picker module is imported on
+ * Pass the test file's mocked `loadPresetsConfig`. The picker module is imported on
  * each call, after the test file has registered its store mock.
  */
 export function pickerMounter(
-  loadAll: Mock,
+  loadPresetsConfig: Mock,
 ): (options: MountPickerOptions) => Promise<MountedPicker> {
   return async (options) => {
     const { openPicker } = await import("../../src/ui/picker.js");
@@ -82,7 +82,10 @@ export function pickerMounter(
       },
     } as unknown as Parameters<typeof openPickerType>[0];
 
-    loadAll.mockResolvedValue({ presets: options.presets, warnings: [] });
+    loadPresetsConfig.mockResolvedValue({
+      presets: options.presets,
+      warnings: [],
+    });
 
     if (options.active) {
       session.restoreFromBranch(

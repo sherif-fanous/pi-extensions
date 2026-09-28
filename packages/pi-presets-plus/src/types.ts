@@ -4,6 +4,7 @@
  * thinking levels a preset may record.
  */
 
+import type { CompiledPolicyRule } from "./store/policy.js";
 import type { ConfigFile } from "@sherif-fanous/pi-extensions-core";
 
 /**
@@ -106,9 +107,14 @@ export interface ScopeConfig {
   /**
    * A `showInactiveStatus` value that is not a boolean. Its warning names
    * the value that applies instead, which depends on the other scope, so
-   * `loadAll` words it.
+   * `loadPresetsConfig` words it.
    */
   readonly invalidShowInactiveStatus?: { readonly value: unknown };
+  /**
+   * The user file's compiled policy rules; always empty for the project
+   * file.
+   */
+  readonly policyRules: readonly CompiledPolicyRule[];
   readonly presets: Preset[];
   readonly showInactiveStatus?: boolean;
   readonly warnings: ScopeWarnings;

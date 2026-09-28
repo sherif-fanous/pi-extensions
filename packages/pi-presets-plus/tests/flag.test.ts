@@ -19,6 +19,8 @@ vi.mock("../src/activation/request.js", () => ({
 
 const { applyPresetFlag } = await import("../src/flag.js");
 
+const policy = { rules: [], warnings: [] };
+
 function fakeCtx() {
   const notify = vi.fn();
 
@@ -61,10 +63,16 @@ describe("applyPresetFlag", () => {
 
     const session = new ActivePresetSession();
 
-    await applyPresetFlag(pi, ctx, [userPreset, projectPreset], session);
+    await applyPresetFlag(
+      pi,
+      ctx,
+      { policy, presets: [userPreset, projectPreset] },
+      session,
+    );
 
     expect(requestActivationMock).toHaveBeenCalledWith(
       projectPreset,
+      policy,
       ctx,
       pi,
       session,
@@ -78,11 +86,14 @@ describe("applyPresetFlag", () => {
     await applyPresetFlag(
       fakePi("bad"),
       ctx,
-      [
-        preset("plan", "user", { shadowed: true }),
-        preset("plan", "project"),
-        preset("review", "user"),
-      ],
+      {
+        policy,
+        presets: [
+          preset("plan", "user", { shadowed: true }),
+          preset("plan", "project"),
+          preset("review", "user"),
+        ],
+      },
       new ActivePresetSession(),
     );
 
@@ -98,7 +109,10 @@ describe("applyPresetFlag", () => {
     await applyPresetFlag(
       fakePi("bad"),
       ctx,
-      [preset("plan", "project", { unavailable: "no-key" })],
+      {
+        policy,
+        presets: [preset("plan", "project", { unavailable: "no-key" })],
+      },
       new ActivePresetSession(),
     );
 
@@ -120,11 +134,17 @@ describe("applyPresetFlag", () => {
     });
 
     await expect(
-      applyPresetFlag(pi, ctx, [selected], new ActivePresetSession()),
+      applyPresetFlag(
+        pi,
+        ctx,
+        { policy, presets: [selected] },
+        new ActivePresetSession(),
+      ),
     ).resolves.toBe(false);
 
     expect(requestActivationMock).toHaveBeenCalledWith(
       selected,
+      policy,
       ctx,
       pi,
       expect.any(ActivePresetSession),
@@ -146,10 +166,11 @@ describe("applyPresetFlag", () => {
 
     const session = new ActivePresetSession();
 
-    await applyPresetFlag(pi, ctx, [selected], session);
+    await applyPresetFlag(pi, ctx, { policy, presets: [selected] }, session);
 
     expect(requestActivationMock).toHaveBeenCalledWith(
       selected,
+      policy,
       ctx,
       pi,
       session,

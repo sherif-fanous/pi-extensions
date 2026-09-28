@@ -15,7 +15,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const addPreset = vi.fn();
-const loadAll = vi.fn();
+const loadPresetsConfig = vi.fn();
 const movePreset = vi.fn();
 const updatePreset = vi.fn();
 const openConfirm = vi.fn();
@@ -27,7 +27,7 @@ vi.mock("../../src/store/api.js", async (importOriginal) => {
   return {
     ...actual,
     addPreset,
-    loadAll,
+    loadPresetsConfig,
     movePreset,
     updatePreset,
   };
@@ -106,7 +106,11 @@ async function runSave(options: {
     analyzeHotkeys(baseline),
     { ui: { notify: () => undefined } } as never,
     { registerShortcut: () => undefined } as never,
-    () => Promise.resolve(baseline),
+    () =>
+      Promise.resolve({
+        policy: { rules: [], warnings: [] },
+        presets: baseline,
+      }),
     {} as never,
   );
 
@@ -131,7 +135,7 @@ async function runSave(options: {
   addPreset.mockResolvedValue({ ok: true });
   updatePreset.mockResolvedValue({ ok: true });
   movePreset.mockResolvedValue({ ok: true });
-  loadAll.mockResolvedValue({ presets: [saved], warnings: [] });
+  loadPresetsConfig.mockResolvedValue({ presets: [saved], warnings: [] });
 
   if (options.confirmAnswers) {
     for (const answer of options.confirmAnswers) {

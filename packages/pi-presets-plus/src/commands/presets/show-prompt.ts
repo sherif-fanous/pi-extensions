@@ -5,7 +5,7 @@
 import type { ActivePresetSession } from "../../activation/session.js";
 import { EXTENSION_NAME } from "../../extension-name.js";
 import { findPreset } from "../../preset-identity.js";
-import { loadAll } from "../../store/api.js";
+import { loadPresetsConfig } from "../../store/api.js";
 import type { ActivePresetState, LoadedPreset } from "../../types.js";
 import { openInfoDialog } from "../../ui/info-dialog.js";
 import { PROMPT_DIALOG_TITLE } from "../../ui/labels.js";
@@ -112,7 +112,7 @@ export async function runShowPrompt(
   session: ActivePresetSession,
 ): Promise<void> {
   const name = args.length > 0 ? args.join(" ") : undefined;
-  const { presets } = await loadAll(ctx);
+  const { presets } = await loadPresetsConfig(ctx);
   const result = findPresetForShowPrompt(name, session.current(), presets);
   const notification = formatShowPromptBody(result, ctx.ui.theme);
 

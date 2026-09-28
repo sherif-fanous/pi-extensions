@@ -5,7 +5,7 @@
  */
 import type { ActivePresetSession } from "../../activation/session.js";
 import type { HotkeyRegistry } from "../../hotkey-registry.js";
-import { loadAll } from "../../store/api.js";
+import { loadPresetsConfig } from "../../store/api.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { pluralize } from "@sherif-fanous/pi-extensions-core";
 
@@ -19,7 +19,7 @@ export async function runReload(
   session: ActivePresetSession,
   hotkeys: HotkeyRegistry,
 ): Promise<void> {
-  const { config, presets, showInactiveStatus } = await loadAll(ctx);
+  const { config, presets, showInactiveStatus } = await loadPresetsConfig(ctx);
 
   session.setShowInactiveStatus(showInactiveStatus, ctx);
 

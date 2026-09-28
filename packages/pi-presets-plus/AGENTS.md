@@ -13,3 +13,10 @@ presets you can switch between. The family rules are in the root `AGENTS.md` and
   config handle `src/store/config.ts` defines. Session start adds the version 1
   migration to the loaded outcome and passes its other startup warnings
   (restore, `--preset`, policy, hotkeys) to `notify` as extras.
+- An operation reads its configuration once, with `loadPresetsConfig(ctx)` in
+  `src/store/api.ts`. The result holds the merged presets, the settings, the
+  compiled user policy, and each warning where it shows: `config` for session
+  start, `/presets reload`, and status, and `policy.warnings` for the activation
+  gate, the startup default, and `/presets policy`. Pass its `policy` to
+  activation instead of reading the file again. A save reads only its own scope,
+  and refuses when any section of that file has a warning.

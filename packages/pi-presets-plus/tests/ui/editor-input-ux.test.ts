@@ -21,7 +21,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const addPreset = vi.fn();
-const loadAll = vi.fn();
+const loadPresetsConfig = vi.fn();
 const movePreset = vi.fn();
 const updatePreset = vi.fn();
 const openConfirm = vi.fn<() => Promise<boolean>>();
@@ -48,7 +48,7 @@ vi.mock("../../src/store/api.js", async (importOriginal) => {
   return {
     ...actual,
     addPreset,
-    loadAll,
+    loadPresetsConfig,
     movePreset,
     updatePreset,
   };
@@ -221,7 +221,7 @@ async function waitForEditorUpdate(assertion: () => void): Promise<void> {
 beforeEach(() => {
   vi.clearAllMocks();
   addPreset.mockResolvedValue({ ok: true });
-  loadAll.mockResolvedValue({ presets: [preset()], warnings: [] });
+  loadPresetsConfig.mockResolvedValue({ presets: [preset()], warnings: [] });
   movePreset.mockResolvedValue({ ok: true });
   openConfirm.mockResolvedValue(true);
   openInfoDialog.mockResolvedValue(undefined);

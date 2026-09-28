@@ -873,8 +873,8 @@ pre-populated from the selected preset with a unique copy name and cleared
 hotkey; the copy persists only on Save), delete (with confirmation), clear
 active preset (with confirmation), and reorder up/down within the selected
 preset's scope (persists via `reorderWithinScope`). After every successful CRUD
-operation the picker SHALL refresh by calling `loadAll` unless the user chose to
-reload Pi and the picker closes to allow `ctx.reload()`.
+operation the picker SHALL refresh by calling `loadPresetsConfig` unless the
+user chose to reload Pi and the picker closes to allow `ctx.reload()`.
 
 When the `x` (delete) action successfully removes a preset whose
 runtime-baseline `hotkey` field was non-empty, the picker SHALL open a

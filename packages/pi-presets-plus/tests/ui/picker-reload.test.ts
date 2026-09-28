@@ -13,7 +13,7 @@ import {
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const loadAll = vi.fn();
+const loadPresetsConfig = vi.fn();
 const removePreset = vi.fn();
 const openConfirm = vi.fn();
 
@@ -24,7 +24,7 @@ vi.mock("../../src/store/api.js", async (importOriginal) => {
   return {
     ...actual,
     addPreset: vi.fn(),
-    loadAll,
+    loadPresetsConfig,
     removePreset,
     reorderWithinScope: vi.fn().mockResolvedValue({ ok: true }),
   };
@@ -88,13 +88,17 @@ async function runDelete(
     analyzeHotkeys(baseline),
     { ui: { notify: () => undefined } } as never,
     { registerShortcut: () => undefined } as never,
-    () => Promise.resolve(baseline),
+    () =>
+      Promise.resolve({
+        policy: { rules: [], warnings: [] },
+        presets: baseline,
+      }),
     {} as never,
   );
 
   const ctx = makeCtx();
 
-  loadAll.mockResolvedValue({ presets: [selected], warnings });
+  loadPresetsConfig.mockResolvedValue({ presets: [selected], warnings });
   removePreset.mockResolvedValue({ ok: true });
   openConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(reloadAnswer);
 
@@ -128,7 +132,7 @@ describe("openPicker delete reload prompt", () => {
     expect(removePreset).toHaveBeenCalledOnce();
     expect(openConfirm).toHaveBeenCalledTimes(2);
     expect(ctx.reload).toHaveBeenCalledOnce();
-    expect(loadAll).toHaveBeenCalledTimes(1);
+    expect(loadPresetsConfig).toHaveBeenCalledTimes(1);
   });
 
   it("does not prompt after deleting a preset without a hotkey", async () => {
@@ -137,13 +141,13 @@ describe("openPicker delete reload prompt", () => {
     expect(removePreset).toHaveBeenCalledOnce();
     expect(openConfirm).toHaveBeenCalledTimes(1);
     expect(ctx.reload).not.toHaveBeenCalled();
-    expect(loadAll).toHaveBeenCalledTimes(2);
+    expect(loadPresetsConfig).toHaveBeenCalledTimes(2);
   });
 
   it("does not repeat load warnings when it opens or refreshes", async () => {
     const ctx = await runDelete(undefined, true, ["Skipped preset 2."]);
 
-    expect(loadAll).toHaveBeenCalledTimes(2);
+    expect(loadPresetsConfig).toHaveBeenCalledTimes(2);
     expect(ctx.ui.notify).not.toHaveBeenCalledWith(
       expect.anything(),
       "warning",
@@ -155,6 +159,6 @@ describe("openPicker delete reload prompt", () => {
 
     expect(openConfirm).toHaveBeenCalledTimes(2);
     expect(ctx.reload).not.toHaveBeenCalled();
-    expect(loadAll).toHaveBeenCalledTimes(2);
+    expect(loadPresetsConfig).toHaveBeenCalledTimes(2);
   });
 });

@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 
 import {
   addPreset,
-  loadAll,
+  loadPresetsConfig,
   movePreset,
   removePreset,
   reorderWithinScope,
@@ -88,15 +88,16 @@ afterEach(async () => {
   await dirs.cleanup();
 });
 
-describe("loadAll", () => {
+describe("loadPresetsConfig", () => {
   it("returns an empty list when neither file exists", async () => {
     const ctx = makeCtx(projectDir, fullRegistry);
-    const result = await loadAll(ctx);
+    const result = await loadPresetsConfig(ctx);
 
     expect(result.presets).toEqual([]);
     expect(result.config.warnings).toEqual([]);
     expect(result.hotkeyAnalysis.conflicts).toEqual([]);
     expect(result.hotkeyAnalysis.invalid).toEqual([]);
+    expect(result.policy).toEqual({ rules: [], warnings: [] });
   });
 
   it("merges both scopes and surfaces warnings from each", async () => {
@@ -118,7 +119,7 @@ describe("loadAll", () => {
       }),
     );
 
-    const result = await loadAll(ctx);
+    const result = await loadPresetsConfig(ctx);
 
     expect(
       result.presets.map((loaded) => `${loaded.scope}:${loaded.name}`),
@@ -130,6 +131,7 @@ describe("loadAll", () => {
       ),
       'Project setting "showInactiveStatus" must be a boolean, not "yes". Using the default value true.',
     ]);
+    expect(result.policy).toEqual({ rules: [], warnings: [] });
   });
 
   it("ignores an invalid project setting when the user setting applies", async () => {
@@ -145,7 +147,7 @@ describe("loadAll", () => {
       JSON.stringify({ version: 2, showInactiveStatus: "yes" }),
     );
 
-    const result = await loadAll(ctx);
+    const result = await loadPresetsConfig(ctx);
 
     expect(result.showInactiveStatus).toBe(false);
     expect(result.config.warnings).toEqual([
@@ -165,11 +167,65 @@ describe("loadAll", () => {
       }),
     );
 
-    const result = await loadAll(ctx);
+    const result = await loadPresetsConfig(ctx);
 
     expect(result.presets.map((loaded) => loaded.name)).toEqual(["plan"]);
     expect(result.config.warnings).toEqual([
-      expect.stringContaining("only in the user configuration"),
+      `The project config file ${presetPath("project")} contains policy, but policy is supported only in the user configuration.`,
+    ]);
+    expect(result.policy).toEqual({ rules: [], warnings: [] });
+  });
+
+  it("compiles the user policy and keeps its warnings out of the configuration's", async () => {
+    const ctx = makeCtx(projectDir, fullRegistry);
+    const path = await writeRawScope(
+      "user",
+      JSON.stringify({
+        version: 2,
+        policy: { rules: [{ match: "[" }, { match: "work" }] },
+      }),
+    );
+
+    const result = await loadPresetsConfig(ctx);
+
+    expect(result.policy.rules.map((rule) => rule.match)).toEqual(["work"]);
+    expect(result.policy.warnings).toEqual([
+      `Skipped policy rule 1 in ${path}: match pattern "[" is invalid.`,
+    ]);
+    expect(result.config.warnings).toEqual([]);
+  });
+
+  it("warns once about a malformed user policy section", async () => {
+    const ctx = makeCtx(projectDir, fullRegistry);
+    const path = await writeRawScope(
+      "user",
+      JSON.stringify({ version: 2, policy: { rules: "work" } }),
+    );
+
+    const result = await loadPresetsConfig(ctx);
+
+    expect(result.policy).toEqual({
+      rules: [],
+      warnings: [
+        `The config file ${path} has an invalid "policy" section; expected an object with a "rules" array.`,
+      ],
+    });
+    expect(result.config.warnings).toEqual([]);
+  });
+
+  it("applies no policy from a user file with an unsupported version", async () => {
+    const ctx = makeCtx(projectDir, fullRegistry);
+
+    await writeRawScope(
+      "user",
+      JSON.stringify({ version: 3, policy: { rules: [{ match: "work" }] } }),
+    );
+
+    const result = await loadPresetsConfig(ctx);
+
+    expect(result.policy).toEqual({ rules: [], warnings: [] });
+    expect(result.config.warnings).toEqual([
+      expect.stringContaining("has version 3, but only version 2 is supported"),
     ]);
   });
 
@@ -194,7 +250,7 @@ describe("loadAll", () => {
       ctx,
     );
 
-    const loaded = await loadAll(ctx);
+    const loaded = await loadPresetsConfig(ctx);
 
     expect(
       loaded.presets.find((entry) => entry.name === "reasoning")?.clampWarning,
@@ -210,13 +266,13 @@ describe("loadAll", () => {
   });
 
   it("observes external file edits between calls (no in-memory cache)", async () => {
-    // `ctx.reload()` works only because every `loadAll` re-reads the file,
+    // `ctx.reload()` works only because every `loadPresetsConfig` re-reads the file,
     // so two calls on the same context can return different presets.
     const ctx = makeCtx(projectDir, fullRegistry);
 
     await saveScope("user", [preset("a")], ctx);
 
-    const first = await loadAll(ctx);
+    const first = await loadPresetsConfig(ctx);
 
     expect(first.presets.map((loaded) => loaded.name)).toEqual(["a"]);
 
@@ -230,7 +286,7 @@ describe("loadAll", () => {
       "utf-8",
     );
 
-    const second = await loadAll(ctx);
+    const second = await loadPresetsConfig(ctx);
 
     expect(second.presets.map((loaded) => loaded.name)).toEqual(["a", "b"]);
   });
@@ -257,7 +313,7 @@ describe("saveScope", () => {
 
     await saveScope("project", [preset("p")], ctx);
 
-    const result = await loadAll(ctx);
+    const result = await loadPresetsConfig(ctx);
 
     expect(
       result.presets.map((loaded) => `${loaded.scope}:${loaded.name}`),
@@ -269,7 +325,7 @@ describe("saveScope", () => {
 
     await saveScope("user", [preset("a"), preset("b")], ctx);
 
-    const loaded = (await loadAll(ctx)).presets;
+    const loaded = (await loadPresetsConfig(ctx)).presets;
 
     await saveScope("user", loaded, ctx);
 
@@ -319,7 +375,7 @@ describe("addPreset", () => {
 
     expect(result).toEqual({ ok: true });
 
-    const loaded = await loadAll(ctx);
+    const loaded = await loadPresetsConfig(ctx);
 
     expect(loaded.presets.map((entry) => entry.name)).toEqual(["plan"]);
   });
@@ -445,9 +501,9 @@ describe("updatePreset", () => {
     const result = await updatePreset("old", "user", preset("new"), ctx);
 
     expect(result).toEqual({ ok: true });
-    expect((await loadAll(ctx)).presets.map((entry) => entry.name)).toEqual([
-      "new",
-    ]);
+    expect(
+      (await loadPresetsConfig(ctx)).presets.map((entry) => entry.name),
+    ).toEqual(["new"]);
   });
 
   it("returns Err when the target name is missing", async () => {
@@ -617,7 +673,7 @@ describe("movePreset", () => {
     ).rejects.toBe(writeError);
 
     expect(
-      (await loadAll(ctx)).presets.map(
+      (await loadPresetsConfig(ctx)).presets.map(
         (entry) => `${entry.scope}:${entry.name}`,
       ),
     ).toEqual(["user:move", "project:keep"]);
@@ -641,7 +697,7 @@ describe("movePreset", () => {
     ).rejects.toBe(sourceError);
     expect(writeScope).toHaveBeenCalledTimes(3);
     expect(
-      (await loadAll(ctx)).presets.map(
+      (await loadPresetsConfig(ctx)).presets.map(
         (entry) => `${entry.scope}:${entry.name}`,
       ),
     ).toEqual(["user:move", "project:keep"]);
@@ -689,7 +745,7 @@ describe("movePreset", () => {
     );
 
     expect(
-      (await loadAll(ctx)).presets.map(
+      (await loadPresetsConfig(ctx)).presets.map(
         (entry) => `${entry.scope}:${entry.name}`,
       ),
     ).toEqual(["user:move", "project:keep", "project:move"]);
@@ -725,9 +781,9 @@ describe("removePreset", () => {
     const result = await removePreset("missing", "user", ctx);
 
     expect(result).toEqual({ ok: true });
-    expect((await loadAll(ctx)).presets.map((entry) => entry.name)).toEqual([
-      "a",
-    ]);
+    expect(
+      (await loadPresetsConfig(ctx)).presets.map((entry) => entry.name),
+    ).toEqual(["a"]);
   });
 });
 
@@ -757,11 +813,9 @@ describe("reorderWithinScope", () => {
 
     await saveScope("user", [preset("a"), preset("b"), preset("c")], ctx);
     await reorderWithinScope("user", ["c"], ctx);
-    expect((await loadAll(ctx)).presets.map((entry) => entry.name)).toEqual([
-      "c",
-      "a",
-      "b",
-    ]);
+    expect(
+      (await loadPresetsConfig(ctx)).presets.map((entry) => entry.name),
+    ).toEqual(["c", "a", "b"]);
   });
 
   it("ignores names that don't match any existing preset", async () => {
@@ -769,10 +823,9 @@ describe("reorderWithinScope", () => {
 
     await saveScope("user", [preset("a"), preset("b")], ctx);
     await reorderWithinScope("user", ["ghost", "b", "a"], ctx);
-    expect((await loadAll(ctx)).presets.map((entry) => entry.name)).toEqual([
-      "b",
-      "a",
-    ]);
+    expect(
+      (await loadPresetsConfig(ctx)).presets.map((entry) => entry.name),
+    ).toEqual(["b", "a"]);
   });
 
   it("ignores duplicate names within the requested order", async () => {
@@ -780,10 +833,9 @@ describe("reorderWithinScope", () => {
 
     await saveScope("user", [preset("a"), preset("b")], ctx);
     await reorderWithinScope("user", ["a", "a", "b"], ctx);
-    expect((await loadAll(ctx)).presets.map((entry) => entry.name)).toEqual([
-      "a",
-      "b",
-    ]);
+    expect(
+      (await loadPresetsConfig(ctx)).presets.map((entry) => entry.name),
+    ).toEqual(["a", "b"]);
   });
 });
 
@@ -795,9 +847,9 @@ describe("unsafe mutation protection", () => {
       ok: true,
     });
 
-    expect((await loadAll(ctx)).presets.map((entry) => entry.name)).toEqual([
-      "plan",
-    ]);
+    expect(
+      (await loadPresetsConfig(ctx)).presets.map((entry) => entry.name),
+    ).toEqual(["plan"]);
   });
 
   it("rejects add and preserves an invalid showInactiveStatus", async () => {
@@ -902,11 +954,14 @@ describe("unsafe mutation protection", () => {
     expect(await readFile(destinationPath, "utf-8")).toBe(destination);
   });
 
-  it("rejects user mutation when policy compilation is unsafe", async () => {
+  it.each([
+    ["a rule does not compile", { rules: [{ match: "[" }] }],
+    ["the policy section is malformed", { rules: "work" }],
+  ])("rejects user mutation when %s", async (_label, policy) => {
     const ctx = makeCtx(projectDir, fullRegistry);
     const original = JSON.stringify({
       version: 2,
-      policy: { rules: [{ match: "[" }] },
+      policy,
       presets: [preset("keep")],
     });
     const path = await writeRawScope("user", original);

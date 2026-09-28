@@ -7,6 +7,7 @@ import { requestActivation } from "./activation/request.js";
 import type { ActivePresetSession } from "./activation/session.js";
 import { EXTENSION_NAME } from "./extension-name.js";
 import { findPreset, type PresetIdentity } from "./preset-identity.js";
+import type { PresetsConfig } from "./store/api.js";
 import type { LoadedPreset } from "./types.js";
 import { notifyApplyResult } from "./ui/apply-result.js";
 import {
@@ -46,10 +47,10 @@ export interface HotkeyDiagnostic {
   readonly reason: string;
 }
 
-/** Re-reads the presets from disk when a shortcut fires. */
-export type CurrentPresetsLoader = (
+/** Re-reads the presets and the policy from disk when a shortcut fires. */
+export type CurrentConfigLoader = (
   ctx: ExtensionContext,
-) => Promise<LoadedPreset[]>;
+) => Promise<Pick<PresetsConfig, "policy" | "presets">>;
 
 /**
  * Tracks the hotkeys bound in the running session and the pending hotkey
@@ -77,7 +78,7 @@ export class HotkeyRegistry {
     hotkeyAnalysis: HotkeyAnalysis,
     ctx: Pick<ExtensionContext, "ui">,
     pi: ExtensionAPI,
-    loadCurrentPresets: CurrentPresetsLoader,
+    loadCurrentConfig: CurrentConfigLoader,
     session: ActivePresetSession,
     warnings?: string[],
   ): void {
@@ -116,7 +117,8 @@ export class HotkeyRegistry {
         description: `Activate preset "${registeredName}"`,
         handler: async (handlerCtx) => {
           try {
-            const currentPresets = await loadCurrentPresets(handlerCtx);
+            const { policy, presets: currentPresets } =
+              await loadCurrentConfig(handlerCtx);
             const current = findPreset(currentPresets, {
               name: registeredName,
               scope: registeredScope,
@@ -132,6 +134,7 @@ export class HotkeyRegistry {
 
             const result = await requestActivation(
               current,
+              policy,
               handlerCtx,
               pi,
               session,

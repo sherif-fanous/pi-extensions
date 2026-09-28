@@ -28,6 +28,7 @@ const preset: LoadedPreset = {
   provider: "anthropic",
   scope: "user",
 };
+const policy = { rules: [], warnings: [] };
 const ctx = createFakeContext();
 const { pi } = createFakePi();
 
@@ -48,10 +49,16 @@ describe("requestActivation", () => {
 
     applyMock.mockResolvedValue(result);
 
-    await expect(requestActivation(preset, ctx, pi, session)).resolves.toBe(
-      result,
+    await expect(
+      requestActivation(preset, policy, ctx, pi, session),
+    ).resolves.toBe(result);
+
+    expect(gateActivationMock).toHaveBeenCalledWith(
+      preset,
+      policy,
+      ctx,
+      undefined,
     );
-    expect(gateActivationMock).toHaveBeenCalledWith(preset, ctx, undefined);
     expect(applyMock).toHaveBeenCalledWith(preset, ctx, pi, session);
   });
 
@@ -59,7 +66,7 @@ describe("requestActivation", () => {
     gateActivationMock.mockResolvedValue(false);
 
     await expect(
-      requestActivation(preset, ctx, pi, new ActivePresetSession()),
+      requestActivation(preset, policy, ctx, pi, new ActivePresetSession()),
     ).resolves.toEqual({
       kind: "cancelled",
       ok: false,

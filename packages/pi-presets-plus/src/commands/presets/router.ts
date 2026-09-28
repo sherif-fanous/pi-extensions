@@ -7,7 +7,7 @@ import { requestActivation } from "../../activation/request.js";
 import type { ActivePresetSession } from "../../activation/session.js";
 import { EXTENSION_NAME } from "../../extension-name.js";
 import type { HotkeyRegistry } from "../../hotkey-registry.js";
-import { loadAll } from "../../store/api.js";
+import { loadPresetsConfig } from "../../store/api.js";
 import { notifyApplyResult } from "../../ui/apply-result.js";
 import { openPicker } from "../../ui/picker.js";
 import { runClear } from "./clear.js";
@@ -164,7 +164,7 @@ async function activateNamedPreset(
   ctx: ExtensionCommandContext,
   { pi, session }: PresetsCommandDeps,
 ): Promise<boolean> {
-  const { config, presets } = await loadAll(ctx);
+  const { config, policy, presets } = await loadPresetsConfig(ctx);
   const preset = presets.find(
     (candidate) => candidate.name === name && !candidate.shadowed,
   );
@@ -177,7 +177,7 @@ async function activateNamedPreset(
     return false;
   }
 
-  const result = await requestActivation(preset, ctx, pi, session);
+  const result = await requestActivation(preset, policy, ctx, pi, session);
 
   if (!result.ok && result.kind === "cancelled") return true;
 
@@ -198,7 +198,8 @@ async function runPicker(
     hotkeys,
     inheritedTools: pi.getActiveTools(),
     onActivate: async (preset) => {
-      const result = await requestActivation(preset, ctx, pi, session);
+      const { policy } = await loadPresetsConfig(ctx);
+      const result = await requestActivation(preset, policy, ctx, pi, session);
 
       if (result.ok) notifyApplyResult(ctx, preset, result);
 

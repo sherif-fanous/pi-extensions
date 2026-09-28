@@ -374,7 +374,7 @@ The class SHALL replace and consolidate the deleted modules
 1. `analyze(presets: LoadedPreset[]): HotkeyAnalysis` — parses, marks
    `LoadedPreset.hotkeyConflict` and `LoadedPreset.hotkeyShadowsBuiltin` as a
    side effect for downstream UI read sites, and returns the analysis. Called by
-   `loadAll` on every storage read.
+   `loadPresetsConfig` on every storage read.
 2. `bindForSession(presets, analysis, ctx, pi, loadCurrent): void` — registers
    `pi` shortcuts, emits session-start conflict/shadow/invalid notifications,
    and captures the runtime baseline internally. Called once at `session_start`.
@@ -406,7 +406,7 @@ and `src/hotkeys.ts` SHALL NOT exist after this change.
 
 #### Scenario: Loader uses the registry's analyze
 
-- **WHEN** `loadAll(ctx)` runs
+- **WHEN** `loadPresetsConfig(ctx)` runs
 - **THEN** it SHALL invoke `hotkeys.analyze(presets)` exactly once
 - **AND** the returned `HotkeyAnalysis` SHALL be threaded to callers exactly as
   today's `annotateAndAnalyzeHotkeys` was
@@ -603,9 +603,9 @@ The subcommand SHALL be registered in the same subcommand registry that contains
 `reload`, `clear`, and `status`, alongside an autocomplete entry labeled
 `show-prompt` with the description
 `Show a preset's prompt, the active one by default`. Argument-position
-autocomplete SHALL offer known preset names from `loadAll()` when the cursor is
-past the `show-prompt` token; an empty prefix SHALL offer every loaded preset,
-and a non-empty prefix SHALL filter to names that start with the prefix
+autocomplete SHALL offer known preset names from `loadPresetsConfig()` when the
+cursor is past the `show-prompt` token; an empty prefix SHALL offer every loaded
+preset, and a non-empty prefix SHALL filter to names that start with the prefix
 (case-sensitive, matching the existing autocomplete style elsewhere in the
 router). Pi replaces the whole `/presets` argument with the chosen completion's
 `value`, so each name completion SHALL carry the value `show-prompt <name>` and
@@ -717,7 +717,7 @@ UI calls.
 - **WHEN** the user types `/presets show-prompt ` (with trailing space) and
   requests autocomplete
 - **THEN** the completion list SHALL contain the name of every preset returned
-  by `loadAll`
+  by `loadPresetsConfig`
 - **AND** each completion entry's `label` SHALL equal the preset name verbatim
 - **AND** each completion entry's `value` SHALL be `show-prompt ` followed by
   the preset name

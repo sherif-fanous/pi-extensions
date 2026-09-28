@@ -1,32 +1,30 @@
 /**
  * Covers policy-default startup eligibility, precedence, resolution, and
- * unchanged apply outcomes.
+ * unchanged apply outcomes, reading the policy from a real user file.
  */
+import { join } from "node:path";
+
 import { ActivePresetSession } from "../../src/activation/session.js";
 import type { StartupSelection } from "../../src/activation/startup-selection.js";
+import { loadPresetsConfig } from "../../src/store/api.js";
 import type { LoadedPreset } from "../../src/types.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   createFakeContext,
   createFakePi,
+  createTempConfigDirs,
+  type TempConfigDirs,
 } from "@sherif-fanous/pi-extensions-testing";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { applyMock, isAutomaticDefaultEligibleMock, loadPolicyMock } =
-  vi.hoisted(() => ({
-    applyMock: vi.fn(),
-    isAutomaticDefaultEligibleMock: vi.fn(),
-    loadPolicyMock: vi.fn(),
-  }));
+const { applyMock, isAutomaticDefaultEligibleMock } = vi.hoisted(() => ({
+  applyMock: vi.fn(),
+  isAutomaticDefaultEligibleMock: vi.fn(),
+}));
 
 vi.mock("../../src/activation/apply.js", () => ({ apply: applyMock }));
 vi.mock("../../src/activation/startup-selection.js", () => ({
   isAutomaticDefaultEligible: isAutomaticDefaultEligibleMock,
-}));
-
-vi.mock("../../src/store/policy.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../src/store/policy.js")>()),
-  loadPolicy: loadPolicyMock,
 }));
 
 const { maybeApplyPolicyDefault } =
@@ -43,6 +41,8 @@ const captured: StartupSelection = {
   thinkingLevel: "medium",
 };
 
+let dirs: TempConfigDirs;
+
 async function applyDefault(
   ctx: ExtensionContext,
   precedence = { flagApplied: false, restored: false },
@@ -50,8 +50,9 @@ async function applyDefault(
 ) {
   const { pi } = createFakePi();
   const session = new ActivePresetSession();
+  const { policy } = await loadPresetsConfig(ctx);
   const result = await maybeApplyPolicyDefault(
-    [selected],
+    { policy, presets: [selected] },
     ctx,
     pi,
     session,
@@ -66,34 +67,38 @@ function context(mode: ExtensionContext["mode"] = "tui") {
   const notify = vi.fn();
 
   return {
-    ctx: createFakeContext({ cwd: "/work/project", mode, ui: { notify } }),
+    ctx: createFakeContext({ cwd: dirs.cwd, mode, ui: { notify } }),
     notify,
   };
 }
 
-function matchingPolicy(pattern = "work-opus") {
-  return {
-    rules: [
-      {
-        allow: [],
-        default: { field: "name", pattern, regex: new RegExp(pattern) },
-        index: 0,
-        match: "^/work/",
-        matchRegex: /^\/work\//,
-        prohibit: [],
-      },
-    ],
-    warnings: [],
-  };
+/**
+ * Write a user policy whose one rule matches the test's cwd and defaults
+ * to presets named by `pattern`, followed by `extraRules`.
+ */
+async function writePolicy(
+  pattern = "work-opus",
+  extraRules: readonly unknown[] = [],
+): Promise<void> {
+  await dirs.writeJson(join(dirs.agentDir, "presets-plus", "config.json"), {
+    version: 2,
+    policy: {
+      rules: [{ default: { pattern }, match: "project$" }, ...extraRules],
+    },
+  });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  dirs = await createTempConfigDirs();
   applyMock.mockReset();
   isAutomaticDefaultEligibleMock.mockReset();
-  loadPolicyMock.mockReset();
   applyMock.mockResolvedValue({ ok: true });
   isAutomaticDefaultEligibleMock.mockReturnValue(true);
-  loadPolicyMock.mockResolvedValue(matchingPolicy());
+  await writePolicy();
+});
+
+afterEach(async () => {
+  await dirs.cleanup();
 });
 
 describe("maybeApplyPolicyDefault", () => {
@@ -107,7 +112,6 @@ describe("maybeApplyPolicyDefault", () => {
       const { result } = await applyDefault(ctx, precedence);
 
       expect(result).toBe(false);
-      expect(loadPolicyMock).not.toHaveBeenCalled();
       expect(isAutomaticDefaultEligibleMock).not.toHaveBeenCalled();
       expect(applyMock).not.toHaveBeenCalled();
       expect(notify).not.toHaveBeenCalled();
@@ -118,10 +122,7 @@ describe("maybeApplyPolicyDefault", () => {
     const { ctx, notify } = context("print");
 
     isAutomaticDefaultEligibleMock.mockReturnValue(false);
-    loadPolicyMock.mockResolvedValue({
-      ...matchingPolicy(),
-      warnings: ["Policy warning."],
-    });
+    await writePolicy("work-opus", [{ match: "[" }]);
 
     const { result } = await applyDefault(ctx);
 
@@ -129,7 +130,7 @@ describe("maybeApplyPolicyDefault", () => {
     expect(isAutomaticDefaultEligibleMock).toHaveBeenCalledWith(captured, ctx);
     expect(applyMock).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledExactlyOnceWith(
-      "Presets Plus: 1 warning\n- Policy warning.",
+      `Presets Plus: 1 warning\n- Skipped policy rule 2 in ${join(dirs.agentDir, "presets-plus", "config.json")}: match pattern "[" is invalid.`,
       "warning",
     );
   });
@@ -149,7 +150,7 @@ describe("maybeApplyPolicyDefault", () => {
   it("does not report an unresolvable default when comparison fails", async () => {
     const { ctx, notify } = context();
 
-    loadPolicyMock.mockResolvedValue(matchingPolicy("missing"));
+    await writePolicy("missing");
 
     isAutomaticDefaultEligibleMock.mockReturnValue(false);
 
@@ -173,7 +174,7 @@ describe("maybeApplyPolicyDefault", () => {
   it("warns and keeps the baseline when the default is unresolvable", async () => {
     const { ctx, notify } = context();
 
-    loadPolicyMock.mockResolvedValue(matchingPolicy("missing"));
+    await writePolicy("missing");
 
     await applyDefault(ctx);
 

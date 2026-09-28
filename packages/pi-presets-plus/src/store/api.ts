@@ -13,19 +13,28 @@ import type {
 import { formatScopeName } from "../ui/widgets.js";
 import { DEFAULT_CONFIG, parseScope, PRESETS_PLUS_CONFIG } from "./config.js";
 import { mergeScopes } from "./merge.js";
-import { loadPolicy } from "./policy.js";
+import type { CompiledPolicy } from "./policy.js";
 import { computeClampWarning } from "./validate.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { ConfigOutcome } from "@sherif-fanous/pi-extensions-core";
 
-/** Result of loading all presets. */
-export interface LoadAllResult {
+/**
+ * One read of both scope files: the merged presets, the settings, the
+ * compiled user policy, and each warning in the place that shows it.
+ */
+export interface PresetsConfig {
   /**
    * What reading both files found, with a value warning for each invalid
-   * setting, preset, and project policy section.
+   * setting, preset, and project policy section. Session start,
+   * `/presets reload`, and `/presets status` show these.
    */
   readonly config: ConfigOutcome<PresetScope>;
   readonly hotkeyAnalysis: HotkeyAnalysis;
+  /**
+   * The user policy's rules and its warnings, which the activation gate,
+   * the startup default, and `/presets policy` show.
+   */
+  readonly policy: CompiledPolicy;
   readonly presets: LoadedPreset[];
   readonly showInactiveStatus: boolean;
 }
@@ -66,17 +75,17 @@ export async function addPreset(
 }
 
 /**
- * Load both consolidated scopes, preserving user then project merge order.
+ * Read each scope file once, preserving user then project merge order.
  * The project file is read only while Pi trusts the project.
  */
-export async function loadAll(ctx: StorageContext): Promise<LoadAllResult> {
+export async function loadPresetsConfig(
+  ctx: StorageContext,
+): Promise<PresetsConfig> {
   const config = await PRESETS_PLUS_CONFIG.load(ctx);
   const user = parseScope("user", config.files.user);
   const project = parseScope("project", config.files.project);
   const showInactiveStatus =
     project.showInactiveStatus ?? user.showInactiveStatus;
-  // Policy warnings for the user scope belong to loadPolicy. The project
-  // scope has no other reader, so its policy warnings surface here.
   const valueWarnings = [
     ...scopeValueWarnings("user", user, showInactiveStatus),
     ...scopeValueWarnings("project", project, showInactiveStatus),
@@ -95,6 +104,7 @@ export async function loadAll(ctx: StorageContext): Promise<LoadAllResult> {
   return {
     config: config.withValueWarnings(valueWarnings),
     hotkeyAnalysis: analyzeHotkeys(presets),
+    policy: { rules: user.policyRules, warnings: user.warnings.policy },
     presets,
     showInactiveStatus: showInactiveStatus ?? DEFAULT_CONFIG.showInactiveStatus,
   };
@@ -282,14 +292,9 @@ export async function updatePreset(
   return { ok: true };
 }
 
-/** Warnings from the sections every scope loads, leaving policy aside. */
-function loadableWarnings(loaded: ScopeConfig): string[] {
-  return [...loaded.warnings.file, ...loaded.warnings.presets];
-}
-
 /**
- * Load one scope for a mutation, or refuse when the project is not
- * trusted or the file did not load completely.
+ * Read one scope's file once for a mutation, or refuse when the project is
+ * not trusted or the file did not load completely.
  */
 async function readScope(
   scope: PresetScope,
@@ -305,15 +310,12 @@ async function readScope(
   }
 
   const result = parseScope(scope, await PRESETS_PLUS_CONFIG.read(ctx, scope));
-  // Compiled-rule warnings only come from loadPolicy, which also carries
-  // the user policy bucket, so the raw bucket is read here for project only.
-  const policyWarnings =
-    scope === "user"
-      ? (await loadPolicy(ctx)).warnings
-      : result.warnings.policy;
-  const warnings = [...loadableWarnings(result), ...policyWarnings];
+  const { file, policy, presets } = result.warnings;
 
-  if (warnings.length > 0 || result.invalidShowInactiveStatus !== undefined) {
+  if (
+    file.length + presets.length + policy.length > 0 ||
+    result.invalidShowInactiveStatus !== undefined
+  ) {
     return {
       ok: false,
       reason: `${EXTENSION_NAME} did not change the ${scope} configuration file at ${path}. It could not load the complete file. Fix the file and try again.`,
@@ -324,10 +326,10 @@ async function readScope(
 }
 
 /**
- * Warnings `loadAll` shows about one scope's values, in setting, then
- * preset order. An invalid `showInactiveStatus` warning names the default when no
- * scope supplies a valid value, and otherwise says the value was ignored,
- * since the other scope's value applies.
+ * Warnings `loadPresetsConfig` shows about one scope's values, in setting,
+ * then preset order. An invalid `showInactiveStatus` warning names the
+ * default when no scope supplies a valid value, and otherwise says the
+ * value was ignored, since the other scope's value applies.
  */
 function scopeValueWarnings(
   scope: PresetScope,

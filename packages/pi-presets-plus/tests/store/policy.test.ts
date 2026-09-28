@@ -1,45 +1,18 @@
 /**
- * Covers access policy loaded from user config, including matcher validation,
+ * Covers compiling the user access policy, including matcher validation,
  * permission decisions, and default selection for a directory.
  */
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-
-import { parseScope, PRESETS_PLUS_CONFIG } from "../../src/store/config.js";
 import {
+  compilePolicy,
   isPermitted,
-  loadPolicy,
   matchesPreset,
   resolveMatchingRules,
   resolvePolicyDefault,
 } from "../../src/store/policy.js";
 import type { LoadedPreset } from "../../src/types.js";
-import {
-  createProjectTrustContext,
-  createTempConfigDirs,
-  type TempConfigDirs,
-} from "@sherif-fanous/pi-extensions-testing";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-let dirs: TempConfigDirs;
-let agentDir: string;
-
-beforeEach(async () => {
-  dirs = await createTempConfigDirs();
-  agentDir = dirs.agentDir;
-});
-
-afterEach(async () => {
-  await dirs.cleanup();
-});
-
-function context(cwd = dirs.cwd) {
-  return createProjectTrustContext(cwd, true);
-}
-
-async function loadUserScope() {
-  return parseScope("user", await PRESETS_PLUS_CONFIG.read(context(), "user"));
-}
+const PATH = "/agent/presets-plus/config.json";
 
 function preset(name: string, extra: Partial<LoadedPreset> = {}): LoadedPreset {
   return {
@@ -51,132 +24,124 @@ function preset(name: string, extra: Partial<LoadedPreset> = {}): LoadedPreset {
   };
 }
 
-function userConfigPath(): string {
-  return join(agentDir, "presets-plus", "config.json");
+/** Compile `rules` as a user file's `policy.rules` and return the rules. */
+function rulesOf(rules: readonly unknown[]) {
+  return compilePolicy({ rules }, PATH).rules;
 }
 
-async function writePolicy(value: unknown): Promise<void> {
-  const path = userConfigPath();
-  const object = value as { rules?: unknown; version?: number };
-  const document =
-    object.version === 1
-      ? { version: 2, policy: { rules: object.rules } }
-      : value;
-
-  await mkdir(join(agentDir, "presets-plus"), { recursive: true });
-  await writeFile(path, JSON.stringify(document));
-}
-
-describe("loadPolicy", () => {
-  it("treats a missing file and empty rules as no policy", async () => {
-    await expect(loadPolicy(context())).resolves.toEqual({
-      rules: [],
-      warnings: [],
-    });
-
-    await writePolicy({ rules: [], version: 1 });
-
-    await expect(loadPolicy(context())).resolves.toEqual({
-      rules: [],
-      warnings: [],
-    });
-  });
-
-  it("fails open for unsupported versions and malformed JSON and leaves the file warning to the scope loader", async () => {
-    await writePolicy({ rules: [], version: 3 });
-
-    const unsupported = await loadPolicy(context());
-
-    expect(unsupported).toEqual({ rules: [], warnings: [] });
-    expect((await loadUserScope()).warnings.file.join(" ")).toContain(
-      "has version 3, but only version 2 is supported",
-    );
-
-    await writeFile(userConfigPath(), "{");
-
-    const malformed = await loadPolicy(context());
-
-    expect(malformed).toEqual({ rules: [], warnings: [] });
-    expect((await loadUserScope()).warnings.file.join(" ")).toContain(
-      "is not valid JSON",
-    );
-  });
-
-  it("skips an invalid match while retaining other rules", async () => {
-    await writePolicy({
-      rules: [{ match: "[" }, { match: "work" }],
-      version: 1,
-    });
-
-    const result = await loadPolicy(context());
-
-    expect(result.rules.map((rule) => rule.match)).toEqual(["work"]);
-    expect(result.warnings.join(" ")).toContain('"["');
-  });
-
-  it("skips only an invalid matcher and defaults fields to name", async () => {
-    await writePolicy({
-      rules: [
-        {
-          allow: [{ pattern: "[" }, { pattern: "apple" }],
-          default: { pattern: "opus" },
-          match: "work",
-          prohibit: [{ field: "provider", pattern: "openai" }],
-        },
+describe("compilePolicy", () => {
+  it.each([
+    ["an absent section", undefined, [], []],
+    ["empty rules", { rules: [] }, [], []],
+    [
+      "a section that is not an object",
+      "work",
+      [],
+      [
+        `The config file ${PATH} has an invalid "policy" section; expected an object with a "rules" array.`,
       ],
-      version: 1,
-    });
+    ],
+    [
+      "a section without a rules array",
+      { rules: {} },
+      [],
+      [
+        `The config file ${PATH} has an invalid "policy" section; expected an object with a "rules" array.`,
+      ],
+    ],
+    [
+      "a rule without a string match",
+      { rules: [{ match: 1 }, { match: "work" }] },
+      ["work"],
+      [`Skipped policy rule 1 in ${PATH}: "match" must be a string.`],
+    ],
+    [
+      "a rule with an invalid match pattern",
+      { rules: [{ match: "[" }, { match: "work" }] },
+      ["work"],
+      [`Skipped policy rule 1 in ${PATH}: match pattern "[" is invalid.`],
+    ],
+    [
+      "an allow value that is not an array",
+      { rules: [{ allow: { pattern: "a" }, match: "work" }] },
+      ["work"],
+      [
+        `Ignored "allow" in policy rule 1 of ${PATH}: the value must be an array.`,
+      ],
+    ],
+    [
+      "a matcher without a string pattern",
+      { rules: [{ match: "work", prohibit: [{ field: "name" }] }] },
+      ["work"],
+      [
+        `Skipped the prohibit matcher in policy rule 1 of ${PATH}: "pattern" must be a string.`,
+      ],
+    ],
+    [
+      "a matcher with an unsupported field",
+      { rules: [{ default: { field: "tools", pattern: "a" }, match: "work" }] },
+      ["work"],
+      [
+        `Skipped default pattern "a" in policy rule 1 of ${PATH}: field "tools" is not supported.`,
+      ],
+    ],
+    [
+      "a matcher with an invalid pattern",
+      { rules: [{ allow: [{ pattern: "[" }], match: "work" }] },
+      ["work"],
+      [
+        `Skipped the allow matcher in policy rule 1 of ${PATH}: pattern "[" is invalid.`,
+      ],
+    ],
+  ])(
+    "compiles %s, keeping the usable rules",
+    (_label, section, matches, warnings) => {
+      const result = compilePolicy(section, PATH);
 
-    const result = await loadPolicy(context());
+      expect(result.rules.map((rule) => rule.match)).toEqual(matches);
+      expect(result.warnings).toEqual(warnings);
+    },
+  );
+
+  it("skips only an invalid matcher and defaults fields to name", () => {
+    const result = compilePolicy(
+      {
+        rules: [
+          {
+            allow: [{ pattern: "[" }, { pattern: "apple" }],
+            default: { pattern: "opus" },
+            match: "work",
+            prohibit: [{ field: "provider", pattern: "openai" }],
+          },
+        ],
+      },
+      PATH,
+    );
     const rule = result.rules[0];
 
     expect(rule?.allow).toHaveLength(1);
     expect(rule?.allow[0]?.field).toBe("name");
     expect(rule?.default?.field).toBe("name");
-    expect(result.warnings.join(" ")).toContain('"["');
+    expect(rule?.prohibit[0]?.field).toBe("provider");
+    expect(result.warnings).toHaveLength(1);
   });
 });
 
 describe("policy matching and permissions", () => {
-  it("ignores project policy and reports the trust-boundary warning", async () => {
-    const cwd = join(agentDir, "project");
-    const path = join(cwd, ".pi", "presets-plus", "config.json");
+  it("uses raw regex semantics for name, provider, and combined model", () => {
+    const policyRules = rulesOf([
+      {
+        allow: [
+          { pattern: "apple" },
+          { pattern: "^ifanous-$" },
+          { field: "provider", pattern: "apple-genai" },
+          { field: "model", pattern: "^anthropic/" },
+        ],
+        match: "project",
+      },
+    ]);
 
-    await mkdir(join(cwd, ".pi", "presets-plus"), { recursive: true });
-    await writeFile(
-      path,
-      JSON.stringify({ version: 2, policy: { rules: [{ match: ".*" }] } }),
-    );
-
-    const result = parseScope(
-      "project",
-      await PRESETS_PLUS_CONFIG.read(context(cwd), "project"),
-    );
-
-    expect(result.presets).toEqual([]);
-    expect(result.warnings.policy).toHaveLength(1);
-    expect(result.warnings.policy[0]).toContain(
-      "only in the user configuration",
-    );
-  });
-
-  it("uses raw regex semantics for name, provider, and combined model", async () => {
-    await writePolicy({
-      rules: [
-        {
-          allow: [
-            { pattern: "apple" },
-            { pattern: "^ifanous-$" },
-            { field: "provider", pattern: "apple-genai" },
-            { field: "model", pattern: "^anthropic/" },
-          ],
-          match: "project",
-        },
-      ],
-      version: 1,
-    });
-
-    const rule = (await loadPolicy(context())).rules[0];
+    const rule = policyRules[0];
 
     expect(rule).toBeDefined();
     if (!rule) return;
@@ -198,22 +163,18 @@ describe("policy matching and permissions", () => {
     expect(matchesPreset(preset("other"), model)).toBe(true);
   });
 
-  it("unions matching rules, treats allow as a whitelist, and lets prohibit win", async () => {
-    await writePolicy({
-      rules: [
-        {
-          allow: [{ pattern: "^apple-" }],
-          match: "work",
-          prohibit: [{ pattern: "sonnet" }],
-        },
-        { match: "apple", prohibit: [{ pattern: "^virtasant-" }] },
-      ],
-      version: 1,
-    });
+  it("unions matching rules, treats allow as a whitelist, and lets prohibit win", () => {
+    const policyRules = rulesOf([
+      {
+        allow: [{ pattern: "^apple-" }],
+        match: "work",
+        prohibit: [{ pattern: "sonnet" }],
+      },
+      { match: "apple", prohibit: [{ pattern: "^virtasant-" }] },
+    ]);
 
-    const rules = (await loadPolicy(context())).rules;
-    const none = resolveMatchingRules("/personal", rules);
-    const matched = resolveMatchingRules("/work/apple/project", rules);
+    const none = resolveMatchingRules("/personal", policyRules);
+    const matched = resolveMatchingRules("/work/apple/project", policyRules);
 
     expect(isPermitted(preset("anything"), none)).toBe(true);
     expect(isPermitted(preset("ifanous-codex"), matched)).toBe(false);
@@ -224,20 +185,16 @@ describe("policy matching and permissions", () => {
 });
 
 describe("resolvePolicyDefault", () => {
-  it("uses longest match, then file order, then existing preset order", async () => {
-    await writePolicy({
-      rules: [
-        { default: { pattern: "^apple-opus" }, match: "^/work/" },
-        { default: { pattern: "^apple-opus-4-8$" }, match: "^/work/apple/" },
-      ],
-      version: 1,
-    });
+  it("uses longest match, then file order, then existing preset order", () => {
+    const policyRules = rulesOf([
+      { default: { pattern: "^apple-opus" }, match: "^/work/" },
+      { default: { pattern: "^apple-opus-4-8$" }, match: "^/work/apple/" },
+    ]);
 
-    const rules = (await loadPolicy(context())).rules;
     const result = resolvePolicyDefault(
       "/work/apple/project",
       [preset("apple-opus-4-7"), preset("apple-opus-4-8")],
-      rules,
+      policyRules,
     );
 
     expect(result.kind).toBe("resolved");
@@ -248,19 +205,16 @@ describe("resolvePolicyDefault", () => {
     expect(result.winner.rule.index).toBe(1);
   });
 
-  it("uses the first rule on equal spans", async () => {
-    await writePolicy({
-      rules: [
-        { default: { pattern: "^first$" }, match: "work" },
-        { default: { pattern: "^second$" }, match: "work" },
-      ],
-      version: 1,
-    });
+  it("uses the first rule on equal spans", () => {
+    const policyRules = rulesOf([
+      { default: { pattern: "^first$" }, match: "work" },
+      { default: { pattern: "^second$" }, match: "work" },
+    ]);
 
     const result = resolvePolicyDefault(
       "/work",
       [preset("first"), preset("second")],
-      (await loadPolicy(context())).rules,
+      policyRules,
     );
 
     expect(result.kind).toBe("resolved");
@@ -269,16 +223,15 @@ describe("resolvePolicyDefault", () => {
     expect(result.winner.rule.index).toBe(0);
   });
 
-  it("lists several default candidates in preset order", async () => {
-    await writePolicy({
-      rules: [{ default: { pattern: "opus" }, match: "work" }],
-      version: 1,
-    });
+  it("lists several default candidates in preset order", () => {
+    const policyRules = rulesOf([
+      { default: { pattern: "opus" }, match: "work" },
+    ]);
 
     const result = resolvePolicyDefault(
       "/work",
       [preset("second-opus"), preset("first-opus"), preset("other")],
-      (await loadPolicy(context())).rules,
+      policyRules,
     );
 
     expect(result.kind).toBe("resolved");
@@ -289,17 +242,14 @@ describe("resolvePolicyDefault", () => {
     ]);
   });
 
-  it("excludes prohibited, shadowed, and unavailable candidates", async () => {
-    await writePolicy({
-      rules: [
-        {
-          default: { pattern: "opus" },
-          match: "work",
-          prohibit: [{ pattern: "blocked" }],
-        },
-      ],
-      version: 1,
-    });
+  it("excludes prohibited, shadowed, and unavailable candidates", () => {
+    const policyRules = rulesOf([
+      {
+        default: { pattern: "opus" },
+        match: "work",
+        prohibit: [{ pattern: "blocked" }],
+      },
+    ]);
 
     const result = resolvePolicyDefault(
       "/work",
@@ -309,7 +259,7 @@ describe("resolvePolicyDefault", () => {
         preset("unavailable-opus", { unavailable: "no-key" }),
         preset("allowed-opus"),
       ],
-      (await loadPolicy(context())).rules,
+      policyRules,
     );
 
     expect(result.kind).toBe("resolved");
@@ -321,29 +271,19 @@ describe("resolvePolicyDefault", () => {
     }
   });
 
-  it("distinguishes no configured default from an unresolvable one", async () => {
-    await writePolicy({
-      rules: [{ match: "work" }],
-      version: 1,
-    });
-
+  it("distinguishes no configured default from an unresolvable one", () => {
     const noDefault = resolvePolicyDefault(
       "/work",
       [],
-      (await loadPolicy(context())).rules,
+      rulesOf([{ match: "work" }]),
     );
 
     expect(noDefault.kind).toBe("none");
 
-    await writePolicy({
-      rules: [{ default: { pattern: "missing" }, match: "work" }],
-      version: 1,
-    });
-
     const unavailable = resolvePolicyDefault(
       "/work",
       [],
-      (await loadPolicy(context())).rules,
+      rulesOf([{ default: { pattern: "missing" }, match: "work" }]),
     );
 
     expect(unavailable.kind).toBe("unresolvable");

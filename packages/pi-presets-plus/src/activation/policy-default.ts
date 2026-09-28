@@ -2,8 +2,8 @@
  * Activates the preset that the access policy names as the default for the
  * current directory when nothing else claimed the fresh session.
  */
-import { loadPolicy, resolvePolicyDefault } from "../store/policy.js";
-import type { LoadedPreset } from "../types.js";
+import type { PresetsConfig } from "../store/api.js";
+import { resolvePolicyDefault } from "../store/policy.js";
 import { notifyApplyResult } from "../ui/apply-result.js";
 import { reportWarnings } from "../warnings.js";
 import { apply } from "./apply.js";
@@ -30,7 +30,7 @@ export interface PolicyDefaultPrecedence {
  * out as one warning notification per step.
  */
 export async function maybeApplyPolicyDefault(
-  presets: readonly LoadedPreset[],
+  { policy, presets }: Pick<PresetsConfig, "policy" | "presets">,
   ctx: ExtensionContext,
   pi: ExtensionAPI,
   session: ActivePresetSession,
@@ -40,13 +40,11 @@ export async function maybeApplyPolicyDefault(
 ): Promise<boolean> {
   if (precedence.flagApplied || precedence.restored) return false;
 
-  const { rules, warnings: policyWarnings } = await loadPolicy(ctx);
-
-  reportWarnings(ctx, policyWarnings, warnings);
+  reportWarnings(ctx, policy.warnings, warnings);
 
   if (!isAutomaticDefaultEligible(startup, ctx)) return false;
 
-  const resolved = resolvePolicyDefault(ctx.cwd, presets, rules);
+  const resolved = resolvePolicyDefault(ctx.cwd, presets, policy.rules);
 
   if (resolved.kind === "none") return false;
 

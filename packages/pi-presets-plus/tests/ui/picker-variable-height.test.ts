@@ -7,7 +7,7 @@ import { pickerMounter } from "../helpers/picker.js";
 import { Key, type Component } from "@earendil-works/pi-tui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const loadAll = vi.fn();
+const loadPresetsConfig = vi.fn();
 /**
  * Raw terminal byte sequences for the special keys these tests drive.
  *
@@ -33,13 +33,13 @@ vi.mock("../../src/store/api.js", async (importOriginal) => {
   return {
     ...actual,
     addPreset: vi.fn(),
-    loadAll,
+    loadPresetsConfig,
     removePreset: vi.fn(),
     reorderWithinScope: vi.fn().mockResolvedValue({ ok: true }),
   };
 });
 
-const mount = pickerMounter(loadAll);
+const mount = pickerMounter(loadPresetsConfig);
 
 interface PresetFixtureOptions {
   readonly availability?: LoadedPreset["unavailable"];

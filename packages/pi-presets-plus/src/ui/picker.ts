@@ -8,7 +8,7 @@ import type { ActivePresetSession } from "../activation/session.js";
 import { EXTENSION_NAME } from "../extension-name.js";
 import type { HotkeyRegistry } from "../hotkey-registry.js";
 import { samePresetIdentity } from "../preset-identity.js";
-import { loadAll } from "../store/api.js";
+import { loadPresetsConfig } from "../store/api.js";
 import type { LoadedPreset } from "../types.js";
 import { formatActionError } from "./action-error.js";
 import type { ScopeFilter } from "./filter.js";
@@ -395,7 +395,7 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
   async refreshPresets(selectionKey?: string): Promise<void> {
     // Load warnings show at session start and on /presets reload, so a
     // refresh does not repeat them.
-    const { presets } = await loadAll(this.ctx);
+    const { presets } = await loadPresetsConfig(this.ctx);
 
     this.allPresets = presets;
     this.inheritedTools = this.pi?.getActiveTools() ?? this.inheritedTools;
@@ -696,7 +696,7 @@ export async function openPicker(
 ): Promise<PickerResult | undefined> {
   // Load warnings show at session start and on /presets reload, so opening
   // the picker does not repeat them.
-  const { presets } = await loadAll(ctx);
+  const { presets } = await loadPresetsConfig(ctx);
   const inheritedTools = options.inheritedTools ?? [];
   let currentPicker: PresetPickerComponent | undefined;
 

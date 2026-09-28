@@ -17,7 +17,7 @@ import {
 } from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const loadAll = vi.fn();
+const loadPresetsConfig = vi.fn();
 
 /** Raw terminal byte sequences for the arrow keys these tests drive. */
 const KEY_BYTES = {
@@ -32,13 +32,13 @@ vi.mock("../../src/store/api.js", async (importOriginal) => {
   return {
     ...actual,
     addPreset: vi.fn(),
-    loadAll,
+    loadPresetsConfig,
     removePreset: vi.fn(),
     reorderWithinScope: vi.fn().mockResolvedValue({ ok: true }),
   };
 });
 
-const mount = pickerMounter(loadAll);
+const mount = pickerMounter(loadPresetsConfig);
 
 interface MountOptions {
   readonly active?: ActivePresetState;

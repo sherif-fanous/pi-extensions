@@ -2,8 +2,10 @@
  * Covers the `/presets status` report: its delivery by `runStatus`, and
  * the rows, severity, Config block, and warnings `statusReport` builds for
  * no active preset, a preset no longer loaded, a baseline, and a restored
- * session without one.
+ * session without one. Presets load from real temporary config files.
  */
+import { join } from "node:path";
+
 import {
   ActivePresetSession,
   type ActivePresetStartOptions,
@@ -12,14 +14,16 @@ import {
   runStatus,
   statusReport,
 } from "../../../src/commands/presets/status.js";
+import { toPersistedPreset } from "../../../src/store/api.js";
 import type { LoadedPreset } from "../../../src/types.js";
+import { makeStubModelRegistry } from "../../helpers/model-registry.js";
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
-import { afterEach, describe, expect, it, vi } from "vitest";
-
-const loadAll = vi.hoisted(() => vi.fn());
-
-vi.mock("../../../src/store/api.js", () => ({ loadAll }));
+import {
+  createPlainTheme,
+  createTempConfigDirs,
+  type TempConfigDirs,
+} from "@sherif-fanous/pi-extensions-testing";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const preset: LoadedPreset = {
   model: "claude",
@@ -29,13 +33,20 @@ const preset: LoadedPreset = {
   thinkingLevel: "high",
 };
 
+let dirs: TempConfigDirs;
+
 /** A context outside the TUI whose current model is `current`. */
 function context(current?: Model<Api>) {
   const notify = vi.fn();
 
   return {
     ctx: {
+      cwd: dirs.cwd,
+      isProjectTrusted: () => true,
       model: current,
+      modelRegistry: makeStubModelRegistry({
+        models: { anthropic: { claude: { hasKey: true, reasoning: true } } },
+      }),
       ui: { notify, setStatus: vi.fn(), theme: createPlainTheme() },
     } as never,
     notify,
@@ -52,19 +63,6 @@ function pi(thinkingLevel: string, tools: string[]) {
     getActiveTools: () => tools,
     getThinkingLevel: () => thinkingLevel as never,
   };
-}
-
-const configLines = [
-  "Config:",
-  "  User:    loaded",
-  "           /agent/presets-plus/config.json",
-  "  Project: not found",
-  "           /repo/.pi/presets-plus/config.json",
-];
-
-/** A `loadAll` result with the configuration members the report reads. */
-function loaded(presets: LoadedPreset[], statusWarnings: string[] = []) {
-  return { config: { statusLines: configLines, statusWarnings }, presets };
 }
 
 /** A session restored from a branch, which carries no baseline. */
@@ -101,15 +99,29 @@ function startedSession(
   return session;
 }
 
-afterEach(() => {
-  loadAll.mockReset();
+function userPath(): string {
+  return join(dirs.agentDir, "presets-plus", "config.json");
+}
+
+/** Save `preset` to the project file, which stores it without its scope. */
+async function writePreset(): Promise<void> {
+  await dirs.writeJson(join(dirs.cwd, ".pi", "presets-plus", "config.json"), {
+    version: 2,
+    presets: [toPersistedPreset(preset)],
+  });
+}
+
+beforeEach(async () => {
+  dirs = await createTempConfigDirs();
+});
+
+afterEach(async () => {
+  await dirs.cleanup();
 });
 
 describe("runStatus", () => {
   it("delivers the status report as a notification outside the TUI", async () => {
     const { ctx, notify } = context();
-
-    loadAll.mockResolvedValue(loaded([]));
 
     await runStatus(ctx, pi("medium", []) as never, new ActivePresetSession());
 
@@ -122,10 +134,7 @@ describe("runStatus", () => {
 
 describe("statusReport", () => {
   it("says no preset is active, with the Config block and the configuration's warnings", async () => {
-    const invalidPreset =
-      "Skipped preset 1 in /agent/presets-plus/config.json: It needs a name.";
-
-    loadAll.mockResolvedValue(loaded([], [invalidPreset]));
+    await dirs.writeJson(userPath(), { version: 2, presets: [{}] });
 
     const report = await statusReport(
       context().ctx,
@@ -136,14 +145,23 @@ describe("statusReport", () => {
     expect(report.title).toBe("Presets Plus Status");
     expect(report.body.startsWith(`${report.title}\n`)).toBe(true);
     expect(report.body).toContain("No preset is active.");
-    expect(report.body).toContain(configLines.join("\n"));
-    expect(report.body).toContain(`- ${invalidPreset}`);
+    expect(report.body).toContain(
+      [
+        "Config:",
+        "  User:    loaded",
+        `           ${userPath()}`,
+        "  Project: not found",
+        `           ${join(dirs.cwd, ".pi", "presets-plus", "config.json")}`,
+      ].join("\n"),
+    );
+
+    expect(report.body).toContain(
+      `Warnings:\n- Skipped preset at index 0 in ${userPath()}: `,
+    );
     expect(report.severity).toBe("info");
   });
 
   it("warns when the active preset is no longer loaded", async () => {
-    loadAll.mockResolvedValue(loaded([]));
-
     const report = await statusReport(
       context().ctx,
       pi("high", []),
@@ -155,7 +173,7 @@ describe("statusReport", () => {
   });
 
   it("shows the baseline, the preset's values, and the managed current values", async () => {
-    loadAll.mockResolvedValue(loaded([preset]));
+    await writePreset();
 
     const session = startedSession({
       baseline: {
@@ -199,7 +217,7 @@ describe("statusReport", () => {
   });
 
   it("flags user overrides and tools the preset does not manage", async () => {
-    loadAll.mockResolvedValue(loaded([preset]));
+    await writePreset();
 
     const session = startedSession({
       baseline: {
@@ -233,7 +251,7 @@ describe("statusReport", () => {
   });
 
   it("leaves out the baseline and preset rows for a session without a baseline", async () => {
-    loadAll.mockResolvedValue(loaded([preset]));
+    await writePreset();
 
     const { body } = await statusReport(
       context(model("anthropic", "claude")).ctx,

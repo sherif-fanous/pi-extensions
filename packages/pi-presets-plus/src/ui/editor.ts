@@ -6,7 +6,12 @@
 import type { ActivePresetSession } from "../activation/session.js";
 import type { HotkeyRegistry } from "../hotkey-registry.js";
 import { findPreset, samePresetIdentity } from "../preset-identity.js";
-import { addPreset, loadAll, movePreset, updatePreset } from "../store/api.js";
+import {
+  addPreset,
+  loadPresetsConfig,
+  movePreset,
+  updatePreset,
+} from "../store/api.js";
 import type { LoadedPreset, Preset } from "../types.js";
 import { formatActionError } from "./action-error.js";
 import { openConfirm } from "./confirm.js";
@@ -95,7 +100,8 @@ export interface EditorOptions {
   /**
    * Preset list used for name collision and hotkey conflict checks.
    * Callers that already hold a fresh in-memory list pass it here to skip
-   * the initial disk read; otherwise the editor calls `loadAll(ctx)`.
+   * the initial disk read; otherwise the editor calls
+   * `loadPresetsConfig(ctx)`.
    */
   presets?: readonly LoadedPreset[];
   session: ActivePresetSession;
@@ -643,7 +649,7 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
 
     this.updateActiveAfterMoveOrRename(next);
 
-    const loaded = findPreset((await loadAll(this.ctx)).presets, {
+    const loaded = findPreset((await loadPresetsConfig(this.ctx)).presets, {
       name: next.name,
       scope: this.state.scope,
     });
@@ -927,7 +933,7 @@ export async function openEditor(
   openOptions: EditorOpenOptions,
   options: EditorOptions,
 ): Promise<EditorResult | undefined> {
-  const presets = options.presets ?? (await loadAll(ctx)).presets;
+  const presets = options.presets ?? (await loadPresetsConfig(ctx)).presets;
   // Include models without configured auth so a preset whose provider lost
   // its API key still appears in the list, dimmed with a `(no key)` suffix.
   const models = ctx.modelRegistry.getAll();

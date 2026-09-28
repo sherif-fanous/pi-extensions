@@ -1,6 +1,6 @@
 /**
  * Combines the two scope files into the single ordered `LoadedPreset[]`
- * that `loadAll` returns, tagging each entry with its scope, its
+ * that `loadPresetsConfig` returns, tagging each entry with its scope, its
  * shadowing, and its availability.
  */
 import type { LoadedPreset, Preset } from "../types.js";

@@ -5,7 +5,7 @@
  */
 import { join } from "node:path";
 
-import { loadAll } from "../../src/store/api.js";
+import { loadPresetsConfig } from "../../src/store/api.js";
 import { parseScope, PRESETS_PLUS_CONFIG } from "../../src/store/config.js";
 import type { PresetScope } from "../../src/types.js";
 import { makeStubModelRegistry } from "../helpers/model-registry.js";
@@ -72,7 +72,7 @@ describe("parseScope", () => {
   });
 
   it("defaults to showing inactive status when files are missing", async () => {
-    const result = await loadAll(context());
+    const result = await loadPresetsConfig(context());
 
     expect(result.showInactiveStatus).toBe(true);
     expect(result.config.warnings).toEqual([]);
@@ -85,13 +85,13 @@ describe("parseScope", () => {
 
   it("resolves project, user, then default status", async () => {
     await dirs.writeJson(userPath(), { version: 2, showInactiveStatus: false });
-    expect((await loadAll(context())).showInactiveStatus).toBe(false);
+    expect((await loadPresetsConfig(context())).showInactiveStatus).toBe(false);
 
     await dirs.writeJson(projectPath(), {
       version: 2,
       showInactiveStatus: true,
     });
-    expect((await loadAll(context())).showInactiveStatus).toBe(true);
+    expect((await loadPresetsConfig(context())).showInactiveStatus).toBe(true);
   });
 
   it("fails open with an invalid file and keeps its warning", async () => {

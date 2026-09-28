@@ -3,10 +3,9 @@
  * the current directory, and delivers that report to the user.
  */
 import { EXTENSION_NAME } from "../../extension-name.js";
-import { loadAll } from "../../store/api.js";
+import { loadPresetsConfig } from "../../store/api.js";
 import {
   isPermitted,
-  loadPolicy,
   resolvePolicyDefault,
   type CompiledPolicyRule,
 } from "../../store/policy.js";
@@ -49,11 +48,11 @@ export async function runPolicy(
   ctx: ExtensionCommandContext,
   pi: Pick<ExtensionAPI, "appendEntry">,
 ): Promise<void> {
-  const [policy, loaded] = await Promise.all([loadPolicy(ctx), loadAll(ctx)]);
-  const warnings = [...policy.warnings, ...loaded.config.warnings];
+  const { config, policy, presets } = await loadPresetsConfig(ctx);
+  const warnings = [...policy.warnings, ...config.warnings];
 
   deliverCommandReport(ctx, pi, {
-    body: formatPolicy(ctx.cwd, loaded.presets, policy.rules, warnings),
+    body: formatPolicy(ctx.cwd, presets, policy.rules, warnings),
     severity: warnings.length > 0 ? "warning" : "info",
   });
 }

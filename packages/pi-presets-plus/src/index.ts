@@ -17,12 +17,9 @@ import {
 } from "./commands/presets/router.js";
 import { EXTENSION_NAME } from "./extension-name.js";
 import { applyPresetFlag, registerPresetFlag } from "./flag.js";
-import {
-  HotkeyRegistry,
-  type CurrentPresetsLoader,
-} from "./hotkey-registry.js";
+import { HotkeyRegistry } from "./hotkey-registry.js";
 import { findPreset } from "./preset-identity.js";
-import { loadAll } from "./store/api.js";
+import { loadPresetsConfig } from "./store/api.js";
 import { PRESETS_PLUS_CONFIG } from "./store/config.js";
 import { migrateAll } from "./store/migrate.js";
 import type { PresetScope } from "./types.js";
@@ -73,7 +70,7 @@ export default function presetsPlus(pi: ExtensionAPI): void {
       try {
         migration = await migrateAll(ctx);
 
-        const loaded = await loadAll(ctx);
+        const loaded = await loadPresetsConfig(ctx);
         const { hotkeyAnalysis, presets, showInactiveStatus } = loaded;
 
         config = loaded.config.withMigrations(migration);
@@ -90,13 +87,13 @@ export default function presetsPlus(pi: ExtensionAPI): void {
         const flagApplied = await applyPresetFlag(
           pi,
           ctx,
-          presets,
+          loaded,
           session,
           startupWarnings,
         );
 
         await maybeApplyPolicyDefault(
-          presets,
+          loaded,
           ctx,
           pi,
           session,
@@ -110,21 +107,20 @@ export default function presetsPlus(pi: ExtensionAPI): void {
 
         presetNamesLoader.fn = async () => {
           try {
-            return (await loadAll(ctx)).presets.map((preset) => preset.name);
+            return (await loadPresetsConfig(ctx)).presets.map(
+              (preset) => preset.name,
+            );
           } catch {
             return [];
           }
         };
-
-        const loadCurrentPresets: CurrentPresetsLoader = async (handlerCtx) =>
-          (await loadAll(handlerCtx)).presets;
 
         hotkeys.bindForSession(
           presets,
           hotkeyAnalysis,
           ctx,
           pi,
-          loadCurrentPresets,
+          loadPresetsConfig,
           session,
           startupWarnings,
         );
@@ -160,7 +156,7 @@ export default function presetsPlus(pi: ExtensionAPI): void {
       // This load drops its warnings on purpose. Session start and
       // `/presets reload` already report them, and repeating them on every
       // agent turn would bury the rest of the conversation.
-      const { presets } = await loadAll(ctx);
+      const { presets } = await loadPresetsConfig(ctx);
       const preset = findPreset(presets, active);
 
       if (!preset?.instructions) return undefined;

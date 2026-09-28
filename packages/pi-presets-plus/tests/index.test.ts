@@ -1,13 +1,14 @@
 /**
  * Covers session-start configuration loading, warning delivery, and picking
- * up an externally edited configuration on extension reload.
+ * up an externally edited configuration on extension reload, against real
+ * temporary config files.
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { LoadAllResult } from "../src/store/api.js";
-import { PRESETS_PLUS_CONFIG } from "../src/store/config.js";
-import type { ThinkingLevel } from "../src/types.js";
+import { toPersistedPreset } from "../src/store/api.js";
+import type { LoadedPreset, ThinkingLevel } from "../src/types.js";
+import { makeStubModelRegistry } from "./helpers/model-registry.js";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type {
   ExtensionContext,
@@ -22,14 +23,8 @@ import {
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { loadAllMock, maybeApplyPolicyDefaultMock } = vi.hoisted(() => ({
-  loadAllMock: vi.fn(),
+const { maybeApplyPolicyDefaultMock } = vi.hoisted(() => ({
   maybeApplyPolicyDefaultMock: vi.fn(),
-}));
-
-vi.mock("../src/store/api.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../src/store/api.js")>()),
-  loadAll: loadAllMock,
 }));
 
 vi.mock("../src/activation/policy-default.js", () => ({
@@ -37,9 +32,6 @@ vi.mock("../src/activation/policy-default.js", () => ({
 }));
 
 const { default: presetsPlus } = await import("../src/index.js");
-const { loadAll: realLoadAll } = await vi.importActual<
-  typeof import("../src/store/api.js")
->("../src/store/api.js");
 const { maybeApplyPolicyDefault: realMaybeApplyPolicyDefault } =
   await vi.importActual<typeof import("../src/activation/policy-default.js")>(
     "../src/activation/policy-default.js",
@@ -54,22 +46,6 @@ function configPath(scope: "project" | "user", cwd: string): string {
     : join(cwd, ".pi", "presets-plus", "config.json");
 }
 
-/**
- * A `loadAll` stand-in that reads the real files for its configuration
- * outcome and returns `presets` and `hotkeyAnalysis` as given.
- */
-function fakeLoadAll(
-  overrides: Partial<Omit<LoadAllResult, "config">> = {},
-): (ctx: ExtensionContext) => Promise<LoadAllResult> {
-  return async (ctx) => ({
-    config: await PRESETS_PLUS_CONFIG.load(ctx),
-    hotkeyAnalysis: { conflicts: [], invalid: [], parsed: new Map() },
-    presets: [],
-    showInactiveStatus: true,
-    ...overrides,
-  });
-}
-
 function makeContext(
   status: Record<string, string | undefined>,
   mode: ExtensionContext["mode"] = "tui",
@@ -82,6 +58,9 @@ function makeContext(
     isProjectTrusted: () => trusted,
     mode,
     model: { id: "gpt-5", provider: "openai" } as Model<Api>,
+    modelRegistry: makeStubModelRegistry({
+      models: { anthropic: { "claude-opus": { hasKey: true } } },
+    }),
     sessionManager: { getBranch: () => branch },
     ui: {
       notify,
@@ -145,13 +124,23 @@ async function writeProjectLegacyPresets(
   await writeFile(projectPresetsPath(cwd), contents, "utf-8");
 }
 
+/** Save `presets` to the user file, which stores them without a scope. */
+async function writeUserPresets(
+  presets: readonly LoadedPreset[],
+  extra: Record<string, unknown> = {},
+): Promise<void> {
+  await dirs.writeJson(configPath("user", ""), {
+    version: 2,
+    presets: presets.map(toPersistedPreset),
+    ...extra,
+  });
+}
+
 beforeEach(async () => {
   dirs = await createTempConfigDirs();
   agentDir = dirs.agentDir;
-  loadAllMock.mockReset();
   maybeApplyPolicyDefaultMock.mockReset();
   maybeApplyPolicyDefaultMock.mockImplementation(realMaybeApplyPolicyDefault);
-  loadAllMock.mockImplementation(fakeLoadAll());
 });
 
 afterEach(async () => {
@@ -160,10 +149,12 @@ afterEach(async () => {
 
 describe("/presets command", () => {
   it("reports a failing subcommand as an error notification", async () => {
-    loadAllMock.mockRejectedValue(new Error("disk on fire"));
-
     const { fake } = makePi();
     const { ctx, notify } = makeContext({});
+
+    ctx.isProjectTrusted = () => {
+      throw new Error("disk on fire");
+    };
 
     presetsPlus(fake.pi);
     await fake.runCommand("presets", "reload", ctx);
@@ -177,7 +168,6 @@ describe("/presets command", () => {
 
 describe("session_start configuration", () => {
   it("applies the inactive preference and re-reads it after reload", async () => {
-    loadAllMock.mockImplementation(realLoadAll);
     await writeConfig(
       JSON.stringify({ version: 2, showInactiveStatus: false }),
     );
@@ -265,14 +255,17 @@ describe("session_start configuration", () => {
       const status: Record<string, string | undefined> = {};
       const { ctx } = makeContext(status);
 
-      loadAllMock.mockImplementation((handlerCtx: ExtensionContext) => {
-        Object.assign(handlerCtx, {
+      // Pi's model and thinking level change once the configuration
+      // starts loading, which asks whether the project is trusted.
+      ctx.isProjectTrusted = () => {
+        Object.assign(ctx, {
           model: { id: "claude-opus", provider: "anthropic" },
         });
         spies.getThinkingLevel.mockReturnValue("high");
 
-        return fakeLoadAll()(handlerCtx);
-      });
+        return true;
+      };
+
       maybeApplyPolicyDefaultMock.mockResolvedValue(false);
 
       presetsPlus(fake.pi);
@@ -294,14 +287,14 @@ describe("session_start configuration", () => {
   );
 
   it("passes a restored attachment as higher precedence without changing Pi state", async () => {
-    const restored: import("../src/types.js").LoadedPreset = {
-      model: "claude-opus",
-      name: "restored",
-      provider: "anthropic",
-      scope: "user",
-    };
-
-    loadAllMock.mockImplementation(fakeLoadAll({ presets: [restored] }));
+    await writeUserPresets([
+      {
+        model: "claude-opus",
+        name: "restored",
+        provider: "anthropic",
+        scope: "user",
+      },
+    ]);
 
     const branch = [
       {
@@ -333,7 +326,7 @@ describe("session_start configuration", () => {
   });
 
   it("keeps an SDK-shaped print session unchanged through the next turn", async () => {
-    const conflicting: import("../src/types.js").LoadedPreset = {
+    const directoryDefault: LoadedPreset = {
       hotkey: "ctrl+2",
       instructions: "Use the directory default.",
       model: "claude-opus",
@@ -344,35 +337,16 @@ describe("session_start configuration", () => {
       tools: ["write"],
     };
 
-    await writeConfig(
-      JSON.stringify({
-        policy: {
-          rules: [
-            {
-              default: { pattern: "^directory-default$" },
-              match: ".*",
-            },
-          ],
-        },
-        version: 2,
-      }),
-    );
-
-    loadAllMock.mockImplementation(
-      fakeLoadAll({
-        hotkeyAnalysis: {
-          conflicts: [],
-          invalid: [],
-          parsed: new Map([
-            [
-              conflicting,
-              { key: "2", modifiers: ["ctrl"], normalized: "ctrl+2" },
-            ],
-          ]),
-        },
-        presets: [conflicting],
-      }),
-    );
+    await writeUserPresets([directoryDefault], {
+      policy: {
+        rules: [
+          {
+            default: { pattern: "^directory-default$" },
+            match: ".*",
+          },
+        ],
+      },
+    });
 
     const { fake, spies } = makePi();
     const status: Record<string, string | undefined> = {};
@@ -436,8 +410,6 @@ describe("session_start configuration", () => {
   });
 
   it("skips a project configuration in an untrusted project with one warning", async () => {
-    loadAllMock.mockImplementation(realLoadAll);
-
     const cwd = join(agentDir, "project");
     const path = configPath("project", cwd);
 
@@ -470,8 +442,6 @@ describe("session_start configuration", () => {
   });
 
   it("leaves a legacy project file in an untrusted project and warns about it", async () => {
-    loadAllMock.mockImplementation(realLoadAll);
-
     const cwd = join(agentDir, "project");
     const legacy = JSON.stringify({ version: 1, presets: [] });
 
@@ -496,7 +466,20 @@ describe("session_start configuration", () => {
   });
 
   it("warns about malformed configuration without skipping preset loading", async () => {
+    const cwd = join(agentDir, "project");
+
     await writeConfig("{");
+    await dirs.writeJson(configPath("project", cwd), {
+      version: 2,
+      presets: [
+        {
+          hotkey: "ctrl+alt+p",
+          model: "claude-opus",
+          name: "project",
+          provider: "anthropic",
+        },
+      ],
+    });
 
     const { fake } = makePi();
     const status: Record<string, string | undefined> = {};
@@ -505,7 +488,7 @@ describe("session_start configuration", () => {
     presetsPlus(fake.pi);
     await startSession(fake, ctx);
 
-    expect(loadAllMock).toHaveBeenCalledOnce();
+    expect([...fake.shortcuts.keys()]).toEqual(["ctrl+alt+p"]);
     expect(notify).toHaveBeenCalledWith(
       expect.stringContaining("invalid JSON"),
       "warning",

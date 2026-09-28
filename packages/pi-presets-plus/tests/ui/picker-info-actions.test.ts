@@ -18,7 +18,7 @@ import {
 } from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const loadAll = vi.fn();
+const loadPresetsConfig = vi.fn();
 const openConfirm = vi.fn();
 const openInfoDialog = vi.fn();
 const reorderWithinScope = vi.fn();
@@ -30,7 +30,7 @@ vi.mock("../../src/store/api.js", async (importOriginal) => {
   return {
     ...actual,
     addPreset: vi.fn(),
-    loadAll,
+    loadPresetsConfig,
     removePreset: vi.fn(),
     reorderWithinScope,
   };
@@ -165,10 +165,12 @@ async function runPicker(
     presets,
   };
 
-  loadAll.mockResolvedValue(loaded);
+  loadPresetsConfig.mockResolvedValue(loaded);
 
   if (statusLoad) {
-    loadAll.mockResolvedValueOnce(loaded).mockImplementationOnce(statusLoad);
+    loadPresetsConfig
+      .mockResolvedValueOnce(loaded)
+      .mockImplementationOnce(statusLoad);
   }
 
   if (active) {

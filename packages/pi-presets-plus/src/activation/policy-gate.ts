@@ -4,25 +4,27 @@
  */
 import {
   isPermitted,
-  loadPolicy,
   resolveMatchingRules,
+  type CompiledPolicy,
 } from "../store/policy.js";
 import type { LoadedPreset } from "../types.js";
 import { reportWarnings } from "../warnings.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 /**
- * Return true when activation may proceed, including an explicit override.
+ * Return true when `policy` permits activation, including an explicit
+ * override.
  *
  * Policy warnings go into `warnings` when the caller collects them, and
  * otherwise out as one warning notification.
  */
 export async function gateActivation(
   preset: LoadedPreset,
-  ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "mode" | "ui">,
+  policy: CompiledPolicy,
+  ctx: Pick<ExtensionContext, "cwd" | "mode" | "ui">,
   warnings?: string[],
 ): Promise<boolean> {
-  const { rules, warnings: policyWarnings } = await loadPolicy(ctx);
+  const { rules, warnings: policyWarnings } = policy;
 
   reportWarnings(ctx, policyWarnings, warnings);
 
