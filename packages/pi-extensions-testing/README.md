@@ -63,7 +63,9 @@ expect(findOverflowingLines(lines, 40)).toEqual([]);
 ### Config
 
 - `createTempConfigDirs()` creates temporary agent and project directories for
-  one test. Call `cleanup` in `afterEach`.
+  one test and points `PI_CODING_AGENT_DIR` at the agent directory, so core's
+  config handle and Pi's `getAgentDir()` read and write there. Call `cleanup` in
+  `afterEach`; it deletes the directories and restores the variable.
 - `createProjectTrustContext(cwd, trusted)` returns a context whose
   `isProjectTrusted()` returns `trusted`.
 

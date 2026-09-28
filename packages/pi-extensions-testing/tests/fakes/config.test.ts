@@ -57,6 +57,17 @@ describe("createTempConfigDirs", () => {
     expect(await dirs.exists(path)).toBe(true);
   });
 
+  it("points PI_CODING_AGENT_DIR at the agent directory until cleanup", async () => {
+    const previous = process.env.PI_CODING_AGENT_DIR;
+    const nested = await createTempConfigDirs();
+
+    expect(process.env.PI_CODING_AGENT_DIR).toBe(nested.agentDir);
+
+    await nested.cleanup();
+
+    expect(process.env.PI_CODING_AGENT_DIR).toBe(previous);
+  });
+
   it("removes everything on cleanup", async () => {
     await dirs.writeJson(join(dirs.cwd, "a.json"), {});
     await dirs.cleanup();

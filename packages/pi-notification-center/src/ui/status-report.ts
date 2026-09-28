@@ -7,7 +7,6 @@ import type { LoadedConfig } from "../config.js";
 import { EXTENSION_NAME } from "../extension-name.js";
 import {
   alignLabelRows,
-  configStatusLines,
   createCommandReport,
   pluralize,
 } from "@sherif-fanous/pi-extensions-core";
@@ -48,15 +47,12 @@ export function formatStatusReport(status: NotificationStatus): string {
       ["Toast width:", `at most ${pluralize(toast.width, "column")}`],
     ]),
     "",
-    ...configStatusLines([status.loaded.file]),
+    ...status.loaded.outcome.statusLines,
   ];
+  const warnings = status.loaded.outcome.statusWarnings;
 
-  if (status.loaded.warnings.length > 0) {
-    lines.push(
-      "",
-      "Warnings:",
-      ...status.loaded.warnings.map((warning) => `- ${warning}`),
-    );
+  if (warnings.length > 0) {
+    lines.push("", "Warnings:", ...warnings.map((warning) => `- ${warning}`));
   }
 
   return lines.join("\n");

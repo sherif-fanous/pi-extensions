@@ -36,33 +36,24 @@ function pi(thinkingLevel: string, tools: string[]) {
   };
 }
 
-const userFile = {
-  data: {},
-  path: "/agent/presets-plus/config.json",
-  renamedKeys: [],
-  scope: "user",
-  state: "loaded",
-} as const;
-const projectFile = {
-  path: "/repo/.pi/presets-plus/config.json",
-  scope: "project",
-  state: "missing",
-} as const;
-const configBlock = [
+const configLines = [
   "Config:",
   "  User:    loaded",
   "           /agent/presets-plus/config.json",
   "  Project: not found",
   "           /repo/.pi/presets-plus/config.json",
-].join("\n");
+];
+const configBlock = configLines.join("\n");
 
-function loaded(presets: LoadedPreset[]) {
-  return {
-    files: [userFile, projectFile],
-    presets,
-    valueWarnings: [],
-    warnings: [],
-  };
+/** A `loadAll` result with the configuration members the report reads. */
+function loaded(
+  presets: LoadedPreset[],
+  config: { statusLines: string[]; statusWarnings: string[] } = {
+    statusLines: configLines,
+    statusWarnings: [],
+  },
+) {
+  return { config, presets };
 }
 
 afterEach(() => {
@@ -94,7 +85,7 @@ describe("runStatus", () => {
     ]);
   });
 
-  it("shows file problems in the Config block and value warnings under Warnings", async () => {
+  it("shows the Config block and the configuration's status warnings under Warnings", async () => {
     const notifications: Array<[string, string]> = [];
     const ctx = {
       ui: {
@@ -104,18 +95,21 @@ describe("runStatus", () => {
         theme: createPlainTheme(),
       },
     };
-    const skipped = `Skipped project configuration at ${projectFile.path} because the project is not trusted. Trust the project to use it.`;
-    const invalidPreset = `Skipped preset 1 in ${userFile.path}: It needs a name.`;
+    const invalidPreset =
+      "Skipped preset 1 in /agent/presets-plus/config.json: It needs a name.";
 
-    loadAll.mockResolvedValue({
-      files: [
-        userFile,
-        { ...projectFile, state: "untrusted", warning: skipped },
-      ],
-      presets: [],
-      valueWarnings: [invalidPreset],
-      warnings: [skipped, invalidPreset],
-    });
+    loadAll.mockResolvedValue(
+      loaded([], {
+        statusLines: [
+          "Config:",
+          "  User:    loaded",
+          "           /agent/presets-plus/config.json",
+          "  Project: skipped (untrusted)",
+          "           /repo/.pi/presets-plus/config.json",
+        ],
+        statusWarnings: [invalidPreset],
+      }),
+    );
 
     await runStatus(
       ctx as never,

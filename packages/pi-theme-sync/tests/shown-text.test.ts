@@ -44,7 +44,6 @@ let dirs: TempConfigDirs;
 
 beforeEach(async () => {
   dirs = await createTempConfigDirs();
-  vi.stubEnv("PI_CODING_AGENT_DIR", dirs.agentDir);
   // An old User file migrates, and its invalid value shows a warning.
   await dirs.writeJson(
     path.join(dirs.agentDir, "theme-sync", "settings.json"),
@@ -63,7 +62,6 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  vi.unstubAllEnvs();
   vi.resetAllMocks();
   await dirs.cleanup();
 });

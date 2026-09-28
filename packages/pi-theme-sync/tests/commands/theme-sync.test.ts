@@ -10,7 +10,7 @@ import { afterEach, expect, test, vi } from "vitest";
 const status: RuntimeStatus = {
   appliedTheme: "dark",
   availableDetectors: [],
-  configFiles: [],
+  configStatusLines: [],
   currentAppearance: "dark",
   desiredTheme: "dark",
   detectionStrategy: "OSC 11",

@@ -4,11 +4,10 @@
  * need Pi's `/reload`.
  */
 import type { ActivePresetSession } from "../../activation/session.js";
-import { EXTENSION_NAME } from "../../extension-name.js";
 import type { HotkeyRegistry } from "../../hotkey-registry.js";
 import { loadAll } from "../../store/api.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { notifyWarnings, pluralize } from "@sherif-fanous/pi-extensions-core";
+import { pluralize } from "@sherif-fanous/pi-extensions-core";
 
 /**
  * Re-read both configuration files, apply `showInactiveStatus`, and notify
@@ -20,7 +19,7 @@ export async function runReload(
   session: ActivePresetSession,
   hotkeys: HotkeyRegistry,
 ): Promise<void> {
-  const { presets, showInactiveStatus, warnings } = await loadAll(ctx);
+  const { config, presets, showInactiveStatus } = await loadAll(ctx);
 
   session.setShowInactiveStatus(showInactiveStatus, ctx);
 
@@ -34,7 +33,7 @@ export async function runReload(
   }
 
   ctx.ui.notify(lines.join(" "), "info");
-  notifyWarnings(ctx, EXTENSION_NAME, warnings);
+  config.notify(ctx);
 }
 
 /** Quote each name and join them as `"a"`, `"a" and "b"`, or `"a", "b" and "c"`. */

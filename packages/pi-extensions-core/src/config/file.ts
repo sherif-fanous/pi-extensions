@@ -1,27 +1,40 @@
 /**
- * Reading and saving an extension's `config.json` in each scope: Pi's
- * project trust, the `version` key, renamed keys, and the state of each
- * file for warnings and status reports.
+ * Reading and writing one scope's `config.json`: where it lives, Pi's
+ * project trust, the `version` key, and renamed keys.
  */
 
-import { access, readFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  open,
+  readFile,
+  rename,
+  unlink,
+} from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 import { describeError } from "../errors.js";
 import { isNotFoundError } from "../guards.js";
 import { writeJsonFile, type AtomicWriteFs } from "./atomic-write.js";
 import { parseJsonObject } from "./json.js";
 import { renameConfigKeys, type ConfigKeyRename } from "./keys.js";
-import { extensionConfigPath, projectConfigPath } from "./paths.js";
 import {
   malformedConfigWarning,
   unreadableConfigWarning,
   unsupportedConfigVersionWarning,
   untrustedProjectConfigWarning,
 } from "./warnings.js";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import {
+  CONFIG_DIR_NAME,
+  getAgentDir,
+  type ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 
-/** The file-system calls the loader makes. Tests inject failures. */
-export interface ConfigFileFs {
+/**
+ * The file-system calls reading and writing make. Core's tests inject
+ * failures.
+ */
+export interface ConfigFileFs extends AtomicWriteFs {
   readonly access: (path: string) => Promise<void>;
   readonly readFile: (path: string, encoding: "utf8") => Promise<string>;
 }
@@ -32,36 +45,18 @@ export interface ConfigFileLocation {
   readonly scope: ConfigScope;
 }
 
-/** Options for {@link loadConfigFiles}. */
-export interface LoadConfigFilesOptions<S extends ConfigScope> {
-  /** Pi's agent directory. Defaults to `getAgentDir()`; tests pass their own. */
-  readonly agentDir?: string;
-  /** The extension's slug, which names its configuration directory. */
-  readonly extension: string;
-  readonly fs?: ConfigFileFs;
+/** What reading a file needs besides its location and project trust. */
+export interface ReadConfigFileOptions {
+  readonly fs: ConfigFileFs;
+  /** Old file names beside `config.json` that an untrusted project reports. */
+  readonly legacyFileNames: readonly string[];
   /** Keys read under an old name while the new name is absent. */
-  readonly renamedKeys?: readonly ConfigKeyRename[];
-  /** The scopes the extension has, such as `["user", "project"]`. */
-  readonly scopes: readonly S[];
+  readonly renamedKeys: readonly ConfigKeyRename[];
   /** The `version` this release reads and writes. */
   readonly version: number;
 }
 
-/** Options for {@link readConfigFile} and {@link updateConfigFile}. */
-export interface ReadConfigFileOptions extends ConfigFileLocation {
-  readonly fs?: ConfigFileFs;
-  /** Keys read under an old name while the new name is absent. */
-  readonly renamedKeys?: readonly ConfigKeyRename[];
-  /**
-   * Whether Pi trusts the project, from `ctx.isProjectTrusted()`. Only a
-   * project file consults it.
-   */
-  readonly trusted: boolean;
-  /** The `version` this release reads and writes. */
-  readonly version: number;
-}
-
-/** The part of a handler's context the loader uses for project trust. */
+/** The part of a handler's context the config handle uses for project trust. */
 export type ConfigContext = Pick<ExtensionContext, "cwd" | "isProjectTrusted">;
 
 /**
@@ -103,27 +98,30 @@ export type ConfigScope = "project" | "user";
 /** The file name every extension's configuration uses. */
 const CONFIG_FILE_NAME = "config.json";
 
-const defaultFs: ConfigFileFs = {
+/** The real file system, used unless a core test injects failures. */
+export const DEFAULT_CONFIG_FILE_FS: ConfigFileFs = {
   access: (path) => access(path),
+  mkdir,
+  open,
   readFile: (path, encoding) => readFile(path, encoding),
+  rename,
+  unlink,
 };
 
 /**
  * Path to an extension's configuration file in one scope:
- * `<agentDir>/<extension>/config.json` for `user` and
+ * `<agentDir>/<extension>/config.json` for `user`, where `<agentDir>` is
+ * Pi's `getAgentDir()` (which honors `PI_CODING_AGENT_DIR`), and
  * `<cwd>/.pi/<extension>/config.json` for `project`.
  */
 export function configFilePath(
+  extension: string,
   scope: ConfigScope,
-  {
-    agentDir,
-    cwd,
-    extension,
-  }: { agentDir?: string; cwd: string; extension: string },
+  cwd: string,
 ): string {
-  return scope === "user"
-    ? extensionConfigPath({ agentDir, extension, file: CONFIG_FILE_NAME })
-    : projectConfigPath({ cwd, extension, file: CONFIG_FILE_NAME });
+  const base = scope === "user" ? getAgentDir() : join(cwd, CONFIG_DIR_NAME);
+
+  return join(base, extension, CONFIG_FILE_NAME);
 }
 
 /** The warnings of every file that has one, in the order given. */
@@ -141,69 +139,40 @@ export function configScopeLabel(scope: ConfigScope): "Project" | "User" {
 }
 
 /**
- * Read an extension's configuration file in each of `scopes`, checking
- * project trust through `ctx.isProjectTrusted()` when it reads the project
- * scope.
- *
- * Returns one {@link ConfigFile} per scope and never throws for a file
- * problem: each problem is an `invalid` or `untrusted` state carrying its
- * warning.
- */
-export async function loadConfigFiles<S extends ConfigScope>(
-  ctx: ConfigContext,
-  options: LoadConfigFilesOptions<S>,
-): Promise<Record<S, ConfigFile>> {
-  const entries = await Promise.all(
-    options.scopes.map(
-      async (scope) =>
-        [
-          scope,
-          await readConfigFile({
-            fs: options.fs,
-            path: configFilePath(scope, {
-              agentDir: options.agentDir,
-              cwd: ctx.cwd,
-              extension: options.extension,
-            }),
-            renamedKeys: options.renamedKeys,
-            scope,
-            trusted: scope === "user" || ctx.isProjectTrusted(),
-            version: options.version,
-          }),
-        ] as const,
-    ),
-  );
-
-  return Object.fromEntries(entries) as Record<S, ConfigFile>;
-}
-
-/**
  * Read one configuration file.
  *
  * A project file in an untrusted project is not read: it is `untrusted`
- * when it exists and `missing` otherwise, so an untrusted project without
- * the file stays silent. A file whose `version` is present and differs
- * from `version` is `invalid`. Otherwise `renamedKeys` are applied to the
- * loaded data.
+ * when it, or else one of `legacyFileNames` beside it, exists, and
+ * `missing` otherwise, so an untrusted project without the file stays
+ * silent. A file whose `version` is present and differs from `version` is
+ * `invalid`. Otherwise `renamedKeys` are applied to the loaded data.
  */
 export async function readConfigFile(
+  location: ConfigFileLocation,
+  trusted: boolean,
   options: ReadConfigFileOptions,
 ): Promise<ConfigFile> {
-  const { fs = defaultFs, path, scope } = options;
-  const location = { path, scope };
+  const { fs } = options;
+  const { path } = location;
 
-  if (scope === "project" && !options.trusted) {
-    try {
-      await fs.access(path);
-    } catch (error) {
-      if (isNotFoundError(error)) return { ...location, state: "missing" };
+  if (location.scope === "project" && !trusted) {
+    const candidates = [
+      path,
+      ...options.legacyFileNames.map((name) => join(dirname(path), name)),
+    ];
+
+    for (const candidate of candidates) {
+      if (await mightExist(fs, candidate)) {
+        return {
+          path: candidate,
+          scope: location.scope,
+          state: "untrusted",
+          warning: untrustedProjectConfigWarning(candidate),
+        };
+      }
     }
 
-    return {
-      ...location,
-      state: "untrusted",
-      warning: untrustedProjectConfigWarning(path),
-    };
+    return { ...location, state: "missing" };
   }
 
   let text: string;
@@ -248,46 +217,10 @@ export async function readConfigFile(
 
   const { document, renamed } = renameConfigKeys(
     parsed.value,
-    options.renamedKeys ?? [],
+    options.renamedKeys,
   );
 
   return { ...location, data: document, renamedKeys: renamed, state: "loaded" };
-}
-
-/**
- * Read one configuration file again, apply `update` to its data, and save
- * the result with the current `version`.
- *
- * `update` receives the file's data with renamed keys already moved, or
- * `{}` when the file is missing, so a save also migrates renamed keys.
- * Throws, leaving the file untouched, when the scope is a project Pi does
- * not trust, when the file is `invalid` (so a malformed file or one from a
- * newer release is never overwritten), or when the write fails.
- */
-export async function updateConfigFile(
-  options: ReadConfigFileOptions & { readonly atomicWriteFs?: AtomicWriteFs },
-  update: (data: Record<string, unknown>) => Record<string, unknown>,
-): Promise<void> {
-  if (options.scope === "project" && !options.trusted) {
-    throw new Error(
-      `The project is not trusted, so ${options.path} was not saved. Trust the project and try again.`,
-    );
-  }
-
-  const file = await readConfigFile(options);
-
-  if (file.state === "invalid") {
-    throw new Error(
-      `${file.path} is invalid (${file.reason}). Fix the file and try again.`,
-    );
-  }
-
-  await writeConfigFile(
-    file.path,
-    update(file.state === "loaded" ? file.data : {}),
-    options.version,
-    options.atomicWriteFs,
-  );
 }
 
 /**
@@ -298,7 +231,7 @@ export async function writeConfigFile(
   path: string,
   document: Record<string, unknown>,
   version: number,
-  fs?: AtomicWriteFs,
+  fs: AtomicWriteFs,
 ): Promise<void> {
   // The first object puts `version` first; the last replaces the document's.
   await writeJsonFile(
@@ -314,4 +247,18 @@ export async function writeConfigFile(
  */
 function describeReason(error: unknown): string {
   return describeError(error).trim().replace(/\.$/u, "");
+}
+
+/**
+ * Whether a file might exist at `path`. Anything but a missing-file error
+ * might hide one, so it counts as present.
+ */
+async function mightExist(fs: ConfigFileFs, path: string): Promise<boolean> {
+  try {
+    await fs.access(path);
+
+    return true;
+  } catch (error) {
+    return !isNotFoundError(error);
+  }
 }

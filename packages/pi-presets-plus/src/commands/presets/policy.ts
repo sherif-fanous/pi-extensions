@@ -79,8 +79,8 @@ export async function runPolicy(
   ctx: ExtensionCommandContext,
   pi: Pick<ExtensionAPI, "appendEntry">,
 ): Promise<void> {
-  const [policy, loaded] = await Promise.all([loadPolicy(), loadAll(ctx)]);
-  const warnings = [...policy.warnings, ...loaded.warnings];
+  const [policy, loaded] = await Promise.all([loadPolicy(ctx), loadAll(ctx)]);
+  const warnings = [...policy.warnings, ...loaded.config.warnings];
   const body = appendReportWarnings(
     formatPolicy(ctx.cwd, loaded.presets, policy.rules),
     warnings,

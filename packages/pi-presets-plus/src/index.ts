@@ -23,7 +23,9 @@ import {
 } from "./hotkey-registry.js";
 import { findPreset } from "./preset-identity.js";
 import { loadAll } from "./store/api.js";
-import { describeMigration, migrateAll } from "./store/migrate.js";
+import { PRESETS_PLUS_CONFIG } from "./store/config.js";
+import { migrateAll } from "./store/migrate.js";
+import type { PresetScope } from "./types.js";
 import { registerCommandReportRenderer } from "./ui/command-report.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
@@ -31,6 +33,8 @@ import {
   guardCommand,
   guardEvent,
   notifyWarnings,
+  type ConfigMigration,
+  type ConfigOutcome,
 } from "@sherif-fanous/pi-extensions-core";
 
 /** Register every pi-presets-plus command, flag, and event handler. */
@@ -59,22 +63,21 @@ export default function presetsPlus(pi: ExtensionAPI): void {
     "session_start",
     guardEvent(EXTENSION_NAME, "session_start", async (_event, ctx) => {
       const startupSelection = captureStartupSelection(ctx, pi);
-      // Every startup step adds its warnings here, so they show as one
-      // notification once startup ends.
+      // Every startup step after loading adds its warnings here, so they
+      // show after the configuration's in one notification once startup
+      // ends.
       const startupWarnings: string[] = [];
+      let migration: ConfigMigration | undefined;
+      let config: ConfigOutcome<PresetScope> | undefined;
 
       try {
-        const migration = describeMigration(await migrateAll(ctx));
+        migration = await migrateAll(ctx);
 
-        if (migration.info) ctx.ui.notify(migration.info, "info");
+        const loaded = await loadAll(ctx);
+        const { hotkeyAnalysis, presets, showInactiveStatus } = loaded;
 
-        startupWarnings.push(...migration.warnings);
-
-        const { hotkeyAnalysis, presets, showInactiveStatus, warnings } =
-          await loadAll(ctx);
-
+        config = loaded.config.withMigrations(migration);
         session.setShowInactiveStatus(showInactiveStatus, ctx);
-        startupWarnings.push(...warnings);
 
         const restoreResult = session.restoreFromBranch(
           ctx.sessionManager.getBranch(),
@@ -131,7 +134,19 @@ export default function presetsPlus(pi: ExtensionAPI): void {
         );
       }
 
-      notifyWarnings(ctx, EXTENSION_NAME, startupWarnings);
+      // Loading failed after the migration ran, so what it did is reported
+      // with the files as they read now.
+      if (config === undefined && migration !== undefined) {
+        config = (await PRESETS_PLUS_CONFIG.load(ctx)).withMigrations(
+          migration,
+        );
+      }
+
+      if (config) {
+        config.notify(ctx, startupWarnings);
+      } else {
+        notifyWarnings(ctx, EXTENSION_NAME, startupWarnings);
+      }
     }),
   );
 

@@ -5,107 +5,65 @@
  */
 import { readFile, unlink } from "node:fs/promises";
 
-import { EXTENSION_NAME } from "../extension-name.js";
 import type { ConfigDocument, PresetScope } from "../types.js";
-import { CONFIG_VERSION } from "./config.js";
+import { PRESETS_PLUS_CONFIG } from "./config.js";
+import { getLegacyPresetsPath, getUserPolicyPath } from "./paths.js";
 import {
-  getConfigPath,
-  getProjectPresetsPath,
-  getUserPolicyPath,
-  getUserPresetsPath,
-} from "./paths.js";
-import {
-  configMigratedMessage,
   describeError,
   isNotFoundError,
   isRecord,
-  writeConfigFile,
-  type AtomicWriteFs,
   type ConfigContext,
+  type ConfigMigration,
 } from "@sherif-fanous/pi-extensions-core";
 
-/** File-system seam for migration tests. */
+/**
+ * The file-system calls migration makes besides writing `config.json`.
+ * Tests inject failures.
+ */
 export interface MigrationFs {
   readonly readFile: typeof readFile;
   readonly unlink: typeof unlink;
-  readonly atomicWriteFs?: AtomicWriteFs;
 }
 
 const defaultFs: MigrationFs = { readFile, unlink };
 
-/** Structured result for one attempted scope migration. */
-export interface MigrationOutcome {
-  readonly scope: PresetScope;
-  /** The scope's `config.json`, which a migration writes. */
-  readonly path: string;
-  readonly attempted: boolean;
-  readonly migrated: boolean;
-  readonly warnings: string[];
-}
-
-/**
- * Describe attempted migrations for startup: one info line naming the
- * files written, if any, and every migration warning.
- */
-export function describeMigration(outcomes: readonly MigrationOutcome[]): {
-  readonly info?: string;
-  readonly warnings: string[];
-} {
-  const [first, ...rest] = outcomes
-    .filter((outcome) => outcome.migrated)
-    .map((outcome) => outcome.path);
-  const warnings = outcomes.flatMap((outcome) => outcome.warnings);
-
-  return first === undefined
-    ? { warnings }
-    : {
-        info: configMigratedMessage(EXTENSION_NAME, [first, ...rest]),
-        warnings,
-      };
-}
-
 /**
  * Migrate the user scope, and the project scope while Pi trusts the
- * project, and return their outcomes. The loader reports a legacy project
- * file left behind in an untrusted project.
+ * project, User first. The loader reports a legacy project file left
+ * behind in an untrusted project.
  */
 export async function migrateAll(
   ctx: ConfigContext,
-  agentDir?: string,
   fs: MigrationFs = defaultFs,
-): Promise<MigrationOutcome[]> {
+): Promise<ConfigMigration> {
   const scopes: PresetScope[] = ctx.isProjectTrusted()
     ? ["user", "project"]
     : ["user"];
-
-  return Promise.all(
-    scopes.map((scope) => migrateScope(scope, ctx.cwd, agentDir, fs)),
+  const outcomes = await Promise.all(
+    scopes.map((scope) => migrateScope(scope, ctx, fs)),
   );
+
+  return {
+    migrated: outcomes.flatMap((outcome) => outcome.migrated),
+    warnings: outcomes.flatMap((outcome) => outcome.warnings),
+  };
 }
 
 /** Migrate one scope, leaving all source files intact when validation fails. */
 export async function migrateScope(
   scope: PresetScope,
-  cwd: string,
-  agentDir?: string,
+  ctx: ConfigContext,
   fs: MigrationFs = defaultFs,
-): Promise<MigrationOutcome> {
-  const configPath = getConfigPath(scope, cwd, agentDir);
-  const sidecars =
-    scope === "user"
-      ? [getUserPresetsPath(agentDir), getUserPolicyPath(agentDir)]
-      : [getProjectPresetsPath(cwd)];
+): Promise<ConfigMigration> {
+  const configPath = PRESETS_PLUS_CONFIG.path(ctx, scope);
+  const presetsPath = getLegacyPresetsPath(ctx, scope);
+  const policyPath = getUserPolicyPath(ctx);
+  const sidecars = scope === "user" ? [presetsPath, policyPath] : [presetsPath];
   const configRead = await readJson(fs, configPath);
-  const skipped = {
-    scope,
-    path: configPath,
-    attempted: false,
-    migrated: false,
-    warnings: [],
-  };
+  const skipped: ConfigMigration = { migrated: [], warnings: [] };
 
   if (configRead.exists && configRead.error && scope === "user") {
-    return failed(scope, configPath, configPath, configRead.error);
+    return failed(configPath, configRead.error);
   }
 
   // A version 2 file, or one without `version`, which reads as version 2,
@@ -126,16 +84,11 @@ export async function migrateScope(
     if (!result.exists) continue;
 
     if (result.error) {
-      return failed(scope, configPath, path, result.error);
+      return failed(path, result.error);
     }
 
     if (!isVersion1(result.value)) {
-      return failed(
-        scope,
-        configPath,
-        path,
-        `expected a version 1 JSON object`,
-      );
+      return failed(path, `expected a version 1 JSON object`);
     }
 
     existing.push({ path, value: result.value });
@@ -145,57 +98,31 @@ export async function migrateScope(
 
   const document: ConfigDocument = {};
   const config = existing.find((entry) => entry.path === configPath)?.value;
-  const presets = existing.find(
-    (entry) => entry.path !== configPath && entry.path.endsWith("presets.json"),
-  )?.value;
-  const policy = existing.find((entry) =>
-    entry.path.endsWith("policy.json"),
-  )?.value;
+  const presets = existing.find((entry) => entry.path === presetsPath)?.value;
+  const policy = existing.find((entry) => entry.path === policyPath)?.value;
 
   if (config?.showInactiveStatus !== undefined) {
     if (typeof config.showInactiveStatus !== "boolean")
-      return failed(
-        scope,
-        configPath,
-        configPath,
-        `"showInactiveStatus" must be a boolean`,
-      );
+      return failed(configPath, `"showInactiveStatus" must be a boolean`);
     document.showInactiveStatus = config.showInactiveStatus;
   }
 
   if (presets) {
     if (!Array.isArray(presets.presets))
-      return failed(
-        scope,
-        configPath,
-        getLegacyPresetPath(scope, cwd, agentDir),
-        `"presets" must be an array`,
-      );
+      return failed(presetsPath, `"presets" must be an array`);
     document.presets = presets.presets;
   }
 
   if (policy) {
     if (!Array.isArray(policy.rules))
-      return failed(
-        scope,
-        configPath,
-        getUserPolicyPath(agentDir),
-        `"rules" must be an array`,
-      );
+      return failed(policyPath, `"rules" must be an array`);
     document.policy = { rules: policy.rules };
   }
 
   try {
-    await writeConfigFile(
-      configPath,
-      document,
-      CONFIG_VERSION,
-      fs.atomicWriteFs,
-    );
+    await PRESETS_PLUS_CONFIG.write(ctx, scope, document);
   } catch (error) {
     return failed(
-      scope,
-      configPath,
       configPath,
       `could not write the version 2 configuration: ${describeError(error)}`,
     );
@@ -214,35 +141,17 @@ export async function migrateScope(
     }
   }
 
-  return { scope, path: configPath, attempted: true, migrated: true, warnings };
+  return { migrated: [configPath], warnings };
 }
 
 /** The outcome of a scope whose migration failed because of `path`. */
-function failed(
-  scope: PresetScope,
-  configPath: string,
-  path: string,
-  reason: string,
-): MigrationOutcome {
+function failed(path: string, reason: string): ConfigMigration {
   return {
-    scope,
-    path: configPath,
-    attempted: true,
-    migrated: false,
+    migrated: [],
     warnings: [
       `Migration failed for ${path}: ${reason}. See the migration guidance in the README.`,
     ],
   };
-}
-
-function getLegacyPresetPath(
-  scope: PresetScope,
-  cwd: string,
-  agentDir?: string,
-): string {
-  return scope === "user"
-    ? getUserPresetsPath(agentDir)
-    : getProjectPresetsPath(cwd);
 }
 
 function isVersion1(value: unknown): value is Record<string, unknown> {

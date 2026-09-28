@@ -3,15 +3,13 @@
  * or prohibited, how it resolves the default, and how it leaves
  * `config.json` untouched.
  */
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
   formatPolicy,
   runPolicy,
 } from "../../../src/commands/presets/policy.js";
-import { getConfigPath } from "../../../src/store/paths.js";
 import type {
   CompiledPolicyMatcher,
   CompiledPolicyRule,
@@ -20,6 +18,8 @@ import type { LoadedPreset } from "../../../src/types.js";
 import {
   createFakeContext,
   createMarkerTheme,
+  createTempConfigDirs,
+  type TempConfigDirs,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -49,18 +49,11 @@ const presets: readonly LoadedPreset[] = [
   preset("other", "anthropic"),
 ];
 
-let tempAgentDir: string | undefined;
-let previousAgentDir: string | undefined;
+let dirs: TempConfigDirs | undefined;
 
 afterEach(async () => {
-  if (previousAgentDir === undefined) {
-    delete process.env.PI_CODING_AGENT_DIR;
-  } else {
-    process.env.PI_CODING_AGENT_DIR = previousAgentDir;
-  }
-
-  if (tempAgentDir) await rm(tempAgentDir, { force: true, recursive: true });
-  tempAgentDir = undefined;
+  await dirs?.cleanup();
+  dirs = undefined;
 });
 
 describe("formatPolicy", () => {
@@ -203,16 +196,13 @@ describe("formatPolicy", () => {
 
 describe("runPolicy", () => {
   it("delivers one styled report with its warnings and does not modify config.json", async () => {
-    tempAgentDir = await mkdtemp(join(tmpdir(), "pi-policy-view-"));
-    previousAgentDir = process.env.PI_CODING_AGENT_DIR;
-    process.env.PI_CODING_AGENT_DIR = tempAgentDir;
+    dirs = await createTempConfigDirs();
 
-    const path = getConfigPath("user", process.cwd(), tempAgentDir);
+    const path = join(dirs.agentDir, "presets-plus", "config.json");
     const original = `${JSON.stringify({ policy: { rules: [{ allow: {}, match: "work" }] }, version: 2 }, null, 2)}\n`;
     const notify = vi.fn();
 
-    await mkdir(join(tempAgentDir, "presets-plus"), { recursive: true });
-    await writeFile(path, original);
+    await dirs.writeText(path, original);
 
     await runPolicy(
       createFakeContext({

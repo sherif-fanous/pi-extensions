@@ -19,6 +19,9 @@ history of the session's notifications. The family rules are in the root
   small.
 - Pi session entries are the only durable history store; module memory is never
   authoritative.
+- Read `config.json` only through the core config handle `src/config.ts`
+  defines. Session start shows its outcome through the capture-backed context,
+  so the messages travel the capture path.
 - Keep pure formatting apart from rendering: an exported function returns
   `string[]` for a given viewport and state, and a thin component holds the
   state and routes those lines. Tests assert on the function.

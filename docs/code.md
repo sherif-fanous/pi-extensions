@@ -31,11 +31,10 @@ README for the full API.
   inside `try { … } catch {}`, since it has no UI to report a failure to, then
   drops its reference to a per-session runtime. There is no shared helper for
   this, because the extensions' lifecycles differ.
-- Config: `loadConfigFiles` or `readConfigFile` to read `config.json`,
-  `updateConfigFile` to save it, and the rest of [config.md](config.md). Other
-  files, such as an old layout a migration reads, use `extensionConfigPath` and
-  `projectConfigPath` for locations, `parseJsonObject` to read, and
-  `writeJsonFile` (atomic) to save.
+- Config: describe `config.json` once with `defineConfigFile` and use only its
+  handle (`load`, `read`, `update`, `write`, `migrateKeys`, `path`); see
+  [config.md](config.md). An old layout a migration reads sits beside the
+  handle's `path`, and the migration saves the new file with `write`.
 - Reports: `createCommandReport` to show a command's report (transcript entry in
   TUI mode, notification otherwise), `styleReport` for other surfaces,
   `alignLabelRows` for `Label: value` rows.
@@ -64,8 +63,9 @@ README for the full API.
   autocomplete and dispatch, define one `as const` registry and use it from
   both. Nothing fails at compile time when two copies drift apart.
 - Test seams: optional last parameters that default to the real implementation,
-  such as the file system on a writer or `agentDir` on a path helper. Never a DI
-  container or an injection layer.
+  such as the file system on a migration. Never a DI container or an injection
+  layer. Tests move Pi's agent directory only through `PI_CODING_AGENT_DIR`,
+  which `createTempConfigDirs` sets and restores.
 
 ## Comments
 

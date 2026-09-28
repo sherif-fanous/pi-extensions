@@ -1,6 +1,7 @@
 /**
  * Doubles for configuration tests: a context whose project trust the test
- * sets, and real temporary agent and project directories.
+ * sets, and real temporary agent and project directories that Pi's
+ * `PI_CODING_AGENT_DIR` points at while a test runs.
  */
 
 import {
@@ -14,6 +15,9 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
+/** The environment variable Pi reads its agent directory from. */
+const AGENT_DIR_VARIABLE = "PI_CODING_AGENT_DIR";
+
 /** The part of an extension context that project trust checks read. */
 export interface ProjectTrustContext {
   readonly cwd: string;
@@ -23,11 +27,18 @@ export interface ProjectTrustContext {
 /**
  * A fresh temporary directory holding an agent directory and a project
  * directory, with file helpers that create parent directories as needed.
+ * `PI_CODING_AGENT_DIR` points at `agentDir` until `cleanup` runs.
  */
 export interface TempConfigDirs {
-  /** `<root>/agent`, for `agentDir` options. Not created until written to. */
+  /**
+   * `<root>/agent`, which `PI_CODING_AGENT_DIR` names until `cleanup`.
+   * Not created until written to.
+   */
   readonly agentDir: string;
-  /** Delete the whole temporary directory. */
+  /**
+   * Delete the whole temporary directory and restore `PI_CODING_AGENT_DIR`
+   * to its value before the call.
+   */
   readonly cleanup: () => Promise<void>;
   /** `<root>/project`, for `cwd`. Not created until written to. */
   readonly cwd: string;
@@ -52,19 +63,32 @@ export function createProjectTrustContext(
 }
 
 /**
- * Create a temporary directory under the OS temp directory for one test.
- * Call `cleanup` in `afterEach`.
+ * Create a temporary directory under the OS temp directory for one test and
+ * point `PI_CODING_AGENT_DIR` at its agent directory, so Pi's
+ * `getAgentDir()` finds it. Call `cleanup` in `afterEach`.
  */
 export async function createTempConfigDirs(): Promise<TempConfigDirs> {
   const root = await mkdtemp(join(tmpdir(), "pi-extensions-config-"));
+  const agentDir = join(root, "agent");
+  const previousAgentDir = process.env[AGENT_DIR_VARIABLE];
   const writeText = async (path: string, text: string): Promise<void> => {
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, text);
   };
 
+  process.env[AGENT_DIR_VARIABLE] = agentDir;
+
   return {
-    agentDir: join(root, "agent"),
-    cleanup: () => rm(root, { force: true, recursive: true }),
+    agentDir,
+    cleanup: async () => {
+      if (previousAgentDir === undefined) {
+        delete process.env[AGENT_DIR_VARIABLE];
+      } else {
+        process.env[AGENT_DIR_VARIABLE] = previousAgentDir;
+      }
+
+      await rm(root, { force: true, recursive: true });
+    },
     cwd: join(root, "project"),
     exists: (path) =>
       access(path).then(

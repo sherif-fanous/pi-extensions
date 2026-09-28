@@ -1,7 +1,6 @@
-import { mkdir, open, readFile, unlink } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { ConfigOptions } from "../src/config.js";
 import { EXTENSION_NAME } from "../src/extension-name.js";
 import { createNotificationEntry } from "../src/history.js";
 import notificationCenter from "../src/index.js";
@@ -10,9 +9,7 @@ import type {
   ExtensionCommandContext,
   ExtensionUIContext,
 } from "@earendil-works/pi-coding-agent";
-import type { AtomicWriteFs } from "@sherif-fanous/pi-extensions-core";
 import {
-  createDeferred,
   createFakeContext,
   createFakeCustom,
   createFakePi,
@@ -210,41 +207,14 @@ describe("notification-center lifecycle", () => {
     expect(harness.appended).toEqual([]);
   });
 
-  it("puts a failed migration's warning before the value warnings", async () => {
-    await dirs.writeJson(userPath, {
-      maxToastsVisible: 2,
-      toast: { width: 1 },
-    });
-
-    const harness = setup({
-      config: { atomicWriteFs: failingWriteFs() },
-      mode: "rpc",
-    });
-
-    await harness.start();
-
-    expect(harness.notify).toHaveBeenCalledExactlyOnceWith(
-      `Notification Center: 2 warnings\n- Could not migrate configuration at ${userPath}: disk full. Left the file unchanged.\n- Setting "toast.width" must be an integer from 20 through 80, not 1. Using the default value 64.`,
-      "warning",
-    );
-  });
-
   it("drops a start that a shutdown replaced while it read the file", async () => {
     await dirs.writeText(userPath, "[1]");
 
-    const read = createDeferred<string>();
-    const harness = setup({
-      config: {
-        fs: {
-          access: () => Promise.resolve(),
-          readFile: () => read.promise,
-        },
-      },
-    });
+    const harness = setup();
+    // The start is still reading the file when the shutdown arrives.
     const starting = harness.start();
 
     harness.shutdown();
-    read.resolve("[1]");
     await starting;
 
     expect(harness.fake.overlays).toEqual([]);
@@ -401,23 +371,17 @@ describe("/notifications status", () => {
     expect(body).not.toContain("Warnings:");
   });
 
-  it("lists the invalid values and a failed migration under Warnings", async () => {
-    await dirs.writeJson(userPath, {
-      maxToastsVisible: 2,
-      toast: { width: 1 },
-    });
+  it("lists the invalid values under Warnings", async () => {
+    await dirs.writeJson(userPath, { toast: { width: 1 } });
 
-    const harness = setup({
-      config: { atomicWriteFs: failingWriteFs() },
-      mode: "rpc",
-    });
+    const harness = setup({ mode: "rpc" });
 
     await harness.start();
     harness.notify.mockClear();
     await harness.run("status");
 
     expect(harness.notify.mock.calls[0]?.[0]).toMatch(
-      /\nWarnings:\n- Could not migrate configuration at .+: disk full\. Left the file unchanged\.\n- Setting "toast\.width" must be an integer from 20 through 80, not 1\. Using the default value 64\.$/u,
+      /\nWarnings:\n- Setting "toast\.width" must be an integer from 20 through 80, not 1\. Using the default value 64\.$/u,
     );
   });
 
@@ -577,8 +541,6 @@ interface IndexHarness {
 }
 
 interface SetupOptions {
-  /** Seams for the configuration loader; the agent directory is the test's. */
-  config?: Omit<ConfigOptions, "agentDir">;
   /** Stand-in for `ctx.ui.custom`, which opens the history browser. */
   custom?: ExtensionUIContext["custom"];
   /** Notifications on the active branch. */
@@ -594,16 +556,6 @@ type Notify = (message: string, type?: "error" | "info" | "warning") => void;
 
 /** What the extension passes to `ctx.ui.setWidget` besides text lines. */
 type WidgetContent = Parameters<FakeWidgets["setWidget"]>[1];
-
-/** Write calls whose rename always fails, so nothing is ever replaced. */
-function failingWriteFs(): AtomicWriteFs {
-  return {
-    mkdir,
-    open,
-    rename: () => Promise.reject(new Error("disk full")),
-    unlink,
-  };
-}
 
 function setup(options: SetupOptions = {}): IndexHarness {
   const fake = createFakeTui();
@@ -650,7 +602,7 @@ function setup(options: SetupOptions = {}): IndexHarness {
 
   const pi = createFakePi({ appendEntry: options.shown?.appendEntry });
 
-  notificationCenter(pi.pi, { ...options.config, agentDir: dirs.agentDir });
+  notificationCenter(pi.pi);
 
   const command = (): FakeCommand => pi.command("notifications");
   const harness: IndexHarness = {

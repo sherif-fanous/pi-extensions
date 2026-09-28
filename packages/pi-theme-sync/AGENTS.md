@@ -7,8 +7,10 @@ this package.
 - Add a detector by writing its implementation, listing it in the registries in
   `src/detectors/index.ts`, and adding the matching `detectAppearance` switch
   arm. Nothing else should need to change.
-- Read and save `config.json` only through `src/config/` and core's config
-  helpers.
+- Read and save `config.json` only through `THEME_SYNC_CONFIG`, the core config
+  handle `src/config/load.ts` defines. The layout migration saves with its
+  `write`, and the session start calls `notify` on the loaded outcome after
+  probing, with the detector warnings as extras.
 - Expose new runtime state through `ThemeSyncRuntime` or `RuntimeStatus`, never
   through exported mutable bindings.
 - `getTuiHandle` gets Pi's live TUI through a transient zero-line `setWidget`

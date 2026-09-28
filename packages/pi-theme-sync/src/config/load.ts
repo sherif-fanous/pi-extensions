@@ -1,5 +1,6 @@
 /** Reads the User and Project `config.json` files and resolves the effective configuration. */
 
+import { EXTENSION_NAME } from "../extension-name.js";
 import type {
   ConfigSource,
   LoadedRuntimeConfig,
@@ -9,25 +10,24 @@ import type {
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   configScopeLabel,
+  defineConfigFile,
   isRecord,
-  loadConfigFiles,
   type ConfigContext,
   type ConfigFile,
-  type ConfigFileFs,
-  type ConfigKeyRename,
   type ConfigScope,
 } from "@sherif-fanous/pi-extensions-core";
-
-/** The slug that names Theme Sync's configuration directory in each scope. */
-export const CONFIG_EXTENSION = "theme-sync";
 
 /** The `version` this release reads and writes. */
 export const CONFIG_VERSION = 2;
 
-/** Keys read under their old name while the new name is absent. */
-export const RENAMED_CONFIG_KEYS: readonly ConfigKeyRename[] = [
-  { from: "isSyncActive", to: "syncEnabled" },
-];
+/** Theme Sync's User and Project `config.json`. */
+export const THEME_SYNC_CONFIG = defineConfigFile({
+  extension: "theme-sync",
+  extensionName: EXTENSION_NAME,
+  renamedKeys: [{ from: "isSyncActive", to: "syncEnabled" }],
+  scopes: ["user", "project"],
+  version: CONFIG_VERSION,
+});
 
 /** Runtime values used when configuration does not provide a valid value. */
 export const DEFAULT_CONFIG: RuntimeConfig = {
@@ -47,12 +47,6 @@ export const DEFAULT_CONFIG: RuntimeConfig = {
 export const CONFIG_LIMITS = {
   "detection.pollIntervalMs": { max: 60_000, min: 1000 },
 } as const;
-
-/** Where `loadConfig` reads: tests pass their own agent directory and file system. */
-export interface ConfigOptions {
-  readonly agentDir?: string;
-  readonly fs?: ConfigFileFs;
-}
 
 /** The part of a context `loadConfig` reads: the project, its trust, and the themes. */
 export type LoadConfigContext = ConfigContext & {
@@ -91,21 +85,14 @@ export function isValidPollIntervalMs(value: number): boolean {
 
 /**
  * Read both scopes' files and resolve each setting from Project, then
- * User, then the default. `warnings` lists only invalid values; file
- * problems stay on `files`.
+ * User, then the default. Each invalid value adds a value warning to the
+ * outcome, whose files carry their own problems.
  */
 export async function loadConfig(
   ctx: LoadConfigContext,
-  options: ConfigOptions = {},
 ): Promise<LoadedRuntimeConfig> {
-  const files = await loadConfigFiles(ctx, {
-    agentDir: options.agentDir,
-    extension: CONFIG_EXTENSION,
-    fs: options.fs,
-    renamedKeys: RENAMED_CONFIG_KEYS,
-    scopes: ["user", "project"],
-    version: CONFIG_VERSION,
-  });
+  const outcome = await THEME_SYNC_CONFIG.load(ctx);
+  const { files } = outcome;
   const warnings: string[] = [];
   const availableThemes = new Set(
     ctx.ui.getAllThemes().map((theme) => theme.name),
@@ -187,7 +174,11 @@ export async function loadConfig(
     },
   };
 
-  return { files, runtimeConfig, runtimeConfigSources, warnings };
+  return {
+    outcome: outcome.withValueWarnings(warnings),
+    runtimeConfig,
+    runtimeConfigSources,
+  };
 }
 
 /**

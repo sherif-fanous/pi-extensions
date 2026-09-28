@@ -1,54 +1,34 @@
 /**
- * Resolves the configuration file of each scope and the legacy files the
- * startup migration reads.
+ * Resolves the version 1 files the startup migration reads, which sit
+ * beside each scope's `config.json`.
  */
-import type { PresetScope } from "../types.js";
-import {
-  configFilePath,
-  extensionConfigPath,
-  projectConfigPath,
-} from "@sherif-fanous/pi-extensions-core";
+import { dirname, join } from "node:path";
 
-/** Configuration directory under both scopes, the extension's slug. */
-const PRESETS_PLUS_SLUG = "presets-plus";
+import type { PresetScope } from "../types.js";
+import { LEGACY_PRESETS_FILE_NAME, PRESETS_PLUS_CONFIG } from "./config.js";
+import type { ConfigContext } from "@sherif-fanous/pi-extensions-core";
 
 /** File name for the legacy user access policy. */
 const POLICY_FILE_NAME = "policy.json";
-/** File name for legacy preset lists within `PRESETS_PLUS_SLUG`. */
-const PRESETS_FILE_NAME = "presets.json";
 
-/** Absolute path to one scope's `config.json`. */
-export function getConfigPath(
+/** Absolute path to one scope's legacy preset file. */
+export function getLegacyPresetsPath(
+  ctx: Pick<ConfigContext, "cwd">,
   scope: PresetScope,
-  cwd: string,
-  agentDir?: string,
 ): string {
-  return configFilePath(scope, { agentDir, cwd, extension: PRESETS_PLUS_SLUG });
-}
-
-/** Absolute path to the project-scope legacy preset file. */
-export function getProjectPresetsPath(cwd: string): string {
-  return projectConfigPath({
-    cwd,
-    extension: PRESETS_PLUS_SLUG,
-    file: PRESETS_FILE_NAME,
-  });
+  return besideConfig(ctx, scope, LEGACY_PRESETS_FILE_NAME);
 }
 
 /** Absolute path to the user-scope legacy policy file. */
-export function getUserPolicyPath(agentDir?: string): string {
-  return extensionConfigPath({
-    agentDir,
-    extension: PRESETS_PLUS_SLUG,
-    file: POLICY_FILE_NAME,
-  });
+export function getUserPolicyPath(ctx: Pick<ConfigContext, "cwd">): string {
+  return besideConfig(ctx, "user", POLICY_FILE_NAME);
 }
 
-/** Absolute path to the user-scope legacy preset file. */
-export function getUserPresetsPath(agentDir?: string): string {
-  return extensionConfigPath({
-    agentDir,
-    extension: PRESETS_PLUS_SLUG,
-    file: PRESETS_FILE_NAME,
-  });
+/** Absolute path to `file` in the directory of one scope's `config.json`. */
+function besideConfig(
+  ctx: Pick<ConfigContext, "cwd">,
+  scope: PresetScope,
+  file: string,
+): string {
+  return join(dirname(PRESETS_PLUS_CONFIG.path(ctx, scope)), file);
 }

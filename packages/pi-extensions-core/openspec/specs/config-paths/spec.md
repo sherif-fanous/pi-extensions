@@ -2,38 +2,28 @@
 
 ## Purpose
 
-Give Pi extensions one way to locate their configuration files in Pi's agent
-directory and in a project, so every extension resolves the same layout without
-rebuilding the paths.
+Give Pi extensions one location for their configuration files in Pi's agent
+directory and in a project, so every extension resolves the same layout and
+moves with Pi's own agent directory override.
 
 ## Requirements
 
-### Requirement: Agent-directory file paths are resolved per extension
+### Requirement: Configuration files live in Pi's agent directory and the project
 
-The package SHALL export an `extensionConfigPath({ extension, file, agentDir })`
-function that returns `<agentDir>/<extension>/<file>`, where `agentDir` defaults
-to Pi's `getAgentDir()`.
+A config handle's `path(ctx, scope)` SHALL return
+`<agentDir>/<extension>/config.json` for `user`, where `<agentDir>` is Pi's
+`getAgentDir()`, and `<cwd>/<CONFIG_DIR_NAME>/<extension>/config.json` for
+`project`, where `CONFIG_DIR_NAME` is Pi's project configuration directory name.
+No operation SHALL accept another agent directory: `PI_CODING_AGENT_DIR`, which
+`getAgentDir()` honors, is the only way to move it.
 
-#### Scenario: An explicit agent directory
+#### Scenario: Paths in each scope
 
-- **WHEN** `extensionConfigPath` receives an `agentDir`, an extension name, and
-  a file name
-- **THEN** it returns the three joined as one path
+- **WHEN** a handle for the extension `theme-sync` resolves both scopes
+- **THEN** it returns `<agentDir>/theme-sync/config.json` for `user` and
+  `<cwd>/.pi/theme-sync/config.json` for `project`
 
-#### Scenario: No agent directory
+#### Scenario: The agent directory override
 
-- **WHEN** `extensionConfigPath` receives no `agentDir`
-- **THEN** it resolves the path under the directory Pi's `getAgentDir()` returns
-
-### Requirement: Project file paths are resolved per extension
-
-The package SHALL export a `projectConfigPath({ cwd, extension, file })`
-function that returns `<cwd>/<CONFIG_DIR_NAME>/<extension>/<file>`, where
-`CONFIG_DIR_NAME` is Pi's project configuration directory name.
-
-#### Scenario: A project directory
-
-- **WHEN** `projectConfigPath` receives a project directory, an extension name,
-  and a file name
-- **THEN** it returns them joined with Pi's configuration directory name between
-  the project directory and the extension name
+- **WHEN** `PI_CODING_AGENT_DIR` names a directory
+- **THEN** the user path is under that directory

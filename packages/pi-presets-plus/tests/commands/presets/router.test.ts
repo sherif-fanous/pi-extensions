@@ -3,8 +3,7 @@
  * gate for the bare picker, unknown and unsupported subcommands, and
  * dispatch to each subcommand handler over a stubbed `ctx`.
  */
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { ActivePresetSession } from "../../../src/activation/session.js";
@@ -18,6 +17,8 @@ import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
 import {
   createFakeContext,
   createFakePi,
+  createTempConfigDirs,
+  type TempConfigDirs,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,15 +32,16 @@ vi.mock("../../../src/activation/request.js", () => ({
 }));
 vi.mock("../../../src/ui/picker.js", () => ({ openPicker: openPickerMock }));
 
+let dirs: TempConfigDirs;
 let agentDir: string;
-let prevAgentDirEnv: string | undefined;
 
 /**
  * Build a fake `ExtensionCommandContext` whose `ui.notify` is a spy and
  * whose `ui.theme` leaves text unstyled for substring assertions. The
- * `cwd` points at a path that does not exist and `beforeEach` repoints
- * `PI_CODING_AGENT_DIR` at a fresh tmp dir, so `loadAll` sees an empty
- * store in both scopes instead of the developer's own presets file.
+ * `cwd` points at a path that does not exist and `beforeEach` points
+ * `PI_CODING_AGENT_DIR` at a fresh temporary directory, so `loadAll` sees
+ * an empty store in both scopes instead of the developer's own presets
+ * file.
  */
 function makeStubCtx(mode: "tui" | "rpc" | "json" | "print" = "tui") {
   const notify = vi.fn<(message: string, type?: string) => void>();
@@ -61,22 +63,15 @@ function makeStubPi(): ExtensionAPI {
 }
 
 beforeEach(async () => {
-  agentDir = await mkdtemp(join(tmpdir(), "pi-presets-router-agent-"));
-  prevAgentDirEnv = process.env.PI_CODING_AGENT_DIR;
-  process.env.PI_CODING_AGENT_DIR = agentDir;
+  dirs = await createTempConfigDirs();
+  agentDir = dirs.agentDir;
   openPickerMock.mockReset();
   requestActivationMock.mockReset();
   requestActivationMock.mockResolvedValue({ ok: true });
 });
 
 afterEach(async () => {
-  if (prevAgentDirEnv === undefined) {
-    delete process.env.PI_CODING_AGENT_DIR;
-  } else {
-    process.env.PI_CODING_AGENT_DIR = prevAgentDirEnv;
-  }
-
-  await rm(agentDir, { recursive: true, force: true });
+  await dirs.cleanup();
 });
 
 describe("getArgumentCompletions", () => {

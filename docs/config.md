@@ -1,15 +1,21 @@
 # Configuration
 
 The standard for every configuration file. Core implements it (its README's
-"Config API" section); never parse or write `config.json` by hand.
+"Config API" section); never parse or write `config.json` by hand. Each
+extension describes its file once with
+`defineConfigFile({ extension, extensionName, version, renamedKeys, scopes })`
+and uses only the handle it returns: `load`, `read`, `update`, `write`,
+`migrateKeys`, and `path`. Every operation takes the handler context, so core
+resolves the location and project trust itself.
 
-- Files: one `config.json` per scope, located by `configFilePath`: User at
-  `<agentDir>/<slug>/config.json` and Project at `<cwd>/.pi/<slug>/config.json`,
-  where `<agentDir>` is Pi's agent directory (`~/.pi/agent`, or
-  `PI_CODING_AGENT_DIR`) and `<cwd>` is the directory Pi started in. An
-  extension reads only the scopes it has (Notification Center has only User).
-  Only a save or a migration creates a file. A missing file means the defaults,
-  silently.
+- Files: one `config.json` per scope, at the handle's `path(ctx, scope)`: User
+  at `<agentDir>/<slug>/config.json` and Project at
+  `<cwd>/.pi/<slug>/config.json`, where `<agentDir>` is Pi's agent directory
+  (`~/.pi/agent`, or `PI_CODING_AGENT_DIR`) and `<cwd>` is the directory Pi
+  started in. `PI_CODING_AGENT_DIR` is the only way to move it, in tests too. An
+  extension describes only the scopes it has (Notification Center has only
+  User). Only a save or a migration creates a file. A missing file means the
+  defaults, silently.
 - Precedence: per key, Project, then User, then the default. Validate each
   scope's value before merging, so an invalid Project value falls back to a
   valid User value. An invalid value is dropped with a warning; an unknown key
@@ -18,13 +24,16 @@ The standard for every configuration file. Core implements it (its README's
   `ctx.isProjectTrusted()` returns `true`. A Project file in an untrusted
   project gets the state `untrusted` and the warning
   `Skipped project configuration at <path> because the project is not trusted. Trust the project to use it.`
-  An untrusted project without the file stays silent. `updateConfigFile` refuses
-  to save to an untrusted project.
+  An untrusted project without the file stays silent. `update` and `write`
+  refuse to save to an untrusted project, and `migrateKeys` skips it. An old
+  file an extension still counts as project configuration, such as Presets
+  Plus's `presets.json`, goes in the description's `legacyFileNames`, so an
+  untrusted project without `config.json` reports it as skipped.
 - Versions: every file has a top-level integer `version`. A file without one is
   read as the current version, silently. A file with any other version, newer or
   unknown, is ignored with a warning and never overwritten. Every write puts the
-  current version first (`updateConfigFile`, `writeConfigFile`). Bump the
-  version in a release that renames keys or changes the file's shape.
+  current version first (`update`, `write`). Bump the version in a release that
+  renames keys or changes the file's shape.
 - Keys: camelCase. Booleans are phrases without `is` (`syncEnabled`,
   `showInactiveStatus`). Durations and sizes name their unit (`timeoutMs`,
   `pollIntervalMs`). Related keys share an object (`toast.maxVisible`,
@@ -33,18 +42,24 @@ The standard for every configuration file. Core implements it (its README's
   files are loaded. Write the new file atomically, and delete the old files only
   after that write succeeds. Never overwrite an existing new file: when it
   exists, leave the old files alone. When an old file can't be read or parsed,
-  nothing in that scope migrates and a warning names the file. Pass renamed keys
-  to `loadConfigFiles` as `renamedKeys`, so an old key is read while the new one
-  is absent, then call `migrateRenamedConfigKeys` to rewrite those files. One
-  info message from `configMigratedMessage` covers everything one session start
-  migrated (`Theme Sync migrated its configuration to <path>.`).
-- Warnings: an extension shows its configuration warnings once per session, at
-  `session_start`, in one `notifyWarnings` call: migration warnings, then
-  `configFileWarnings`, then invalid values. A command that reads the files
-  again does not repeat them, with two exceptions: an explicit reload command
-  such as `/presets reload` shows them again, because the user asked for a fresh
-  read, and a command whose target failed to load shows the warnings that may
-  explain why. A status report shows every current warning.
+  nothing in that scope migrates and a warning names the file. List renamed keys
+  in the description's `renamedKeys`, so an old key is read while the new one is
+  absent, and every save moves it. At session start, run the extension's layout
+  migration (which writes through `write`), then `migrateKeys`, then `load`, and
+  add both results to the outcome with `withMigrations`. Each result is a
+  `ConfigMigration` (`{ migrated, warnings }`).
+- Warnings: `load` returns an outcome holding the files, and the extension adds
+  its invalid values with `withValueWarnings`. At session start it calls
+  `outcome.notify(ctx, extras)` once, when it chooses: one info message names
+  everything the session start migrated
+  (`Theme Sync migrated its configuration to <path>.`), and one warning
+  notification lists migration warnings, then file warnings, then invalid
+  values, then `extras` (its other startup warnings). A command that reads the
+  files again does not repeat them, with two exceptions: an explicit reload
+  command such as `/presets reload` shows them again (`outcome.notify(ctx)`),
+  because the user asked for a fresh read, and a command whose target failed to
+  load shows the warnings that may explain why. A status report shows every
+  current warning.
 - Applying edits: an extension reads its configuration at session start, so Pi's
   `/reload` applies a hand edit. A command that re-reads in place, such as
   `/presets reload`, names the changes that still need `/reload`. A save that
@@ -52,11 +67,12 @@ The standard for every configuration file. Core implements it (its README's
   `Ctrl+R Reload` hint in a form's footer, or a `Reload now?` confirmation after
   a save from a picker), which calls `ctx.reload()`. A failed reload reads
   `Could not reload Pi: <message>`.
-- Status: every extension with a configuration file puts the `Config:` block
-  from `configStatusLines` in its status report, after the main rows and a blank
-  line, and before `Warnings:`. States read `loaded`, `not found`,
-  `invalid: <reason>`, and `skipped (untrusted)`. File problems show there, not
-  again under `Warnings:`.
+- Status: every extension with a configuration file puts the outcome's
+  `statusLines`, the `Config:` block, in its status report, after the main rows
+  and a blank line, and before `Warnings:`, which lists `statusWarnings`
+  (migration warnings, then invalid values) and the extension's own. States read
+  `loaded`, `not found`, `invalid: <reason>`, and `skipped (untrusted)`. File
+  problems show there, not again under `Warnings:`.
 
   ```text
   Config:
@@ -83,6 +99,9 @@ The standard for every configuration file. Core implements it (its README's
   `save.ts` once it outgrows one file (Presets Plus keeps `src/store/`, which
   also holds preset CRUD). It exports `CONFIG_VERSION`, a named
   `DEFAULT_CONFIG`, one table of limits that validation and the README both use,
-  and an async `loadConfig` that takes `agentDir` (plus a file-system seam where
-  a failure needs simulating), so tests run against real temporary directories
-  from `createTempConfigDirs` with a `createProjectTrustContext`.
+  the handle from `defineConfigFile`, and an async `loadConfig(ctx)`. Tests run
+  against real temporary directories from `createTempConfigDirs`, which points
+  `PI_CODING_AGENT_DIR` at its agent directory, with a
+  `createProjectTrustContext`. Core's own tests cover trust, versions, renamed
+  keys, and write failures, so an extension tests only its own values and
+  migrations.

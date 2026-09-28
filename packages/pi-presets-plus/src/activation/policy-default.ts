@@ -40,7 +40,7 @@ export async function maybeApplyPolicyDefault(
 ): Promise<boolean> {
   if (precedence.flagApplied || precedence.restored) return false;
 
-  const { rules, warnings: policyWarnings } = await loadPolicy();
+  const { rules, warnings: policyWarnings } = await loadPolicy(ctx);
 
   reportWarnings(ctx, policyWarnings, warnings);
 

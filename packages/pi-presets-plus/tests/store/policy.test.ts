@@ -2,12 +2,10 @@
  * Covers access policy loaded from user config, including matcher validation,
  * permission decisions, and default selection for a directory.
  */
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { loadScope } from "../../src/store/config.js";
-import { getConfigPath } from "../../src/store/paths.js";
+import { parseScope, PRESETS_PLUS_CONFIG } from "../../src/store/config.js";
 import {
   isPermitted,
   loadPolicy,
@@ -16,17 +14,32 @@ import {
   resolvePolicyDefault,
 } from "../../src/store/policy.js";
 import type { LoadedPreset } from "../../src/types.js";
+import {
+  createProjectTrustContext,
+  createTempConfigDirs,
+  type TempConfigDirs,
+} from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+let dirs: TempConfigDirs;
 let agentDir: string;
 
 beforeEach(async () => {
-  agentDir = await mkdtemp(join(tmpdir(), "pi-presets-policy-"));
+  dirs = await createTempConfigDirs();
+  agentDir = dirs.agentDir;
 });
 
 afterEach(async () => {
-  await rm(agentDir, { force: true, recursive: true });
+  await dirs.cleanup();
 });
+
+function context(cwd = dirs.cwd) {
+  return createProjectTrustContext(cwd, true);
+}
+
+async function loadUserScope() {
+  return parseScope("user", await PRESETS_PLUS_CONFIG.read(context(), "user"));
+}
 
 function preset(name: string, extra: Partial<LoadedPreset> = {}): LoadedPreset {
   return {
@@ -38,8 +51,12 @@ function preset(name: string, extra: Partial<LoadedPreset> = {}): LoadedPreset {
   };
 }
 
+function userConfigPath(): string {
+  return join(agentDir, "presets-plus", "config.json");
+}
+
 async function writePolicy(value: unknown): Promise<void> {
-  const path = getConfigPath("user", process.cwd(), agentDir);
+  const path = userConfigPath();
   const object = value as { rules?: unknown; version?: number };
   const document =
     object.version === 1
@@ -52,14 +69,14 @@ async function writePolicy(value: unknown): Promise<void> {
 
 describe("loadPolicy", () => {
   it("treats a missing file and empty rules as no policy", async () => {
-    await expect(loadPolicy(agentDir)).resolves.toEqual({
+    await expect(loadPolicy(context())).resolves.toEqual({
       rules: [],
       warnings: [],
     });
 
     await writePolicy({ rules: [], version: 1 });
 
-    await expect(loadPolicy(agentDir)).resolves.toEqual({
+    await expect(loadPolicy(context())).resolves.toEqual({
       rules: [],
       warnings: [],
     });
@@ -68,25 +85,21 @@ describe("loadPolicy", () => {
   it("fails open for unsupported versions and malformed JSON and leaves the file warning to the scope loader", async () => {
     await writePolicy({ rules: [], version: 3 });
 
-    const unsupported = await loadPolicy(agentDir);
+    const unsupported = await loadPolicy(context());
 
     expect(unsupported).toEqual({ rules: [], warnings: [] });
-    expect(
-      (
-        await loadScope("user", { agentDir, cwd: process.cwd(), trusted: true })
-      ).warnings.file.join(" "),
-    ).toContain("has version 3, but only version 2 is supported");
+    expect((await loadUserScope()).warnings.file.join(" ")).toContain(
+      "has version 3, but only version 2 is supported",
+    );
 
-    await writeFile(getConfigPath("user", process.cwd(), agentDir), "{");
+    await writeFile(userConfigPath(), "{");
 
-    const malformed = await loadPolicy(agentDir);
+    const malformed = await loadPolicy(context());
 
     expect(malformed).toEqual({ rules: [], warnings: [] });
-    expect(
-      (
-        await loadScope("user", { agentDir, cwd: process.cwd(), trusted: true })
-      ).warnings.file.join(" "),
-    ).toContain("is not valid JSON");
+    expect((await loadUserScope()).warnings.file.join(" ")).toContain(
+      "is not valid JSON",
+    );
   });
 
   it("skips an invalid match while retaining other rules", async () => {
@@ -95,7 +108,7 @@ describe("loadPolicy", () => {
       version: 1,
     });
 
-    const result = await loadPolicy(agentDir);
+    const result = await loadPolicy(context());
 
     expect(result.rules.map((rule) => rule.match)).toEqual(["work"]);
     expect(result.warnings.join(" ")).toContain('"["');
@@ -114,7 +127,7 @@ describe("loadPolicy", () => {
       version: 1,
     });
 
-    const result = await loadPolicy(agentDir);
+    const result = await loadPolicy(context());
     const rule = result.rules[0];
 
     expect(rule?.allow).toHaveLength(1);
@@ -127,7 +140,7 @@ describe("loadPolicy", () => {
 describe("policy matching and permissions", () => {
   it("ignores project policy and reports the trust-boundary warning", async () => {
     const cwd = join(agentDir, "project");
-    const path = getConfigPath("project", cwd, agentDir);
+    const path = join(cwd, ".pi", "presets-plus", "config.json");
 
     await mkdir(join(cwd, ".pi", "presets-plus"), { recursive: true });
     await writeFile(
@@ -135,7 +148,10 @@ describe("policy matching and permissions", () => {
       JSON.stringify({ version: 2, policy: { rules: [{ match: ".*" }] } }),
     );
 
-    const result = await loadScope("project", { agentDir, cwd, trusted: true });
+    const result = parseScope(
+      "project",
+      await PRESETS_PLUS_CONFIG.read(context(cwd), "project"),
+    );
 
     expect(result.presets).toEqual([]);
     expect(result.warnings.policy).toHaveLength(1);
@@ -160,7 +176,7 @@ describe("policy matching and permissions", () => {
       version: 1,
     });
 
-    const rule = (await loadPolicy(agentDir)).rules[0];
+    const rule = (await loadPolicy(context())).rules[0];
 
     expect(rule).toBeDefined();
     if (!rule) return;
@@ -195,7 +211,7 @@ describe("policy matching and permissions", () => {
       version: 1,
     });
 
-    const rules = (await loadPolicy(agentDir)).rules;
+    const rules = (await loadPolicy(context())).rules;
     const none = resolveMatchingRules("/personal", rules);
     const matched = resolveMatchingRules("/work/apple/project", rules);
 
@@ -217,7 +233,7 @@ describe("resolvePolicyDefault", () => {
       version: 1,
     });
 
-    const rules = (await loadPolicy(agentDir)).rules;
+    const rules = (await loadPolicy(context())).rules;
     const result = resolvePolicyDefault(
       "/work/apple/project",
       [preset("apple-opus-4-7"), preset("apple-opus-4-8")],
@@ -244,7 +260,7 @@ describe("resolvePolicyDefault", () => {
     const result = resolvePolicyDefault(
       "/work",
       [preset("first"), preset("second")],
-      (await loadPolicy(agentDir)).rules,
+      (await loadPolicy(context())).rules,
     );
 
     expect(result.kind).toBe("resolved");
@@ -262,7 +278,7 @@ describe("resolvePolicyDefault", () => {
     const result = resolvePolicyDefault(
       "/work",
       [preset("second-opus"), preset("first-opus"), preset("other")],
-      (await loadPolicy(agentDir)).rules,
+      (await loadPolicy(context())).rules,
     );
 
     expect(result.kind).toBe("resolved");
@@ -293,7 +309,7 @@ describe("resolvePolicyDefault", () => {
         preset("unavailable-opus", { unavailable: "no-key" }),
         preset("allowed-opus"),
       ],
-      (await loadPolicy(agentDir)).rules,
+      (await loadPolicy(context())).rules,
     );
 
     expect(result.kind).toBe("resolved");
@@ -314,7 +330,7 @@ describe("resolvePolicyDefault", () => {
     const noDefault = resolvePolicyDefault(
       "/work",
       [],
-      (await loadPolicy(agentDir)).rules,
+      (await loadPolicy(context())).rules,
     );
 
     expect(noDefault.kind).toBe("none");
@@ -327,7 +343,7 @@ describe("resolvePolicyDefault", () => {
     const unavailable = resolvePolicyDefault(
       "/work",
       [],
-      (await loadPolicy(agentDir)).rules,
+      (await loadPolicy(context())).rules,
     );
 
     expect(unavailable.kind).toBe("unresolvable");

@@ -1,7 +1,7 @@
 /** Defines configuration, detector, and runtime state shared across the extension. */
 
 import type {
-  ConfigFile,
+  ConfigOutcome,
   ConfigScope,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -20,14 +20,13 @@ export type EditableConfigChanges = Partial<{
 }>;
 
 /**
- * Effective runtime configuration, value sources, each scope's file, and
- * the warnings for invalid values.
+ * Effective runtime configuration, value sources, and what reading the
+ * files found, with a value warning per invalid value.
  */
 export type LoadedRuntimeConfig = {
-  files: Record<ConfigScope, ConfigFile>;
+  outcome: ConfigOutcome<ConfigScope>;
   runtimeConfig: RuntimeConfig;
   runtimeConfigSources: RuntimeConfigSources;
-  warnings: string[];
 };
 
 /** Detector strategies that read appearance on demand. */
@@ -72,8 +71,8 @@ export type RuntimeStatus = {
   syncEnabled: boolean;
   pollIntervalMs: number;
 
-  /** Each scope's file as the session start read it; empty before then. */
-  configFiles: readonly ConfigFile[];
+  /** The `Config:` block as the session start read it; empty before then. */
+  configStatusLines: readonly string[];
   warnings: string[];
 
   lastUpdateAt?: number;

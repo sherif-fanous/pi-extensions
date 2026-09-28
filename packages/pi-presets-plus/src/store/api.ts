@@ -11,33 +11,23 @@ import type {
   ScopeConfig,
 } from "../types.js";
 import { formatScopeName } from "../ui/widgets.js";
-import { CONFIG_VERSION, DEFAULT_CONFIG, loadScope } from "./config.js";
+import { DEFAULT_CONFIG, parseScope, PRESETS_PLUS_CONFIG } from "./config.js";
 import { mergeScopes } from "./merge.js";
-import { getConfigPath } from "./paths.js";
 import { loadPolicy } from "./policy.js";
 import { computeClampWarning } from "./validate.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import {
-  configFileWarnings,
-  updateConfigFile,
-  type ConfigFile,
-} from "@sherif-fanous/pi-extensions-core";
+import type { ConfigOutcome } from "@sherif-fanous/pi-extensions-core";
 
 /** Result of loading all presets. */
 export interface LoadAllResult {
-  /** The User then the Project file, for the status report's `Config:` block. */
-  readonly files: readonly [ConfigFile, ConfigFile];
+  /**
+   * What reading both files found, with a value warning for each invalid
+   * setting, preset, and project policy section.
+   */
+  readonly config: ConfigOutcome<PresetScope>;
   readonly hotkeyAnalysis: HotkeyAnalysis;
   readonly presets: LoadedPreset[];
   readonly showInactiveStatus: boolean;
-  /**
-   * Warnings about values inside the loaded files: invalid settings,
-   * presets, and a project policy section. The file problems the
-   * `Config:` block shows are left out.
-   */
-  readonly valueWarnings: string[];
-  /** Every load warning: the file problems first, then `valueWarnings`. */
-  readonly warnings: string[];
 }
 /** Result type for mutating operations. */
 export type SaveResult = { ok: true } | { ok: false; reason: string };
@@ -80,12 +70,9 @@ export async function addPreset(
  * The project file is read only while Pi trusts the project.
  */
 export async function loadAll(ctx: StorageContext): Promise<LoadAllResult> {
-  const location = { cwd: ctx.cwd, trusted: ctx.isProjectTrusted() };
-  const [user, project] = await Promise.all([
-    loadScope("user", location),
-    loadScope("project", location),
-  ]);
-  const files = [user.file, project.file] as const;
+  const config = await PRESETS_PLUS_CONFIG.load(ctx);
+  const user = parseScope("user", config.files.user);
+  const project = parseScope("project", config.files.project);
   const showInactiveStatus =
     project.showInactiveStatus ?? user.showInactiveStatus;
   // Policy warnings for the user scope belong to loadPolicy. The project
@@ -106,12 +93,10 @@ export async function loadAll(ctx: StorageContext): Promise<LoadAllResult> {
   }));
 
   return {
-    files,
+    config: config.withValueWarnings(valueWarnings),
     hotkeyAnalysis: analyzeHotkeys(presets),
     presets,
     showInactiveStatus: showInactiveStatus ?? DEFAULT_CONFIG.showInactiveStatus,
-    valueWarnings,
-    warnings: [...configFileWarnings(files), ...valueWarnings],
   };
 }
 
@@ -310,22 +295,21 @@ async function readScope(
   scope: PresetScope,
   ctx: StorageContext,
 ): Promise<ScopeConfig | { ok: false; reason: string }> {
-  const path = getConfigPath(scope, ctx.cwd);
-  const trusted = ctx.isProjectTrusted();
+  const path = PRESETS_PLUS_CONFIG.path(ctx, scope);
 
-  if (scope === "project" && !trusted) {
+  if (scope === "project" && !ctx.isProjectTrusted()) {
     return {
       ok: false,
       reason: `The project is not trusted, so ${path} was not saved. Trust the project and try again.`,
     };
   }
 
-  const result = await loadScope(scope, { cwd: ctx.cwd, trusted });
+  const result = parseScope(scope, await PRESETS_PLUS_CONFIG.read(ctx, scope));
   // Compiled-rule warnings only come from loadPolicy, which also carries
   // the user policy bucket, so the raw bucket is read here for project only.
   const policyWarnings =
     scope === "user"
-      ? (await loadPolicy(undefined, ctx.cwd)).warnings
+      ? (await loadPolicy(ctx)).warnings
       : result.warnings.policy;
   const warnings = [...loadableWarnings(result), ...policyWarnings];
 
@@ -374,13 +358,8 @@ async function writeDocument(
   presets: readonly Preset[],
   ctx: StorageContext,
 ): Promise<void> {
-  await updateConfigFile(
-    {
-      path: getConfigPath(scope, ctx.cwd),
-      scope,
-      trusted: ctx.isProjectTrusted(),
-      version: CONFIG_VERSION,
-    },
-    (data) => ({ ...data, presets: presets.map(toPersistedPreset) }),
-  );
+  await PRESETS_PLUS_CONFIG.update(ctx, scope, (data) => ({
+    ...data,
+    presets: presets.map(toPersistedPreset),
+  }));
 }

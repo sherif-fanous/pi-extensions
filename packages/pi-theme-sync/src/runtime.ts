@@ -13,7 +13,6 @@ import {
   type ColorSchemeSubscription,
 } from "./detectors/pi/color-scheme.js";
 import { getTuiHandle } from "./detectors/pi/tui-handle.js";
-import { EXTENSION_NAME } from "./extension-name.js";
 import type {
   Appearance,
   PollingDetector,
@@ -26,11 +25,9 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
-import {
-  configFileWarnings,
-  configMigratedMessage,
-  notifyWarnings,
-  type ConfigFile,
+import type {
+  ConfigOutcome,
+  ConfigScope,
 } from "@sherif-fanous/pi-extensions-core";
 
 type ScheduleRecurringCycle = (
@@ -74,12 +71,9 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
 
   let lastUpdateAt: number | undefined;
   let lastEvent = "Not yet updated";
+  // Runtime warnings, after the configuration's own in the status report.
   let warnings: string[] = [];
-  let migrationWarnings: string[] = [];
-  let configFiles: readonly ConfigFile[] = [];
-  // Shown once at session start, but not in the status report, whose
-  // Config block shows each file's state instead.
-  let configFileNotices: string[] = [];
+  let configOutcome: ConfigOutcome<ConfigScope> | undefined;
 
   let stopRecurringCycle: (() => void) | undefined;
   let isRecurringCycleRunning = false;
@@ -214,23 +208,9 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
       return;
     }
 
-    const [firstMigrated, ...otherMigrated] = startup.migrated;
-
-    if (firstMigrated !== undefined) {
-      ctx.ui.notify(
-        configMigratedMessage(EXTENSION_NAME, [
-          firstMigrated,
-          ...otherMigrated,
-        ]),
-        "info",
-      );
-    }
-
-    runtimeConfig = startup.config.runtimeConfig;
-    configFiles = [startup.config.files.user, startup.config.files.project];
-    configFileNotices = configFileWarnings(configFiles);
-    migrationWarnings = [...startup.warnings];
-    warnings = [...startup.config.warnings];
+    runtimeConfig = startup.runtimeConfig;
+    configOutcome = startup.outcome;
+    warnings = [];
 
     const tui = getTuiHandle(ctx);
 
@@ -457,8 +437,9 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     detectionStrategy = "No available detectors";
   };
 
-  // Startup warnings are notified once. Warnings the recurring cycle adds
-  // later appear only in the status report.
+  // The migration message and startup warnings are notified once, after
+  // probing. Warnings the recurring cycle adds later appear only in the
+  // status report.
   const startSession = async (
     ctx: ExtensionContext,
     schedule: ScheduleRecurringCycle = scheduleRecurringCycle,
@@ -471,13 +452,9 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     await startAppearanceMonitoring(ctx, schedule);
 
     // Any dispose since, from shutdown or a newer start, means this
-    // session is gone and its warnings are no longer current.
+    // session is gone and its messages are no longer current.
     if (disposeCount === startDisposeCount) {
-      notifyWarnings(ctx, EXTENSION_NAME, [
-        ...migrationWarnings,
-        ...configFileNotices,
-        ...warnings,
-      ]);
+      configOutcome?.notify(ctx, warnings);
     }
   };
 
@@ -499,8 +476,8 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
       syncEnabled: runtimeConfig.syncEnabled,
       pollIntervalMs: runtimeConfig.detection.pollIntervalMs,
 
-      configFiles,
-      warnings: [...migrationWarnings, ...warnings],
+      configStatusLines: configOutcome?.statusLines ?? [],
+      warnings: [...(configOutcome?.statusWarnings ?? []), ...warnings],
       lastUpdateAt,
       lastEvent,
     };

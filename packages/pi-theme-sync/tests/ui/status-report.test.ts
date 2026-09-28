@@ -12,20 +12,12 @@ import { expect, test, vi } from "vitest";
 const status: RuntimeStatus = {
   appliedTheme: "solarized-dark",
   availableDetectors: ["OSC 11", "System Appearance"],
-  configFiles: [
-    {
-      data: {},
-      path: "/agent/theme-sync/config.json",
-      renamedKeys: [],
-      scope: "user",
-      state: "loaded",
-    },
-    {
-      path: "/repo/.pi/theme-sync/config.json",
-      scope: "project",
-      state: "untrusted",
-      warning: "Skipped project configuration.",
-    },
+  configStatusLines: [
+    "Config:",
+    "  User:    loaded",
+    "           /agent/theme-sync/config.json",
+    "  Project: skipped (untrusted)",
+    "           /repo/.pi/theme-sync/config.json",
   ],
   currentAppearance: "dark",
   desiredTheme: "solarized-dark",
@@ -64,11 +56,10 @@ test("formats every runtime status field, then the Config block, then warnings",
       "- Second warning.",
     ].join("\n"),
   );
-  expect(report).not.toContain("Skipped project configuration.");
 });
 
 test("leaves out the Config block before a session has read the files", () => {
-  const report = formatStatusReport({ ...status, configFiles: [] });
+  const report = formatStatusReport({ ...status, configStatusLines: [] });
 
   expect(report).not.toContain("Config:");
 });

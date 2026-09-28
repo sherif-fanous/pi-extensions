@@ -39,6 +39,10 @@ export async function openThemeSyncOverlay(
     (tui, theme, keybindings, done) => {
       component = new ConfigOverlayComponent({
         config,
+        configPaths: {
+          project: config.outcome.files.project.path,
+          user: config.outcome.files.user.path,
+        },
         done,
         keybindings,
         requestRender: () => tui.requestRender(),

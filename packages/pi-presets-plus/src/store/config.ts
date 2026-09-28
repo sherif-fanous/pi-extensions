@@ -1,9 +1,8 @@
 /**
- * Loads and validates one scope's `config.json`.
+ * Describes Presets Plus's `config.json` and validates one scope's file.
  * Section warnings preserve fail-open reads while marking the document unsafe to rewrite.
  */
-import { access } from "node:fs/promises";
-
+import { EXTENSION_NAME } from "../extension-name.js";
 import type {
   ConfigDocument,
   Preset,
@@ -12,13 +11,9 @@ import type {
   ScopeWarnings,
 } from "../types.js";
 import { parsePresetArray } from "./load.js";
-import { getConfigPath, getProjectPresetsPath } from "./paths.js";
 import {
-  configFileWarnings,
-  isNotFoundError,
+  defineConfigFile,
   isRecord,
-  readConfigFile,
-  untrustedProjectConfigWarning,
   type ConfigFile,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -28,26 +23,29 @@ export const CONFIG_VERSION = 2;
 /** The value of every setting that no scope sets. */
 export const DEFAULT_CONFIG = { showInactiveStatus: true } as const;
 
-/** Where one scope's configuration lives and whether Pi trusts the project. */
-export interface ScopeLocation {
-  /** Pi's agent directory. Defaults to `getAgentDir()`; tests pass their own. */
-  readonly agentDir?: string;
-  readonly cwd: string;
-  /**
-   * Whether Pi trusts the project, from `ctx.isProjectTrusted()`. Only the
-   * project scope consults it.
-   */
-  readonly trusted: boolean;
-}
+/** The version 1 file of presets in each scope's directory. */
+export const LEGACY_PRESETS_FILE_NAME = "presets.json";
 
-/** Load one scope's complete document and validated preset section. */
-export async function loadScope(
-  scope: PresetScope,
-  location: ScopeLocation,
-): Promise<ScopeConfig> {
-  const file = await readScopeFile(scope, location);
+/**
+ * Presets Plus's User and Project `config.json`. A version 1
+ * `presets.json` the migration left in an untrusted project is reported
+ * as the skipped project file, since it is still project configuration.
+ */
+export const PRESETS_PLUS_CONFIG = defineConfigFile({
+  extension: "presets-plus",
+  extensionName: EXTENSION_NAME,
+  legacyFileNames: [LEGACY_PRESETS_FILE_NAME],
+  scopes: ["user", "project"],
+  version: CONFIG_VERSION,
+});
+
+/** Validate one scope's file: its document, settings, presets, and policy section. */
+export function parseScope(scope: PresetScope, file: ConfigFile): ScopeConfig {
   const warnings: ScopeWarnings = {
-    file: configFileWarnings([file]),
+    file:
+      file.state === "invalid" || file.state === "untrusted"
+        ? [file.warning]
+        : [],
     presets: [],
     policy: [],
   };
@@ -104,39 +102,5 @@ export async function loadScope(
       ? {}
       : { invalidShowInactiveStatus }),
     warnings,
-  };
-}
-
-/**
- * Read one scope's `config.json`. In an untrusted project without one, a
- * legacy `presets.json` the migration left alone is reported as skipped
- * too, since it is still project configuration.
- */
-async function readScopeFile(
-  scope: PresetScope,
-  { agentDir, cwd, trusted }: ScopeLocation,
-): Promise<ConfigFile> {
-  const file = await readConfigFile({
-    path: getConfigPath(scope, cwd, agentDir),
-    scope,
-    trusted,
-    version: CONFIG_VERSION,
-  });
-
-  if (file.state !== "missing" || scope === "user" || trusted) return file;
-
-  const legacyPath = getProjectPresetsPath(cwd);
-
-  try {
-    await access(legacyPath);
-  } catch (error) {
-    if (isNotFoundError(error)) return file;
-  }
-
-  return {
-    path: legacyPath,
-    scope,
-    state: "untrusted",
-    warning: untrustedProjectConfigWarning(legacyPath),
   };
 }

@@ -8,51 +8,28 @@ import path from "node:path";
 
 import type { LoadedRuntimeConfig } from "../types.js";
 import {
-  CONFIG_EXTENSION,
-  CONFIG_VERSION,
   loadConfig,
-  RENAMED_CONFIG_KEYS,
+  THEME_SYNC_CONFIG,
   type LoadConfigContext,
 } from "./load.js";
-import { configPath } from "./save.js";
 import {
   describeError,
   describeErrorSentence,
-  extensionConfigPath,
   isNotFoundError,
-  migrateRenamedConfigKeys,
-  parseJsonObject,
-  projectConfigPath,
-  renameConfigKeys,
-  writeConfigFile,
-  type AtomicWriteFs,
+  isRecord,
   type ConfigContext,
-  type ConfigFileFs,
+  type ConfigMigration,
   type ConfigScope,
 } from "@sherif-fanous/pi-extensions-core";
 
-/** Files one session start migrated, and the warnings for those it could not. */
-export interface ConfigMigration {
-  /** Paths of the `config.json` files written. */
-  readonly migrated: readonly string[];
-  readonly warnings: readonly string[];
-}
-
-/** Where migration reads and writes; tests pass their own. */
-export interface MigrateConfigOptions {
-  readonly agentDir?: string;
-  readonly fs?: MigrationFs;
-}
-
-/** The file-system calls migration makes. Tests inject failures. */
-export interface MigrationFs extends ConfigFileFs {
-  readonly atomicWriteFs?: AtomicWriteFs;
+/**
+ * The file-system calls migration makes besides writing `config.json`.
+ * Tests inject failures.
+ */
+export interface MigrationFs {
+  readonly access: (path: string) => Promise<void>;
+  readonly readFile: (path: string, encoding: "utf8") => Promise<string>;
   readonly unlink: (path: string) => Promise<void>;
-}
-
-/** The configuration a session starts with, after migration. */
-export interface StartupConfig extends ConfigMigration {
-  readonly config: LoadedRuntimeConfig;
 }
 
 const defaultFs: MigrationFs = {
@@ -62,26 +39,17 @@ const defaultFs: MigrationFs = {
 };
 
 /**
- * Migrate old files and renamed keys, then load the configuration.
- * Migration warnings come before the load's file and value problems.
+ * Migrate old files and renamed keys, then load the configuration. The
+ * outcome lists the old layout's migration before the renamed keys'.
  */
 export async function loadStartupConfig(
   ctx: LoadConfigContext,
-  options: MigrateConfigOptions = {},
-): Promise<StartupConfig> {
-  const layout = await migrateConfigLayout(ctx, options);
-  const config = await loadConfig(ctx, options);
-  const keys = await migrateRenamedConfigKeys(
-    [config.files.user, config.files.project],
-    CONFIG_VERSION,
-    options.fs?.atomicWriteFs,
-  );
+): Promise<LoadedRuntimeConfig> {
+  const layout = await migrateConfigLayout(ctx);
+  const keys = await THEME_SYNC_CONFIG.migrateKeys(ctx);
+  const config = await loadConfig(ctx);
 
-  return {
-    config,
-    migrated: [...layout.migrated, ...keys.migrated],
-    warnings: [...layout.warnings, ...keys.warnings],
-  };
+  return { ...config, outcome: config.outcome.withMigrations(layout, keys) };
 }
 
 /**
@@ -96,7 +64,7 @@ export async function loadStartupConfig(
  */
 export async function migrateConfigLayout(
   ctx: ConfigContext,
-  options: MigrateConfigOptions = {},
+  fs: MigrationFs = defaultFs,
 ): Promise<ConfigMigration> {
   const migrated: string[] = [];
   const warnings: string[] = [];
@@ -104,38 +72,13 @@ export async function migrateConfigLayout(
   for (const scope of ["user", "project"] as const) {
     if (scope === "project" && !ctx.isProjectTrusted()) continue;
 
-    const outcome = await migrateScope(scope, ctx, options);
+    const outcome = await migrateScope(scope, ctx, fs);
 
     if (outcome.migrated !== undefined) migrated.push(outcome.migrated);
     warnings.push(...outcome.warnings);
   }
 
   return { migrated, warnings };
-}
-
-/** The old files of a scope, in the order the old release read them. */
-export function oldConfigPaths(
-  scope: ConfigScope,
-  ctx: Pick<ConfigContext, "cwd">,
-  agentDir?: string,
-): readonly [settings: string, legacy: string] {
-  const settings =
-    scope === "user"
-      ? extensionConfigPath({
-          agentDir,
-          extension: CONFIG_EXTENSION,
-          file: "settings.json",
-        })
-      : projectConfigPath({
-          cwd: ctx.cwd,
-          extension: CONFIG_EXTENSION,
-          file: "settings.json",
-        });
-
-  return [
-    settings,
-    path.join(path.dirname(path.dirname(settings)), `${CONFIG_EXTENSION}.json`),
-  ];
 }
 
 async function exists(fs: MigrationFs, filePath: string): Promise<boolean> {
@@ -163,14 +106,13 @@ function failed(
 async function migrateScope(
   scope: ConfigScope,
   ctx: ConfigContext,
-  options: MigrateConfigOptions,
+  fs: MigrationFs,
 ): Promise<{ migrated?: string; warnings: string[] }> {
-  const fs = options.fs ?? defaultFs;
-  const target = configPath(scope, ctx, options.agentDir);
+  const target = THEME_SYNC_CONFIG.path(ctx, scope);
 
   if (await exists(fs, target)) return { warnings: [] };
 
-  for (const source of oldConfigPaths(scope, ctx, options.agentDir)) {
+  for (const source of oldConfigPaths(target)) {
     let text: string;
 
     try {
@@ -181,21 +123,23 @@ async function migrateScope(
       return failed(source, describeErrorSentence(error));
     }
 
-    const parsed = parseJsonObject(text);
+    let document: unknown;
 
-    if (!parsed.ok) {
+    try {
+      document = JSON.parse(text);
+    } catch (error) {
       return failed(
         source,
-        parsed.reason === "invalid-json"
-          ? `The file is not valid JSON (${describeError(parsed.error)}).`
-          : "The file is not a JSON object.",
+        `The file is not valid JSON (${describeError(error)}).`,
       );
     }
 
-    const { document } = renameConfigKeys(parsed.value, RENAMED_CONFIG_KEYS);
+    if (!isRecord(document)) {
+      return failed(source, "The file is not a JSON object.");
+    }
 
     try {
-      await writeConfigFile(target, document, CONFIG_VERSION, fs.atomicWriteFs);
+      await THEME_SYNC_CONFIG.write(ctx, scope, document);
     } catch (error) {
       return failed(source, describeErrorSentence(error));
     }
@@ -217,4 +161,20 @@ async function migrateScope(
   }
 
   return { warnings: [] };
+}
+
+/**
+ * The old files beside a scope's `config.json`, in the order the old
+ * release read them: `settings.json` in the same directory, then
+ * `theme-sync.json` one directory up.
+ */
+function oldConfigPaths(
+  configPath: string,
+): readonly [settings: string, legacy: string] {
+  const directory = path.dirname(configPath);
+
+  return [
+    path.join(directory, "settings.json"),
+    path.join(path.dirname(directory), `${path.basename(directory)}.json`),
+  ];
 }

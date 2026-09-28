@@ -21,11 +21,9 @@ let dirs: TempConfigDirs;
 
 beforeEach(async () => {
   dirs = await createTempConfigDirs();
-  vi.stubEnv("PI_CODING_AGENT_DIR", dirs.agentDir);
 });
 
 afterEach(async () => {
-  vi.unstubAllEnvs();
   await dirs.cleanup();
 });
 

@@ -4,7 +4,6 @@ import { EXTENSION_NAME } from "../extension-name.js";
 import type { RuntimeStatus } from "../types.js";
 import {
   alignLabelRows,
-  configStatusLines,
   createCommandReport,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -48,8 +47,8 @@ export function formatStatusReport(
     ]),
   ];
 
-  if (status.configFiles.length > 0) {
-    lines.push("", ...configStatusLines(status.configFiles));
+  if (status.configStatusLines.length > 0) {
+    lines.push("", ...status.configStatusLines);
   }
 
   if (status.warnings.length > 0) {

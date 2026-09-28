@@ -4,9 +4,11 @@
  * directory permits and which one it defaults to.
  */
 import type { LoadedPreset } from "../types.js";
-import { loadScope } from "./config.js";
-import { getConfigPath } from "./paths.js";
-import { isRecord } from "@sherif-fanous/pi-extensions-core";
+import { parseScope, PRESETS_PLUS_CONFIG } from "./config.js";
+import {
+  isRecord,
+  type ConfigContext,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** One allow, prohibit, or default pattern with its regex compiled. */
 export interface CompiledPolicyMatcher {
@@ -87,12 +89,13 @@ export function isPermitted(
 
 /** Read and compile the user policy fresh on every call. */
 export async function loadPolicy(
-  agentDir?: string,
-  cwd: string = process.cwd(),
+  ctx: ConfigContext,
 ): Promise<PolicyLoadResult> {
-  // The user scope never consults project trust.
-  const loaded = await loadScope("user", { agentDir, cwd, trusted: false });
-  const path = getConfigPath("user", cwd, agentDir);
+  const loaded = parseScope(
+    "user",
+    await PRESETS_PLUS_CONFIG.read(ctx, "user"),
+  );
+  const { path } = loaded.file;
   const documentPolicy = loaded.document.policy;
 
   if (documentPolicy === undefined) {
@@ -313,8 +316,6 @@ function compileRegex(pattern: string): RegExp | undefined {
   }
 }
 
-function policyWarnings(
-  loaded: Awaited<ReturnType<typeof loadScope>>,
-): string[] {
+function policyWarnings(loaded: ReturnType<typeof parseScope>): string[] {
   return [...loaded.warnings.policy];
 }

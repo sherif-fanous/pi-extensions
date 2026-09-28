@@ -40,7 +40,13 @@ import {
 
 /** Inputs and I/O callbacks used by the configuration overlay. */
 export interface ConfigOverlayOptions {
-  readonly config: LoadedRuntimeConfig;
+  /** The effective values and their sources when the overlay opened. */
+  readonly config: Pick<
+    LoadedRuntimeConfig,
+    "runtimeConfig" | "runtimeConfigSources"
+  >;
+  /** Each scope's `config.json` path, which the save target list shows. */
+  readonly configPaths: Readonly<Record<ConfigScope, string>>;
   readonly done: () => void;
   /** Pi's keybindings; list movement, confirm, and cancel follow them. */
   readonly keybindings: Pick<KeybindingsManager, "getKeys" | "matches">;
@@ -483,11 +489,11 @@ export class ConfigOverlayComponent implements Component, Focusable {
         ];
 
       case "writeTarget": {
-        const { files } = this.options.config;
+        const { configPaths } = this.options;
 
         return [
-          { label: `Project (${files.project.path})`, value: "project" },
-          { label: `User (${files.user.path})`, value: "user" },
+          { label: `Project (${configPaths.project})`, value: "project" },
+          { label: `User (${configPaths.user})`, value: "user" },
         ];
       }
 

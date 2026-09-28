@@ -3,13 +3,13 @@
  * temporary file, syncing it, and renaming it over the destination, so no
  * reader sees a half-written file.
  */
-import { mkdir, open, rename, unlink } from "node:fs/promises";
+import type { mkdir, open, rename, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
 
 /**
- * The `node:fs/promises` calls this module makes. Tests inject a stub to
- * simulate rename failures, which vitest cannot spy on because Node's
- * native modules export frozen ESM bindings.
+ * The `node:fs/promises` calls this module makes. Core's tests inject a
+ * stub to simulate rename failures, which vitest cannot spy on because
+ * Node's native modules export frozen ESM bindings.
  */
 export interface AtomicWriteFs {
   mkdir: typeof mkdir;
@@ -17,9 +17,6 @@ export interface AtomicWriteFs {
   rename: typeof rename;
   unlink: typeof unlink;
 }
-
-/** Real filesystem calls, used unless a caller injects a stub. */
-const defaultFs: AtomicWriteFs = { mkdir, open, rename, unlink };
 
 /**
  * Atomically write `contents` to `target`.
@@ -31,7 +28,7 @@ const defaultFs: AtomicWriteFs = { mkdir, open, rename, unlink };
 export async function atomicWrite(
   target: string,
   contents: string,
-  fs: AtomicWriteFs = defaultFs,
+  fs: AtomicWriteFs,
 ): Promise<void> {
   const dir = dirname(target);
 
@@ -60,17 +57,6 @@ export async function atomicWrite(
 }
 
 /**
- * Build a temporary file path next to `target` so the later rename stays
- * on one filesystem and therefore stays atomic.
- *
- * The process id and the monotonic `process.hrtime.bigint()` reading keep
- * concurrent writers from picking the same path.
- */
-export function makeTmpPath(target: string): string {
-  return `${target}.tmp.${process.pid}.${process.hrtime.bigint().toString(36)}`;
-}
-
-/**
  * Atomically write `value` to `path` as JSON indented by two spaces and
  * ending in a newline.
  *
@@ -80,7 +66,18 @@ export function makeTmpPath(target: string): string {
 export async function writeJsonFile(
   path: string,
   value: unknown,
-  fs: AtomicWriteFs = defaultFs,
+  fs: AtomicWriteFs,
 ): Promise<void> {
   await atomicWrite(path, `${JSON.stringify(value, null, 2)}\n`, fs);
+}
+
+/**
+ * Build a temporary file path next to `target` so the later rename stays
+ * on one filesystem and therefore stays atomic.
+ *
+ * The process id and the monotonic `process.hrtime.bigint()` reading keep
+ * concurrent writers from picking the same path.
+ */
+function makeTmpPath(target: string): string {
+  return `${target}.tmp.${process.pid}.${process.hrtime.bigint().toString(36)}`;
 }

@@ -3,8 +3,6 @@
  * hotkey with every surface recorded, and checks everything Presets Plus
  * shows against the family's text and naming standard.
  */
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import presetsPlus from "../src/index.js";
@@ -20,19 +18,19 @@ import {
   createFakeCustom,
   createFakePi,
   createShownTextRecorder,
+  createTempConfigDirs,
   findShownTextViolations,
+  type TempConfigDirs,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+let dirs: TempConfigDirs;
 let agentDir: string;
-let previousAgentDir: string | undefined;
 
 beforeEach(async () => {
-  agentDir = await mkdtemp(join(tmpdir(), "pi-presets-shown-text-"));
-  previousAgentDir = process.env.PI_CODING_AGENT_DIR;
-  process.env.PI_CODING_AGENT_DIR = agentDir;
-  await mkdir(join(agentDir, "presets-plus"), { recursive: true });
-  await writeFile(
+  dirs = await createTempConfigDirs();
+  agentDir = dirs.agentDir;
+  await dirs.writeText(
     join(agentDir, "presets-plus", "config.json"),
     JSON.stringify({
       policy: { rules: [{ allow: [{ pattern: "." }], match: "." }] },
@@ -53,13 +51,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  if (previousAgentDir === undefined) {
-    delete process.env.PI_CODING_AGENT_DIR;
-  } else {
-    process.env.PI_CODING_AGENT_DIR = previousAgentDir;
-  }
-
-  await rm(agentDir, { force: true, recursive: true });
+  await dirs.cleanup();
 });
 
 describe("shown text", () => {

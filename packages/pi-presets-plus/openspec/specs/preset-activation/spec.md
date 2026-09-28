@@ -751,7 +751,7 @@ introduced in change 2:
   SHALL NOT persist ANSI styling. In RPC mode, it SHALL use the RPC-compatible
   notification path. JSON and print modes are out of scope. Row labels SHALL be
   aligned to the longest label in the report. After the rows and a blank line,
-  the report SHALL show the `Config:` block from core's `configStatusLines`: a
+  the report SHALL show the `Config:` block from core's config outcome: a
   `User:` and a `Project:` row with each file's state (`loaded`, `not found`,
   `invalid: <reason>`, or `skipped (untrusted)`) and its path on the next line.
   Warnings about values in the loaded files SHALL follow as a `Warnings:` line

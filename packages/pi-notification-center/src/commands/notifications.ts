@@ -6,11 +6,7 @@
  * reloads, and branch navigation are always reflected.
  */
 
-import {
-  loadConfig,
-  type ConfigOptions,
-  type LoadedConfig,
-} from "../config.js";
+import { loadConfig, type LoadedConfig } from "../config.js";
 import { EXTENSION_NAME } from "../extension-name.js";
 import { readNotificationHistory } from "../history.js";
 import type { NotificationEntry } from "../types.js";
@@ -36,7 +32,6 @@ import {
 
 /** What `/notifications` needs besides its arguments and context. */
 export interface NotificationsCommandDeps {
-  readonly configOptions: ConfigOptions;
   readonly pi: Pick<ExtensionAPI, "appendEntry">;
   /** The configuration the current session started with, once it has. */
   readonly sessionConfig: () => LoadedConfig | undefined;
@@ -77,8 +72,7 @@ export async function runNotificationsCommand(
       body: formatStatusReport({
         captured: readNotificationHistory(ctx.sessionManager.getBranch())
           .length,
-        loaded:
-          deps.sessionConfig() ?? (await loadConfig(ctx, deps.configOptions)),
+        loaded: deps.sessionConfig() ?? (await loadConfig(ctx)),
         toasts: deps.toastsActive(),
       }),
     });

@@ -2,18 +2,10 @@
  * Covers the storage API against a real filesystem: loading both scopes
  * together, saving one scope, and adding, updating, moving, removing, and
  * reordering presets, along with the refusals and warnings each returns.
- * Every test points `PI_CODING_AGENT_DIR` and `ctx.cwd` at a fresh tmp dir
- * so both scopes live under it.
+ * Every test points `PI_CODING_AGENT_DIR` and `ctx.cwd` at fresh temporary
+ * directories so both scopes live under them.
  */
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import {
@@ -30,6 +22,10 @@ import {
   makeStubModelRegistry,
   type RegistryStub,
 } from "../helpers/model-registry.js";
+import {
+  createTempConfigDirs,
+  type TempConfigDirs,
+} from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const fullRegistry: RegistryStub = {
@@ -39,10 +35,9 @@ const fullRegistry: RegistryStub = {
   },
 };
 
-let dir: string;
+let dirs: TempConfigDirs;
 let agentDir: string;
 let projectDir: string;
-let prevAgentDirEnv: string | undefined;
 
 function makeCtx(cwd: string, stub: RegistryStub, trusted = true) {
   return {
@@ -84,21 +79,13 @@ async function writeRawScope(
 }
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), "pi-presets-api-"));
-  agentDir = join(dir, "agent");
-  projectDir = join(dir, "project");
-  prevAgentDirEnv = process.env.PI_CODING_AGENT_DIR;
-  process.env.PI_CODING_AGENT_DIR = agentDir;
+  dirs = await createTempConfigDirs();
+  agentDir = dirs.agentDir;
+  projectDir = dirs.cwd;
 });
 
 afterEach(async () => {
-  if (prevAgentDirEnv === undefined) {
-    delete process.env.PI_CODING_AGENT_DIR;
-  } else {
-    process.env.PI_CODING_AGENT_DIR = prevAgentDirEnv;
-  }
-
-  await rm(dir, { recursive: true, force: true });
+  await dirs.cleanup();
 });
 
 describe("loadAll", () => {
@@ -107,7 +94,7 @@ describe("loadAll", () => {
     const result = await loadAll(ctx);
 
     expect(result.presets).toEqual([]);
-    expect(result.warnings).toEqual([]);
+    expect(result.config.warnings).toEqual([]);
     expect(result.hotkeyAnalysis.conflicts).toEqual([]);
     expect(result.hotkeyAnalysis.invalid).toEqual([]);
   });
@@ -137,7 +124,7 @@ describe("loadAll", () => {
       result.presets.map((loaded) => `${loaded.scope}:${loaded.name}`),
     ).toEqual(["project:plan"]);
 
-    expect(result.warnings).toEqual([
+    expect(result.config.warnings).toEqual([
       expect.stringMatching(
         /^Configuration at .+ is not valid JSON: .+[^.]\. Ignored the file\.$/u,
       ),
@@ -161,7 +148,7 @@ describe("loadAll", () => {
     const result = await loadAll(ctx);
 
     expect(result.showInactiveStatus).toBe(false);
-    expect(result.warnings).toEqual([
+    expect(result.config.warnings).toEqual([
       'Project setting "showInactiveStatus" must be a boolean, not "yes". Ignored it.',
     ]);
   });
@@ -181,7 +168,7 @@ describe("loadAll", () => {
     const result = await loadAll(ctx);
 
     expect(result.presets.map((loaded) => loaded.name)).toEqual(["plan"]);
-    expect(result.warnings).toEqual([
+    expect(result.config.warnings).toEqual([
       expect.stringContaining("only in the user configuration"),
     ]);
   });

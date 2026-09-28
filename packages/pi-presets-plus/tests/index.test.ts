@@ -2,15 +2,11 @@
  * Covers session-start configuration loading, warning delivery, and picking
  * up an externally edited configuration on extension reload.
  */
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import {
-  getConfigPath,
-  getProjectPresetsPath,
-  getUserPresetsPath,
-} from "../src/store/paths.js";
+import type { LoadAllResult } from "../src/store/api.js";
+import { PRESETS_PLUS_CONFIG } from "../src/store/config.js";
 import type { ThinkingLevel } from "../src/types.js";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type {
@@ -20,7 +16,9 @@ import type {
 import {
   createFakeContext,
   createFakePi,
+  createTempConfigDirs,
   type FakePi,
+  type TempConfigDirs,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -47,8 +45,30 @@ const { maybeApplyPolicyDefault: realMaybeApplyPolicyDefault } =
     "../src/activation/policy-default.js",
   );
 
+let dirs: TempConfigDirs;
 let agentDir: string;
-let previousAgentDir: string | undefined;
+
+function configPath(scope: "project" | "user", cwd: string): string {
+  return scope === "user"
+    ? join(agentDir, "presets-plus", "config.json")
+    : join(cwd, ".pi", "presets-plus", "config.json");
+}
+
+/**
+ * A `loadAll` stand-in that reads the real files for its configuration
+ * outcome and returns `presets` and `hotkeyAnalysis` as given.
+ */
+function fakeLoadAll(
+  overrides: Partial<Omit<LoadAllResult, "config">> = {},
+): (ctx: ExtensionContext) => Promise<LoadAllResult> {
+  return async (ctx) => ({
+    config: await PRESETS_PLUS_CONFIG.load(ctx),
+    hotkeyAnalysis: { conflicts: [], invalid: [], parsed: new Map() },
+    presets: [],
+    showInactiveStatus: true,
+    ...overrides,
+  });
+}
 
 function makeContext(
   status: Record<string, string | undefined>,
@@ -89,6 +109,10 @@ function makePi() {
   return { fake, spies };
 }
 
+function projectPresetsPath(cwd: string): string {
+  return join(cwd, ".pi", "presets-plus", "presets.json");
+}
+
 async function startSession(
   fake: FakePi,
   ctx: ExtensionContext,
@@ -106,7 +130,11 @@ async function writeConfig(contents: string): Promise<void> {
 
 async function writeLegacyPresets(contents: string): Promise<void> {
   await mkdir(join(agentDir, "presets-plus"), { recursive: true });
-  await writeFile(getUserPresetsPath(agentDir), contents, "utf-8");
+  await writeFile(
+    join(agentDir, "presets-plus", "presets.json"),
+    contents,
+    "utf-8",
+  );
 }
 
 async function writeProjectLegacyPresets(
@@ -114,32 +142,20 @@ async function writeProjectLegacyPresets(
   cwd: string,
 ): Promise<void> {
   await mkdir(join(cwd, ".pi", "presets-plus"), { recursive: true });
-  await writeFile(getProjectPresetsPath(cwd), contents, "utf-8");
+  await writeFile(projectPresetsPath(cwd), contents, "utf-8");
 }
 
 beforeEach(async () => {
-  agentDir = await mkdtemp(join(tmpdir(), "pi-presets-index-"));
-  previousAgentDir = process.env.PI_CODING_AGENT_DIR;
-  process.env.PI_CODING_AGENT_DIR = agentDir;
+  dirs = await createTempConfigDirs();
+  agentDir = dirs.agentDir;
   loadAllMock.mockReset();
   maybeApplyPolicyDefaultMock.mockReset();
   maybeApplyPolicyDefaultMock.mockImplementation(realMaybeApplyPolicyDefault);
-  loadAllMock.mockResolvedValue({
-    hotkeyAnalysis: { conflicts: [], invalid: [], parsed: new Map() },
-    presets: [],
-    showInactiveStatus: true,
-    warnings: [],
-  });
+  loadAllMock.mockImplementation(fakeLoadAll());
 });
 
 afterEach(async () => {
-  if (previousAgentDir === undefined) {
-    delete process.env.PI_CODING_AGENT_DIR;
-  } else {
-    process.env.PI_CODING_AGENT_DIR = previousAgentDir;
-  }
-
-  await rm(agentDir, { force: true, recursive: true });
+  await dirs.cleanup();
 });
 
 describe("/presets command", () => {
@@ -255,12 +271,7 @@ describe("session_start configuration", () => {
         });
         spies.getThinkingLevel.mockReturnValue("high");
 
-        return {
-          hotkeyAnalysis: { conflicts: [], invalid: [], parsed: new Map() },
-          presets: [],
-          showInactiveStatus: true,
-          warnings: [],
-        };
+        return fakeLoadAll()(handlerCtx);
       });
       maybeApplyPolicyDefaultMock.mockResolvedValue(false);
 
@@ -290,12 +301,7 @@ describe("session_start configuration", () => {
       scope: "user",
     };
 
-    loadAllMock.mockResolvedValue({
-      hotkeyAnalysis: { conflicts: [], invalid: [], parsed: new Map() },
-      presets: [restored],
-      showInactiveStatus: true,
-      warnings: [],
-    });
+    loadAllMock.mockImplementation(fakeLoadAll({ presets: [restored] }));
 
     const branch = [
       {
@@ -352,21 +358,21 @@ describe("session_start configuration", () => {
       }),
     );
 
-    loadAllMock.mockResolvedValue({
-      hotkeyAnalysis: {
-        conflicts: [],
-        invalid: [],
-        parsed: new Map([
-          [
-            conflicting,
-            { key: "2", modifiers: ["ctrl"], normalized: "ctrl+2" },
-          ],
-        ]),
-      },
-      presets: [conflicting],
-      showInactiveStatus: true,
-      warnings: [],
-    });
+    loadAllMock.mockImplementation(
+      fakeLoadAll({
+        hotkeyAnalysis: {
+          conflicts: [],
+          invalid: [],
+          parsed: new Map([
+            [
+              conflicting,
+              { key: "2", modifiers: ["ctrl"], normalized: "ctrl+2" },
+            ],
+          ]),
+        },
+        presets: [conflicting],
+      }),
+    );
 
     const { fake, spies } = makePi();
     const status: Record<string, string | undefined> = {};
@@ -424,7 +430,7 @@ describe("session_start configuration", () => {
     await startSession(fake, ctx);
 
     expect(notify).toHaveBeenCalledWith(
-      `Presets Plus migrated its configuration to ${getConfigPath("user", cwd, agentDir)} and ${getConfigPath("project", cwd, agentDir)}.`,
+      `Presets Plus migrated its configuration to ${configPath("user", cwd)} and ${configPath("project", cwd)}.`,
       "info",
     );
   });
@@ -433,7 +439,7 @@ describe("session_start configuration", () => {
     loadAllMock.mockImplementation(realLoadAll);
 
     const cwd = join(agentDir, "project");
-    const path = getConfigPath("project", cwd, agentDir);
+    const path = configPath("project", cwd);
 
     await mkdir(join(cwd, ".pi", "presets-plus"), { recursive: true });
     await writeFile(
@@ -463,18 +469,6 @@ describe("session_start configuration", () => {
     expect(fake.shortcuts.size).toBe(0);
   });
 
-  it("stays silent in an untrusted project without a project configuration", async () => {
-    loadAllMock.mockImplementation(realLoadAll);
-
-    const { fake } = makePi();
-    const { ctx, notify } = makeContext({}, "tui", [], false);
-
-    presetsPlus(fake.pi);
-    await startSession(fake, ctx);
-
-    expect(notify).not.toHaveBeenCalled();
-  });
-
   it("leaves a legacy project file in an untrusted project and warns about it", async () => {
     loadAllMock.mockImplementation(realLoadAll);
 
@@ -491,13 +485,13 @@ describe("session_start configuration", () => {
 
     expect(notify.mock.calls).toEqual([
       [
-        `Presets Plus: 1 warning\n- Skipped project configuration at ${getProjectPresetsPath(cwd)} because the project is not trusted. Trust the project to use it.`,
+        `Presets Plus: 1 warning\n- Skipped project configuration at ${projectPresetsPath(cwd)} because the project is not trusted. Trust the project to use it.`,
         "warning",
       ],
     ]);
-    expect(await readFile(getProjectPresetsPath(cwd), "utf-8")).toBe(legacy);
+    expect(await readFile(projectPresetsPath(cwd), "utf-8")).toBe(legacy);
     await expect(
-      readFile(getConfigPath("project", cwd, agentDir), "utf-8"),
+      readFile(configPath("project", cwd), "utf-8"),
     ).rejects.toMatchObject({ code: "ENOENT" });
   });
 

@@ -1,4 +1,4 @@
-import { mkdir, open, readFile, unlink } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import {
@@ -9,10 +9,6 @@ import {
   loadStartupConfig,
   type ConfigPath,
 } from "../src/config.js";
-import {
-  configFileWarnings,
-  type AtomicWriteFs,
-} from "@sherif-fanous/pi-extensions-core";
 import {
   createProjectTrustContext,
   createTempConfigDirs,
@@ -63,8 +59,8 @@ describe("loadConfig", () => {
     const result = await load();
 
     expect(result.config).toEqual(DEFAULT_CONFIG);
-    expect(result.warnings).toEqual([]);
-    expect(result.file).toEqual({
+    expect(result.outcome.valueWarnings).toEqual([]);
+    expect(result.outcome.files.user).toEqual({
       path: userPath,
       scope: "user",
       state: "missing",
@@ -82,35 +78,8 @@ describe("loadConfig", () => {
     expect(result.config).toEqual({
       toast: { maxLines: 2, maxVisible: 2, timeoutMs: 250, width: 80 },
     });
-    expect(result.warnings).toEqual([]);
-    expect(result.file.state).toBe("loaded");
-  });
-
-  it("reads a file without a version as the current version, silently", async () => {
-    await dirs.writeJson(userPath, { toast: { maxVisible: 3 } });
-
-    const result = await load();
-
-    expect(result.config.toast.maxVisible).toBe(3);
-    expect(result.warnings).toEqual([]);
-    expect(configFileWarnings([result.file])).toEqual([]);
-  });
-
-  it("ignores a file with an unsupported version and warns once", async () => {
-    await dirs.writeJson(userPath, { toast: { maxVisible: 3 }, version: 3 });
-
-    const result = await load();
-
-    expect(result.config).toEqual(DEFAULT_CONFIG);
-    expect(result.warnings).toEqual([]);
-    expect(result.file).toMatchObject({
-      reason: "unsupported version 3",
-      state: "invalid",
-    });
-
-    expect(configFileWarnings([result.file])).toEqual([
-      `Configuration at ${userPath} has version 3, but only version 2 is supported. Ignored the file.`,
-    ]);
+    expect(result.outcome.valueWarnings).toEqual([]);
+    expect(result.outcome.files.user.state).toBe("loaded");
   });
 
   it("reads and validates every documented setting", async () => {
@@ -123,9 +92,9 @@ describe("loadConfig", () => {
 
       const result = await load();
 
-      expect(result.warnings).toHaveLength(1);
-      expect(result.warnings[0]).toContain(`"${path}"`);
-      expect(result.warnings[0]).toContain(
+      expect(result.outcome.valueWarnings).toHaveLength(1);
+      expect(result.outcome.valueWarnings[0]).toContain(`"${path}"`);
+      expect(result.outcome.valueWarnings[0]).toContain(
         `default value ${String(DEFAULT_CONFIG.toast[key])}`,
       );
     }
@@ -142,7 +111,7 @@ describe("loadConfig", () => {
     expect(result.config).toEqual({
       toast: { ...DEFAULT_CONFIG.toast, width: 30 },
     });
-    expect(result.warnings).toEqual([]);
+    expect(result.outcome.valueWarnings).toEqual([]);
   });
 
   it("keeps valid settings and defaults each invalid one", async () => {
@@ -156,7 +125,7 @@ describe("loadConfig", () => {
       toast: { ...DEFAULT_CONFIG.toast, timeoutMs: 5000 },
     });
 
-    expect(result.warnings).toEqual([
+    expect(result.outcome.valueWarnings).toEqual([
       'Setting "toast.maxVisible" must be an integer from 1 through 10, not 99. Using the default value 5.',
       'Setting "toast.width" must be an integer from 20 through 80, not "wide". Using the default value 64.',
     ]);
@@ -172,7 +141,7 @@ describe("loadConfig", () => {
     const result = await load();
 
     expect(result.config).toEqual(DEFAULT_CONFIG);
-    expect(result.warnings).toHaveLength(3);
+    expect(result.outcome.valueWarnings).toHaveLength(3);
   });
 
   it("reports a non-object toast section once and keeps toast defaults", async () => {
@@ -181,53 +150,19 @@ describe("loadConfig", () => {
     const result = await load();
 
     expect(result.config).toEqual(DEFAULT_CONFIG);
-    expect(result.warnings).toEqual([
+    expect(result.outcome.valueWarnings).toEqual([
       'Setting "toast" must be a JSON object, not "wide". Using default toast settings.',
     ]);
   });
 
-  it("keeps a malformed file's problem on the file and uses all defaults", async () => {
-    await dirs.writeText(userPath, "{ not json");
+  it("uses all defaults for an invalid file and leaves its problem to the file", async () => {
+    await dirs.writeJson(userPath, { toast: { maxVisible: 3 }, version: 3 });
 
     const result = await load();
 
     expect(result.config).toEqual(DEFAULT_CONFIG);
-    expect(result.warnings).toEqual([]);
-    expect(result.file.state).toBe("invalid");
-    expect(configFileWarnings([result.file])).toEqual([
-      expect.stringMatching(
-        /^Configuration at .+config\.json is not valid JSON: .+[^.]\. Ignored the file\.$/u,
-      ),
-    ]);
-  });
-
-  it("keeps a non-object document's problem on the file", async () => {
-    await dirs.writeJson(userPath, [1, 2, 3]);
-
-    const result = await load();
-
-    expect(result.config).toEqual(DEFAULT_CONFIG);
-    expect(configFileWarnings([result.file])).toEqual([
-      `Configuration at ${userPath} must be a JSON object. Ignored the file.`,
-    ]);
-  });
-
-  it("reports an unreadable file rather than treating it as absent", async () => {
-    const result = await loadConfig(createProjectTrustContext(dirs.cwd, true), {
-      agentDir: dirs.agentDir,
-      fs: {
-        access: () => Promise.resolve(),
-        readFile: () =>
-          Promise.reject(
-            Object.assign(new Error("denied"), { code: "EACCES" }),
-          ),
-      },
-    });
-
-    expect(result.config).toEqual(DEFAULT_CONFIG);
-    expect(configFileWarnings([result.file])).toEqual([
-      `Could not read configuration at ${userPath}: denied. Ignored the file.`,
-    ]);
+    expect(result.outcome.valueWarnings).toEqual([]);
+    expect(result.outcome.files.user.state).toBe("invalid");
   });
 
   it("reads the old key names while the new names are absent", async () => {
@@ -246,24 +181,10 @@ describe("loadConfig", () => {
         timeoutMs: 1000,
       },
     });
-    expect(result.warnings).toEqual([]);
-    expect(result.file).toMatchObject({
+    expect(result.outcome.valueWarnings).toEqual([]);
+    expect(result.outcome.files.user).toMatchObject({
       renamedKeys: ["maxToastsVisible", "toast.timeout"],
       state: "loaded",
-    });
-  });
-
-  it("prefers a new key name over its old one", async () => {
-    await dirs.writeJson(userPath, {
-      maxToastsVisible: 2,
-      toast: { maxVisible: 4, timeout: 1000, timeoutMs: 2000 },
-    });
-
-    const result = await load();
-
-    expect(result.config.toast).toMatchObject({
-      maxVisible: 4,
-      timeoutMs: 2000,
     });
   });
 
@@ -275,13 +196,10 @@ describe("loadConfig", () => {
       { toast: { maxVisible: 2 } },
     );
 
-    const result = await loadConfig(
-      { cwd: dirs.cwd, isProjectTrusted },
-      { agentDir: dirs.agentDir },
-    );
+    const result = await loadConfig({ cwd: dirs.cwd, isProjectTrusted });
 
     expect(result.config).toEqual(DEFAULT_CONFIG);
-    expect(result.file.path).toBe(userPath);
+    expect(Object.keys(result.outcome.files)).toEqual(["user"]);
     expect(isProjectTrusted).not.toHaveBeenCalled();
   });
 });
@@ -296,8 +214,8 @@ describe("loadStartupConfig", () => {
 
     const result = await startup();
 
-    expect(result.migrated).toEqual([userPath]);
-    expect(result.migrationWarnings).toEqual([]);
+    expect(result.outcome.migrated).toEqual([userPath]);
+    expect(result.outcome.migrationWarnings).toEqual([]);
     expect(result.config.toast).toMatchObject({
       maxVisible: 2,
       timeoutMs: 1000,
@@ -316,56 +234,6 @@ describe("loadStartupConfig", () => {
       )}\n`,
     );
   });
-
-  it("leaves a file that already uses the new names alone", async () => {
-    await dirs.writeJson(userPath, { toast: { maxVisible: 2 } });
-
-    const before = await readFile(userPath, "utf8");
-    const result = await startup();
-
-    expect(result.migrated).toEqual([]);
-    expect(await readFile(userPath, "utf8")).toBe(before);
-  });
-
-  it("creates no file when there is none", async () => {
-    const result = await startup();
-
-    expect(result.migrated).toEqual([]);
-    expect(await dirs.exists(userPath)).toBe(false);
-  });
-
-  it("never rewrites a file with an unsupported version", async () => {
-    await dirs.writeJson(userPath, { maxToastsVisible: 2, version: 3 });
-
-    const before = await readFile(userPath, "utf8");
-    const result = await startup();
-
-    expect(result.migrated).toEqual([]);
-    expect(await readFile(userPath, "utf8")).toBe(before);
-  });
-
-  it("warns and keeps the old values for the session when the rewrite fails", async () => {
-    await dirs.writeJson(userPath, { maxToastsVisible: 2 });
-
-    const before = await readFile(userPath, "utf8");
-    const failingFs: AtomicWriteFs = {
-      mkdir,
-      open,
-      rename: () => Promise.reject(new Error("disk full")),
-      unlink,
-    };
-    const result = await loadStartupConfig(
-      createProjectTrustContext(dirs.cwd, true),
-      { agentDir: dirs.agentDir, atomicWriteFs: failingFs },
-    );
-
-    expect(result.migrated).toEqual([]);
-    expect(result.migrationWarnings).toEqual([
-      `Could not migrate configuration at ${userPath}: disk full. Left the file unchanged.`,
-    ]);
-    expect(result.config.toast.maxVisible).toBe(2);
-    expect(await readFile(userPath, "utf8")).toBe(before);
-  });
 });
 
 function limitEntries(): [ConfigPath, { max: number; min: number }][] {
@@ -376,9 +244,7 @@ function limitEntries(): [ConfigPath, { max: number; min: number }][] {
 }
 
 function load(): ReturnType<typeof loadConfig> {
-  return loadConfig(createProjectTrustContext(dirs.cwd, true), {
-    agentDir: dirs.agentDir,
-  });
+  return loadConfig(createProjectTrustContext(dirs.cwd, true));
 }
 
 function settingKey(path: ConfigPath): keyof typeof DEFAULT_CONFIG.toast {
@@ -386,7 +252,5 @@ function settingKey(path: ConfigPath): keyof typeof DEFAULT_CONFIG.toast {
 }
 
 function startup(): ReturnType<typeof loadStartupConfig> {
-  return loadStartupConfig(createProjectTrustContext(dirs.cwd, true), {
-    agentDir: dirs.agentDir,
-  });
+  return loadStartupConfig(createProjectTrustContext(dirs.cwd, true));
 }

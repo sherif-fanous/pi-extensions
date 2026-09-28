@@ -109,109 +109,6 @@ try {
 }
 ```
 
-### `parseJsonObject(text: string): ParseJsonObjectResult`
-
-Parses JSON text whose top level must be an object, without throwing. Returns
-`{ ok: true, value }` for an object,
-`{ ok: false, reason: "invalid-json", error }` with the error `JSON.parse`
-threw, or `{ ok: false, reason: "not-object" }` for `null`, an array, or a
-primitive, so callers can word a warning for each.
-
-```ts
-import {
-  malformedConfigWarning,
-  parseJsonObject,
-} from "@sherif-fanous/pi-extensions-core";
-
-const parsed = parseJsonObject(text);
-if (!parsed.ok) return { warnings: [malformedConfigWarning(path, parsed)] };
-```
-
-### `unreadableConfigWarning(path: string, error: unknown): string`
-
-### `malformedConfigWarning(path: string, failure): string`
-
-Return the standard warnings for a configuration file an extension ignores.
-`unreadableConfigWarning` covers a file that exists but could not be read (treat
-a missing file as absent, not as a warning):
-
-```text
-Could not read configuration at <path>: <message>. Ignored the file.
-```
-
-`malformedConfigWarning` takes a failed `parseJsonObject` result:
-
-```text
-Configuration at <path> is not valid JSON: <message>. Ignored the file.
-Configuration at <path> must be a JSON object. Ignored the file.
-```
-
-`<message>` is the `describeError` text followed by a full stop, unless it
-already ends in `.`, `!`, or `?`, so the warning never shows `..`.
-
-```ts
-import {
-  isNotFoundError,
-  unreadableConfigWarning,
-} from "@sherif-fanous/pi-extensions-core";
-
-try {
-  text = await readFile(path, "utf8");
-} catch (error) {
-  if (isNotFoundError(error)) return { warnings: [] };
-  return { warnings: [unreadableConfigWarning(path, error)] };
-}
-```
-
-### `atomicWrite(target: string, contents: string, fs?: AtomicWriteFs): Promise<void>`
-
-Writes `contents` to a temporary file beside `target`, syncs it, and renames it
-over `target`, creating missing parent directories first. Readers see either the
-previous file or the new one, never a partial write. On failure the call
-rejects, `target` keeps its previous contents, and the temporary file is
-removed. Tests can pass an `AtomicWriteFs` stub to simulate failures.
-
-### `writeJsonFile(path: string, value: unknown, fs?: AtomicWriteFs): Promise<void>`
-
-Writes `value` atomically as JSON indented by two spaces and ending in a
-newline.
-
-```ts
-import { writeJsonFile } from "@sherif-fanous/pi-extensions-core";
-
-await writeJsonFile(configPath, { version: 2, presets });
-```
-
-### `extensionConfigPath({ extension, file, agentDir? }): string`
-
-Returns `<agentDir>/<extension>/<file>`. `agentDir` defaults to Pi's
-`getAgentDir()`, which honors the agent directory override.
-
-### `projectConfigPath({ cwd, extension, file }): string`
-
-Returns `<cwd>/.pi/<extension>/<file>`, using Pi's `CONFIG_DIR_NAME` for the
-`.pi` segment.
-
-```ts
-import {
-  extensionConfigPath,
-  projectConfigPath,
-} from "@sherif-fanous/pi-extensions-core";
-
-const userPath = extensionConfigPath({
-  extension: "theme-sync",
-  file: "settings.json",
-});
-const projectPath = projectConfigPath({
-  cwd: ctx.cwd,
-  extension: "theme-sync",
-  file: "settings.json",
-});
-```
-
-Use these for files other than the configuration itself, such as an old layout a
-migration reads. `configFilePath` locates `config.json`.
-
 ### `createCommandReport(entryType: string): CommandReportChannel`
 
 Returns the functions that show a command's plain-text report of type
@@ -399,157 +296,137 @@ if (!requireInteractiveTui(ctx, "Session Slice", "/slice")) return;
 The helpers behind every extension's `config.json`. The rules they implement are
 in the repository's `docs/config.md`.
 
-### `type ConfigScope = "project" | "user"`
+### `defineConfigFile(description): ConfigFileHandle`
 
-### `configScopeLabel(scope: ConfigScope): "Project" | "User"`
-
-The two places a configuration file lives, and the label users see for each, as
-Pi writes them.
-
-### `configFilePath(scope: ConfigScope, { cwd, extension, agentDir? }): string`
-
-Returns `<agentDir>/<extension>/config.json` for `"user"` and
-`<cwd>/.pi/<extension>/config.json` for `"project"`. `agentDir` defaults to Pi's
-`getAgentDir()`.
-
-### `loadConfigFiles(ctx, options): Promise<Record<S, ConfigFile>>`
-
-Reads the extension's `config.json` in each scope of `options.scopes` and
-returns one `ConfigFile` per scope. `ctx` needs `cwd` and `isProjectTrusted()`
-which is consulted only when the project scope is read. The options are:
+Describes an extension's `config.json` once and returns the handle every other
+operation goes through. The description is:
 
 - `extension`: the slug, which names the configuration directory.
+- `extensionName`: the display name startup messages name, such as `Theme Sync`.
 - `scopes`: the scopes the extension has, such as `["user", "project"]` or
   `["user"]`.
 - `version`: the `version` this release reads and writes.
-- `renamedKeys?`: `ConfigKeyRename[]`, keys read under an old name while the new
-  name is absent.
-- `agentDir?` and `fs?` (`ConfigFileFs`: `access` and `readFile`), for tests.
+- `renamedKeys?`: `{ from, to }` pairs of dot-separated paths, such as
+  `{ from: "toast.timeout", to: "toast.timeoutMs" }`, read under the old name
+  while the new one is absent.
+- `legacyFileNames?`: names of files an older release read beside `config.json`,
+  such as `presets.json`. In an untrusted project without `config.json`, the
+  first of these that exists is reported as the skipped project file.
 
-Each `ConfigFile` has `scope`, `path`, and a `state`:
+Every handle operation takes the handler context (`cwd` and
+`isProjectTrusted()`), which it asks about trust only for a project file. The
+User file lives in Pi's agent directory, `getAgentDir()`, which honors
+`PI_CODING_AGENT_DIR`; tests move it with `createTempConfigDirs` from
+`pi-extensions-testing`.
+
+```ts
+import { defineConfigFile } from "@sherif-fanous/pi-extensions-core";
+
+export const THEME_SYNC_CONFIG = defineConfigFile({
+  extension: "theme-sync",
+  extensionName: "Theme Sync",
+  renamedKeys: [{ from: "isSyncActive", to: "syncEnabled" }],
+  scopes: ["user", "project"],
+  version: 2,
+});
+```
+
+### `handle.path(ctx, scope): string`
+
+Returns `<agentDir>/<extension>/config.json` for `"user"` and
+`<cwd>/.pi/<extension>/config.json` for `"project"`. An old layout a migration
+reads sits beside it.
+
+### `handle.read(ctx, scope): Promise<ConfigFile>`
+
+### `handle.load(ctx): Promise<ConfigOutcome>`
+
+`read` reads one scope's file; `load` reads every scope's and returns them in a
+`ConfigOutcome`. Neither throws for a file problem. Each `ConfigFile` has
+`scope`, `path`, and a `state`:
 
 - `"loaded"`: the file is a JSON object whose `version` is absent (meaning the
   current one) or equal to `version`. `data` holds it with renamed keys moved to
-  their new names, and `renamedKeys` lists the old names found, so a non-empty
-  list means the file still needs migrating.
+  their new names, and `renamedKeys` lists the old names found.
 - `"missing"`: no file. Use the defaults and say nothing.
 - `"invalid"`: unreadable, not valid JSON, not an object, or another `version`.
   `reason` is a short phrase for the status block (`not valid JSON: …`,
   `not a JSON object`, `unreadable: …`, `unsupported version 3`); `warning` is
-  the sentence to show once.
+  the sentence to show once:
+
+  ```text
+  Could not read configuration at <path>: <message>. Ignored the file.
+  Configuration at <path> is not valid JSON: <message>. Ignored the file.
+  Configuration at <path> must be a JSON object. Ignored the file.
+  Configuration at <path> has version 3, but only version 2 is supported. Ignored the file.
+  ```
+
 - `"untrusted"`: a project file exists, but Pi does not trust the project, so it
   was not read. `warning` reads
   `Skipped project configuration at <path> because the project is not trusted. Trust the project to use it.`
   An untrusted project without the file is `"missing"`, so it stays silent.
 
-It never throws for a file problem.
+### `handle.update(ctx, scope, update): Promise<void>`
 
-```ts
-import {
-  configFileWarnings,
-  loadConfigFiles,
-  notifyWarnings,
-} from "@sherif-fanous/pi-extensions-core";
-
-const files = await loadConfigFiles(ctx, {
-  extension: "theme-sync",
-  renamedKeys: [{ from: "isSyncActive", to: "syncEnabled" }],
-  scopes: ["user", "project"],
-  version: 2,
-});
-const project = files.project.state === "loaded" ? files.project.data : {};
-
-notifyWarnings(ctx, "Theme Sync", configFileWarnings(Object.values(files)));
-```
-
-### `readConfigFile(options: ReadConfigFileOptions): Promise<ConfigFile>`
-
-Reads one file: `{ scope, path, trusted, version, renamedKeys?, fs? }`, where
-`trusted` is `ctx.isProjectTrusted()` and only a project file consults it. Use
-it when an extension reads one scope at a time.
-
-### `configFileWarnings(files: readonly ConfigFile[]): string[]`
-
-Returns the `warning` of every `invalid` and `untrusted` file, in order.
-
-### `updateConfigFile(options, update): Promise<void>`
-
-Reads the file again with the `readConfigFile` options, passes its data (with
-renamed keys moved, or `{}` when missing) to `update`, and writes the result
-with the current `version` first. Throws, leaving the file untouched, when the
-scope is a project Pi does not trust
+Reads the file again, passes its data (with renamed keys moved, or `{}` when
+missing) to `update`, and writes the result atomically with the current
+`version` first. Throws, leaving the file untouched, when the scope is a project
+Pi does not trust
 (`The project is not trusted, so <path> was not saved. Trust the project and try again.`),
 when the file is invalid
 (`<path> is invalid (<reason>). Fix the file and try again.`), so a malformed
 file or one from a newer release is never overwritten, or when the write fails.
-Pass `atomicWriteFs` to simulate write failures.
 
 ```ts
-import {
-  describeErrorSentence,
-  updateConfigFile,
-} from "@sherif-fanous/pi-extensions-core";
+import { describeErrorSentence } from "@sherif-fanous/pi-extensions-core";
 
 try {
-  await updateConfigFile(
-    { path, scope, trusted: ctx.isProjectTrusted(), version: 2 },
-    (data) => ({ ...data, syncEnabled: false }),
-  );
+  await THEME_SYNC_CONFIG.update(ctx, scope, (data) => ({
+    ...data,
+    syncEnabled: false,
+  }));
 } catch (error) {
   this.message = `Could not save the configuration: ${describeErrorSentence(error)}`;
 }
 ```
 
-### `writeConfigFile(path: string, document: Record<string, unknown>, version: number, fs?: AtomicWriteFs): Promise<void>`
+### `handle.write(ctx, scope, document): Promise<void>`
 
-Writes `document` atomically with `version` as its first key, replacing any
-`version` it holds. Use it for migrations; saves go through `updateConfigFile`.
+Writes `document` atomically as the scope's file, with renamed keys moved and
+the current `version` first, whatever the file holds now. Use it to migrate an
+old layout; saves go through `update`. Throws, leaving the file untouched, when
+the scope is a project Pi does not trust or the write fails.
 
-### `renameConfigKeys(document, renames: readonly ConfigKeyRename[]): RenamedConfigKeys`
+### `handle.migrateKeys(ctx): Promise<ConfigMigration>`
 
-Returns `{ document, renamed }`: a copy with each `{ from, to }` rename applied,
-where both are dot-separated paths such as `toast.timeout`, and the `from` paths
-applied. When only the old key is present, its value moves to the new path,
-creating objects on the way. When both are present, the new key wins and the old
-one is dropped. A rename is skipped when the old key is absent or a value on the
-way to the new path is not an object. `loadConfigFiles` applies it for you.
-
-### `migrateRenamedConfigKeys(files: readonly ConfigFile[], version: number, fs?: AtomicWriteFs): Promise<ConfigKeyMigration>`
-
-Rewrites every loaded file whose `renamedKeys` is not empty with its data, which
-already has the new names, stamped with `version`. Returns
-`{ migrated, warnings }`: the paths rewritten, and one warning per failed write,
+Rewrites every file that still uses an old key name under the new names with the
+current `version`, skipping a project Pi does not trust. Returns a
+`ConfigMigration`, `{ migrated, warnings }`: the paths rewritten, and one
+warning per failed write,
 `Could not migrate configuration at <path>: <message>. Left the file unchanged.`
+The old names are still read, so the session keeps the values either way.
 
-### `configMigratedMessage(extensionName: string, paths: readonly [string, ...string[]]): string`
+### `type ConfigOutcome`
 
-Returns the one info message for everything a session start migrated:
-`<extensionName> migrated its configuration to <path>.`, with two paths joined
-by `and` and more as `a, b, and c`.
+What `load` found, immutable:
 
-```ts
-import {
-  configMigratedMessage,
-  migrateRenamedConfigKeys,
-} from "@sherif-fanous/pi-extensions-core";
-
-const { migrated, warnings } = await migrateRenamedConfigKeys(
-  Object.values(files),
-  2,
-);
-const [first, ...rest] = [...movedLayouts, ...migrated];
-
-if (first)
-  ctx.ui.notify(configMigratedMessage("Theme Sync", [first, ...rest]), "info");
-```
-
-### `configStatusLines(files: readonly ConfigFile[]): string[]`
-
-Returns the `Config:` block of a status report: User before Project, each
-scope's state on its label row and its path on the next line, aligned under the
-state. States read `loaded`, `not found`, `invalid: <reason>`, and
-`skipped (untrusted)`. Put it after the report's main rows and a blank line, and
-before `Warnings:`.
+- `files`: each scope's `ConfigFile`.
+- `withMigrations(...migrations)` and `withValueWarnings(warnings)`: a copy with
+  the extension's migrations or invalid-value warnings added after the ones
+  already there. `migrated`, `migrationWarnings`, and `valueWarnings` list them.
+- `notify(ctx, extras?)`: shows what a session start found. When anything
+  migrated, one info message names every file,
+  `<extensionName> migrated its configuration to <path>.`, with two paths joined
+  by `and` and more as `a, b, and c`. Then one warning notification, through
+  `notifyWarnings`, lists migration warnings, file warnings (User before
+  Project), value warnings, and `extras`. Shows nothing when both are empty.
+- `warnings`: the warnings `notify` shows, without `extras`, for a report
+  without a `Config:` block.
+- `statusLines`: the `Config:` block of a status report, User before Project,
+  each scope's state on its label row and its path on the next line, aligned
+  under the state. Put it after the report's main rows and a blank line.
+- `statusWarnings`: migration warnings, then value warnings, for the report's
+  `Warnings:` block; file problems show in `statusLines` instead.
 
 ```text
 Config:
@@ -559,16 +436,19 @@ Config:
            /repo/.pi/theme-sync/config.json
 ```
 
-### `untrustedProjectConfigWarning(path: string): string`
+```ts
+const layout = await migrateConfigLayout(ctx);
+const keys = await THEME_SYNC_CONFIG.migrateKeys(ctx);
+const outcome = (await THEME_SYNC_CONFIG.load(ctx))
+  .withValueWarnings(invalidValueWarnings)
+  .withMigrations(layout, keys);
 
-### `unsupportedConfigVersionWarning(path: string, found: unknown, supported: number): string`
-
-The warnings `loadConfigFiles` gives an `untrusted` and a wrong-version file:
-
-```text
-Skipped project configuration at <path> because the project is not trusted. Trust the project to use it.
-Configuration at <path> has version 3, but only version 2 is supported. Ignored the file.
+outcome.notify(ctx, runtimeWarnings);
 ```
+
+### `configScopeLabel(scope: ConfigScope): "Project" | "User"`
+
+The label users see for a scope, as Pi writes it.
 
 ## TUI API
 

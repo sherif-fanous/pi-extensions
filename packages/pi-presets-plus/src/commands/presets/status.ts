@@ -33,10 +33,7 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-import {
-  alignLabelRows,
-  configStatusLines,
-} from "@sherif-fanous/pi-extensions-core";
+import { alignLabelRows } from "@sherif-fanous/pi-extensions-core";
 
 /**
  * Report text, its severity, and the warnings about values in the loaded
@@ -135,15 +132,16 @@ export async function formatStatusBody(
   session: ActivePresetSession,
 ): Promise<StatusBodyResult> {
   const active = session.current();
-  const { files, presets, valueWarnings } = await loadAll(ctx);
+  const { config, presets } = await loadAll(ctx);
   const withConfig = (main: string) =>
-    [main, "", ...configStatusLines(files)].join("\n");
+    [main, "", ...config.statusLines].join("\n");
+  const warnings = config.statusWarnings;
 
   if (!active) {
     return {
       body: withConfig(`${STATUS_DIALOG_TITLE}\n  No preset is active.`),
       severity: "info",
-      warnings: valueWarnings,
+      warnings,
     };
   }
 
@@ -155,14 +153,14 @@ export async function formatStatusBody(
         `${STATUS_DIALOG_TITLE}\n  Active preset "${active.name}" is no longer loaded.`,
       ),
       severity: "warning",
-      warnings: valueWarnings,
+      warnings,
     };
   }
 
   return {
     body: withConfig(formatStatus(active, preset, ctx, pi)),
     severity: "info",
-    warnings: valueWarnings,
+    warnings,
   };
 }
 

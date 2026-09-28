@@ -77,7 +77,6 @@ export function isAutomaticDefaultEligible(
 export function readFileBackedDefaults(
   cwd: string,
   projectTrusted: boolean,
-  agentDir = getAgentDir(),
   createSettings: StartupSettingsReaderFactory = (
     settingsCwd,
     settingsAgentDir,
@@ -87,7 +86,7 @@ export function readFileBackedDefaults(
   let settings: StartupSettingsReader;
 
   try {
-    settings = createSettings(cwd, agentDir, { projectTrusted });
+    settings = createSettings(cwd, getAgentDir(), { projectTrusted });
   } catch {
     return undefined;
   }

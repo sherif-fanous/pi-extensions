@@ -35,7 +35,6 @@ let dirs: TempConfigDirs;
 
 beforeEach(async () => {
   dirs = await createTempConfigDirs();
-  vi.stubEnv("PI_CODING_AGENT_DIR", dirs.agentDir);
   vi.mocked(detectAppearanceViaColorScheme).mockResolvedValue("dark");
   vi.mocked(detectAppearanceViaOsc11Background).mockResolvedValue("dark");
   vi.mocked(detectAppearanceViaSystem).mockResolvedValue("dark");
@@ -43,7 +42,6 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  vi.unstubAllEnvs();
   vi.resetAllMocks();
   await dirs.cleanup();
 });
@@ -66,30 +64,6 @@ test("tells the user once which files session start migrated", async () => {
   const again = await startSession(true);
 
   expect(again.notify).not.toHaveBeenCalled();
-});
-
-test("warns about a skipped untrusted project file once, after migration warnings", async () => {
-  await dirs.writeText(settingsPath(), "{");
-  await dirs.writeJson(projectPath(), { syncEnabled: false });
-
-  const session = await startSession(false);
-
-  expect(session.notify).toHaveBeenCalledOnce();
-  expect(session.notify.mock.calls[0]?.[1]).toBe("warning");
-
-  const lines = String(session.notify.mock.calls[0]?.[0]).split("\n");
-
-  expect(lines[0]).toBe("Theme Sync: 2 warnings");
-  expect(lines[1]).toMatch(
-    new RegExp(
-      `^- Could not migrate configuration at ${escapeRegExp(settingsPath())}: The file is not valid JSON`,
-    ),
-  );
-
-  expect(lines[2]).toBe(
-    `- Skipped project configuration at ${projectPath()} because the project is not trusted. Trust the project to use it.`,
-  );
-  expect(session.status().syncEnabled).toBe(true);
 });
 
 test("lists file warnings before invalid values and keeps file problems out of status warnings", async () => {
@@ -132,10 +106,6 @@ test("stays silent in an untrusted project without a project file", async () => 
     ["  Project: not found", `           ${projectPath()}`].join("\n"),
   );
 });
-
-function escapeRegExp(text: string): string {
-  return text.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`);
-}
 
 function projectPath(): string {
   return path.join(dirs.cwd, ".pi", "theme-sync", "config.json");

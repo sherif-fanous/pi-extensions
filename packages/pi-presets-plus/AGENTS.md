@@ -9,3 +9,7 @@ presets you can switch between. The family rules are in the root `AGENTS.md` and
   every surface.
 - `SUBCOMMANDS` in `src/commands/presets/router.ts` is the one registry behind
   the completions, the dispatch, and the usage warning's forms.
+- Read and save `config.json` only through `PRESETS_PLUS_CONFIG`, the core
+  config handle `src/store/config.ts` defines. Session start adds the version 1
+  migration to the loaded outcome and passes its other startup warnings
+  (restore, `--preset`, policy, hotkeys) to `notify` as extras.

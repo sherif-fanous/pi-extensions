@@ -1,4 +1,4 @@
-import { access, mkdir, open, readFile, unlink } from "node:fs/promises";
+import { access, chmod, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 
 import { CONFIG_VERSION } from "../../src/config/load.js";
@@ -7,10 +7,7 @@ import {
   migrateConfigLayout,
   type MigrationFs,
 } from "../../src/config/migrate.js";
-import type {
-  AtomicWriteFs,
-  ConfigScope,
-} from "@sherif-fanous/pi-extensions-core";
+import type { ConfigScope } from "@sherif-fanous/pi-extensions-core";
 import {
   createProjectTrustContext,
   createTempConfigDirs,
@@ -155,25 +152,41 @@ describe.each(["user", "project"] as const)("%s scope", (scope) => {
     expect(await dirs.exists(legacyPath(scope))).toBe(true);
   });
 
-  test("keeps the old file when the write fails", async () => {
-    await dirs.writeJson(settingsPath(scope), { isSyncActive: false });
+  // A read-only directory fails the write; root ignores the permission.
+  test.skipIf(process.getuid?.() === 0)(
+    "keeps the old file when the write fails",
+    async () => {
+      await dirs.writeJson(settingsPath(scope), { isSyncActive: false });
 
-    const result = await migrate(true, {
-      ...realFs(),
-      atomicWriteFs: failingWriteFs(),
-    });
+      const directory = path.dirname(configPath(scope));
 
-    expect(result).toEqual({
-      migrated: [],
-      warnings: [
-        `Could not migrate configuration at ${settingsPath(scope)}: expected write failure. Ignored the file.`,
-      ],
-    });
-    expect(await dirs.exists(configPath(scope))).toBe(false);
-    expect(await dirs.readJson(settingsPath(scope))).toEqual({
-      isSyncActive: false,
-    });
-  });
+      await chmod(directory, 0o500);
+
+      let result: Awaited<ReturnType<typeof migrate>>;
+
+      try {
+        result = await migrate();
+      } finally {
+        await chmod(directory, 0o700);
+      }
+
+      expect(result).toEqual({
+        migrated: [],
+        warnings: [
+          expect.stringMatching(
+            new RegExp(
+              `^Could not migrate configuration at ${escapeRegExp(settingsPath(scope))}: .*permission denied.* Ignored the file\\.$`,
+              "u",
+            ),
+          ),
+        ],
+      });
+      expect(await dirs.exists(configPath(scope))).toBe(false);
+      expect(await dirs.readJson(settingsPath(scope))).toEqual({
+        isSyncActive: false,
+      });
+    },
+  );
 
   test("warns when it cannot delete the old file after the write", async () => {
     await dirs.writeJson(settingsPath(scope), { isSyncActive: false });
@@ -239,9 +252,9 @@ describe("loadStartupConfig", () => {
 
     const startup = await startupConfig();
 
-    expect(startup.migrated).toEqual([configPath("project")]);
-    expect(startup.warnings).toEqual([]);
-    expect(startup.config.runtimeConfig.syncEnabled).toBe(false);
+    expect(startup.outcome.migrated).toEqual([configPath("project")]);
+    expect(startup.outcome.migrationWarnings).toEqual([]);
+    expect(startup.runtimeConfig.syncEnabled).toBe(false);
     expect(await dirs.readJson(configPath("project"))).toEqual({
       syncEnabled: false,
       themes: { dark: "dark" },
@@ -257,51 +270,10 @@ describe("loadStartupConfig", () => {
 
     const startup = await startupConfig();
 
-    expect(startup.migrated).toEqual([configPath("user")]);
-    expect(startup.config.files.user.state).toBe("loaded");
-    expect(startup.config.runtimeConfig.syncEnabled).toBe(false);
-    expect(startup.config.runtimeConfigSources.syncEnabled).toBe("user");
-  });
-
-  test("keeps the old key working for the session when the rewrite fails", async () => {
-    await dirs.writeJson(configPath("user"), { isSyncActive: false });
-
-    const startup = await startupConfig(true, {
-      ...realFs(),
-      atomicWriteFs: failingWriteFs(),
-    });
-
-    expect(startup.migrated).toEqual([]);
-    expect(startup.warnings).toEqual([
-      `Could not migrate configuration at ${configPath("user")}: expected write failure. Left the file unchanged.`,
-    ]);
-    expect(startup.config.runtimeConfig.syncEnabled).toBe(false);
-    expect(await dirs.readJson(configPath("user"))).toEqual({
-      isSyncActive: false,
-    });
-  });
-
-  test("does not rewrite a project file in an untrusted project", async () => {
-    await dirs.writeJson(configPath("project"), { isSyncActive: false });
-
-    const startup = await startupConfig(false);
-
-    expect(startup.migrated).toEqual([]);
-    expect(startup.config.files.project.state).toBe("untrusted");
-    expect(await dirs.readJson(configPath("project"))).toEqual({
-      isSyncActive: false,
-    });
-  });
-
-  test("leaves a current config.json alone", async () => {
-    await dirs.writeJson(configPath("user"), { syncEnabled: false });
-
-    const startup = await startupConfig();
-
-    expect(startup.migrated).toEqual([]);
-    expect(await dirs.readJson(configPath("user"))).toEqual({
-      syncEnabled: false,
-    });
+    expect(startup.outcome.migrated).toEqual([configPath("user")]);
+    expect(startup.outcome.files.user.state).toBe("loaded");
+    expect(startup.runtimeConfig.syncEnabled).toBe(false);
+    expect(startup.runtimeConfigSources.syncEnabled).toBe("user");
   });
 });
 
@@ -309,13 +281,8 @@ function configPath(scope: ConfigScope): string {
   return path.join(scopeDir(scope), "theme-sync", "config.json");
 }
 
-function failingWriteFs(): AtomicWriteFs {
-  return {
-    mkdir,
-    open,
-    rename: () => Promise.reject(new Error("expected write failure")),
-    unlink,
-  };
+function escapeRegExp(text: string): string {
+  return text.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`);
 }
 
 function legacyPath(scope: ConfigScope): string {
@@ -323,10 +290,7 @@ function legacyPath(scope: ConfigScope): string {
 }
 
 function migrate(trusted = true, fs?: MigrationFs) {
-  return migrateConfigLayout(createProjectTrustContext(dirs.cwd, trusted), {
-    agentDir: dirs.agentDir,
-    fs,
-  });
+  return migrateConfigLayout(createProjectTrustContext(dirs.cwd, trusted), fs);
 }
 
 function realFs(): MigrationFs {
@@ -345,12 +309,9 @@ function settingsPath(scope: ConfigScope): string {
   return path.join(scopeDir(scope), "theme-sync", "settings.json");
 }
 
-function startupConfig(trusted = true, fs?: MigrationFs) {
-  return loadStartupConfig(
-    {
-      ...createProjectTrustContext(dirs.cwd, trusted),
-      ui: { getAllThemes: () => [{ name: "dark", path: undefined }] },
-    },
-    { agentDir: dirs.agentDir, fs },
-  );
+function startupConfig() {
+  return loadStartupConfig({
+    ...createProjectTrustContext(dirs.cwd, true),
+    ui: { getAllThemes: () => [{ name: "dark", path: undefined }] },
+  });
 }

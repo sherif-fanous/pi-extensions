@@ -6,43 +6,18 @@
  */
 
 export {
-  atomicWrite,
-  type AtomicWriteFs,
-  writeJsonFile,
-} from "./config/atomic-write.js";
-export {
   type ConfigContext,
   type ConfigFile,
-  configFilePath,
-  type ConfigFileFs,
-  type ConfigFileLocation,
-  configFileWarnings,
   type ConfigScope,
   configScopeLabel,
-  loadConfigFiles,
-  type LoadConfigFilesOptions,
-  readConfigFile,
-  type ReadConfigFileOptions,
-  updateConfigFile,
-  writeConfigFile,
 } from "./config/file.js";
 export {
-  type ConfigKeyRename,
-  renameConfigKeys,
-  type RenamedConfigKeys,
-} from "./config/keys.js";
-export {
-  type ConfigKeyMigration,
-  configMigratedMessage,
-  migrateRenamedConfigKeys,
-} from "./config/migration.js";
-export { configStatusLines } from "./config/report.js";
-export {
-  malformedConfigWarning,
-  unreadableConfigWarning,
-  unsupportedConfigVersionWarning,
-  untrustedProjectConfigWarning,
-} from "./config/warnings.js";
+  type ConfigFileDescription,
+  type ConfigFileHandle,
+  defineConfigFile,
+} from "./config/handle.js";
+export type { ConfigKeyRename } from "./config/keys.js";
+export type { ConfigMigration, ConfigOutcome } from "./config/outcome.js";
 export { describeError, describeErrorSentence } from "./errors.js";
 export {
   guardCommand,
@@ -69,7 +44,6 @@ export {
   isInteractiveTui,
   requireInteractiveTui,
 } from "./commands/interactive.js";
-export { parseJsonObject, type ParseJsonObjectResult } from "./config/json.js";
 export {
   formatKeyId,
   keyHint,
@@ -94,7 +68,6 @@ export {
   overlayOptions,
   type OverlaySize,
 } from "./tui/overlay.js";
-export { extensionConfigPath, projectConfigPath } from "./config/paths.js";
 export {
   alignLabelRows,
   type CommandReport,

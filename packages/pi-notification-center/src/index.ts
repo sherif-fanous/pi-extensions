@@ -6,35 +6,19 @@
 
 import { CaptureRuntime } from "./capture.js";
 import { runNotificationsCommand } from "./commands/notifications.js";
-import {
-  loadStartupConfig,
-  type ConfigOptions,
-  type LoadedConfig,
-} from "./config.js";
+import { loadStartupConfig, type LoadedConfig } from "./config.js";
 import { EXTENSION_NAME } from "./extension-name.js";
 import type { NotificationSeverity } from "./types.js";
 import { registerStatusReportRenderer } from "./ui/status-report.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
-  configFileWarnings,
-  configMigratedMessage,
   guardCommand,
   guardEvent,
-  notifyWarnings,
   subcommandCompletions,
 } from "@sherif-fanous/pi-extensions-core";
 
-/**
- * Register the notification center with the Pi host.
- *
- * Pi calls this with the extension API alone, so `configOptions` is empty
- * in production. Tests pass their own agent directory and file-system
- * seams.
- */
-export default function notificationCenter(
-  pi: ExtensionAPI,
-  configOptions: ConfigOptions = {},
-): void {
+/** Register the notification center with the Pi host. */
+export default function notificationCenter(pi: ExtensionAPI): void {
   let runtime: CaptureRuntime | undefined;
   /** The configuration the current session started with. */
   let session: LoadedConfig | undefined;
@@ -50,7 +34,6 @@ export default function notificationCenter(
     ]),
     handler: guardCommand(EXTENSION_NAME, (args, ctx) =>
       runNotificationsCommand(args, ctx, {
-        configOptions,
         pi,
         sessionConfig: () => session,
         toastsActive: () => runtime !== undefined,
@@ -69,16 +52,12 @@ export default function notificationCenter(
       generation += 1;
 
       const start = generation;
-      const startup = await loadStartupConfig(ctx, configOptions);
+      const startup = await loadStartupConfig(ctx);
 
       // A reload or shutdown while the file was read owns the session now.
       if (start !== generation) return;
 
-      session = {
-        config: startup.config,
-        file: startup.file,
-        warnings: [...startup.migrationWarnings, ...startup.warnings],
-      };
+      session = startup;
       runtime = CaptureRuntime.startSession(ctx, pi, startup.config);
 
       // Messages go out after installation so they travel the capture
@@ -95,23 +74,8 @@ export default function notificationCenter(
             },
           }
         : ctx;
-      const [firstMigrated, ...otherMigrated] = startup.migrated;
 
-      if (firstMigrated !== undefined) {
-        reportContext.ui.notify(
-          configMigratedMessage(EXTENSION_NAME, [
-            firstMigrated,
-            ...otherMigrated,
-          ]),
-          "info",
-        );
-      }
-
-      notifyWarnings(reportContext, EXTENSION_NAME, [
-        ...startup.migrationWarnings,
-        ...configFileWarnings([startup.file]),
-        ...startup.warnings,
-      ]);
+      startup.outcome.notify(reportContext);
     }),
   );
 

@@ -22,7 +22,6 @@ import type {
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 import {
   notifyUsageWarning,
-  notifyWarnings,
   requireInteractiveTui,
   subcommandCompletions,
 } from "@sherif-fanous/pi-extensions-core";
@@ -165,7 +164,7 @@ async function activateNamedPreset(
   ctx: ExtensionCommandContext,
   { pi, session }: PresetsCommandDeps,
 ): Promise<boolean> {
-  const { presets, warnings } = await loadAll(ctx);
+  const { config, presets } = await loadAll(ctx);
   const preset = presets.find(
     (candidate) => candidate.name === name && !candidate.shadowed,
   );
@@ -173,7 +172,7 @@ async function activateNamedPreset(
   // Load warnings show at session start and on /presets reload. They are
   // repeated only when the name is not loaded, since one may explain why.
   if (!preset) {
-    notifyWarnings(ctx, EXTENSION_NAME, warnings);
+    config.notify(ctx);
 
     return false;
   }

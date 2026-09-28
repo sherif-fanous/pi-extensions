@@ -8,17 +8,6 @@
   `null` or an array
 - Added: Add `isNotFoundError`, which checks that a thrown value is a
   missing-file (`ENOENT`) error
-- Added: Add `parseJsonObject`, which parses JSON text whose top level must be
-  an object and reports invalid JSON apart from a non-object value
-- Added: Add `unreadableConfigWarning` and `malformedConfigWarning`, which word
-  the warning for a configuration file that could not be read, is not valid
-  JSON, or is not a JSON object
-- Added: Add `atomicWrite`, which replaces a file through a synced temporary
-  file so readers never see a partial write
-- Added: Add `writeJsonFile`, which writes a value atomically as
-  two-space-indented JSON ending in a newline
-- Added: Add `extensionConfigPath` and `projectConfigPath`, which locate an
-  extension's file in Pi's agent directory and in a project
 - Added: Add `createCommandReport`, which shows a command's report as a
   transcript entry in TUI mode and as a notification in other modes
 - Added: Add `styleReport`, which styles a report's heading, labels, and
@@ -59,20 +48,11 @@
   markers
 - Added: Add `emptyStateLines`, which draws an empty or no-match state as muted
   text
-- Added: Add `loadConfigFiles` and `readConfigFile`, which read an extension's
-  `config.json` in each scope into a `loaded`, `missing`, `invalid`, or
-  `untrusted` state, skip a project file Pi does not trust, and ignore a file
-  with another `version`
-- Added: Add `configFilePath`, `configScopeLabel`, and `configFileWarnings`,
-  which locate the file, label its scope `User` or `Project`, and collect the
-  warnings to show once
-- Added: Add `renameConfigKeys` and `migrateRenamedConfigKeys`, which read a
-  renamed key under its old name and rewrite the file with the new one
-- Added: Add `updateConfigFile` and `writeConfigFile`, which save with the
-  current `version` first and refuse to overwrite an invalid file or save to an
-  untrusted project
-- Added: Add `configStatusLines`, which writes the `Config:` block of a status
-  report
-- Added: Add `configMigratedMessage`, `untrustedProjectConfigWarning`, and
-  `unsupportedConfigVersionWarning`, which word the migration message and the
-  new warnings
+- Added: Add `defineConfigFile`, which describes an extension's `config.json`
+  once and returns a handle that reads, saves, and migrates each scope's file,
+  skips a project file Pi does not trust, ignores a file with another `version`,
+  and reads renamed keys under their old names
+- Added: Add the configuration outcome a load returns, which shows what a
+  session start migrated and every configuration warning in one fixed order, and
+  writes the `Config:` block of a status report
+- Added: Add `configScopeLabel`, which labels a scope `User` or `Project`

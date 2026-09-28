@@ -2,8 +2,6 @@
  * Covers file-backed startup defaults, trust-aware merging, thinking
  * normalization, and silent ineligible comparison outcomes.
  */
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
@@ -17,8 +15,13 @@ import {
 import type { ThinkingLevel } from "../../src/types.js";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import {
+  createTempConfigDirs,
+  type TempConfigDirs,
+} from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+let dirs: TempConfigDirs;
 let agentDir: string;
 let cwd: string;
 
@@ -71,18 +74,18 @@ function startup(overrides: Partial<StartupSelection> = {}): StartupSelection {
 }
 
 beforeEach(async () => {
-  agentDir = await mkdtemp(join(tmpdir(), "pi-presets-startup-defaults-"));
-  cwd = join(agentDir, "project");
-  await mkdir(join(cwd, ".pi"), { recursive: true });
+  dirs = await createTempConfigDirs();
+  agentDir = dirs.agentDir;
+  cwd = dirs.cwd;
 });
 
 afterEach(async () => {
-  await rm(agentDir, { force: true, recursive: true });
+  await dirs.cleanup();
 });
 
 describe("readFileBackedDefaults", () => {
   it("merges trusted project values over global settings", async () => {
-    await writeFile(
+    await dirs.writeText(
       join(agentDir, "settings.json"),
       JSON.stringify({
         defaultModel: "global-model",
@@ -91,7 +94,7 @@ describe("readFileBackedDefaults", () => {
       }),
     );
 
-    await writeFile(
+    await dirs.writeText(
       join(cwd, ".pi", "settings.json"),
       JSON.stringify({
         defaultModel: "project-model",
@@ -99,13 +102,13 @@ describe("readFileBackedDefaults", () => {
       }),
     );
 
-    expect(readFileBackedDefaults(cwd, true, agentDir)).toEqual({
+    expect(readFileBackedDefaults(cwd, true)).toEqual({
       model: "project-model",
       provider: "openai",
       thinkingLevel: "high",
     });
 
-    expect(readFileBackedDefaults(cwd, false, agentDir)).toEqual({
+    expect(readFileBackedDefaults(cwd, false)).toEqual({
       model: "global-model",
       provider: "openai",
       thinkingLevel: "low",
@@ -115,19 +118,19 @@ describe("readFileBackedDefaults", () => {
   it("reads settings again after an edit", async () => {
     const path = join(agentDir, "settings.json");
 
-    await writeFile(
+    await dirs.writeText(
       path,
       JSON.stringify({ defaultModel: "first", defaultProvider: "openai" }),
     );
 
-    expect(readFileBackedDefaults(cwd, true, agentDir)?.model).toBe("first");
+    expect(readFileBackedDefaults(cwd, true)?.model).toBe("first");
 
-    await writeFile(
+    await dirs.writeText(
       path,
       JSON.stringify({ defaultModel: "second", defaultProvider: "openai" }),
     );
 
-    expect(readFileBackedDefaults(cwd, true, agentDir)?.model).toBe("second");
+    expect(readFileBackedDefaults(cwd, true)?.model).toBe("second");
   });
 
   it("returns no defaults for reported errors or factory failures", () => {
@@ -141,13 +144,9 @@ describe("readFileBackedDefaults", () => {
       throw new Error("read failed");
     });
 
-    expect(readFileBackedDefaults(cwd, true, agentDir, reportedError)).toBe(
-      undefined,
-    );
+    expect(readFileBackedDefaults(cwd, true, reportedError)).toBe(undefined);
 
-    expect(readFileBackedDefaults(cwd, true, agentDir, thrownError)).toBe(
-      undefined,
-    );
+    expect(readFileBackedDefaults(cwd, true, thrownError)).toBe(undefined);
   });
 });
 

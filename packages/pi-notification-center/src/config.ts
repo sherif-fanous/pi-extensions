@@ -7,48 +7,26 @@
  * edit followed by `/reload` takes effect without restarting Pi.
  */
 
+import { EXTENSION_NAME } from "./extension-name.js";
 import type { NotificationConfig, ToastConfig } from "./types.js";
 import {
+  defineConfigFile,
   isRecord,
-  loadConfigFiles,
-  migrateRenamedConfigKeys,
-  type AtomicWriteFs,
   type ConfigContext,
-  type ConfigFile,
-  type ConfigFileFs,
-  type ConfigKeyRename,
+  type ConfigOutcome,
 } from "@sherif-fanous/pi-extensions-core";
 
-/** Where the loader reads and writes; tests pass their own. */
-export interface ConfigOptions {
-  /** Pi's agent directory. Defaults to `getAgentDir()`. */
-  readonly agentDir?: string;
-  /** Write seam for the startup migration. */
-  readonly atomicWriteFs?: AtomicWriteFs;
-  readonly fs?: ConfigFileFs;
-}
-
 /**
- * An always-usable configuration, the file it came from, and the invalid
- * values rejected along the way.
+ * An always-usable configuration and what reading the User file found,
+ * with one value warning per invalid setting.
  */
 export interface LoadedConfig {
   readonly config: NotificationConfig;
-  /** What reading the User file found, for warnings and the status report. */
-  readonly file: ConfigFile;
   /**
-   * One warning per invalid value. File problems stay on `file`, so they
-   * show in the status report's `Config:` block rather than here.
+   * The User file, the value warnings, and at session start what migrated,
+   * for the startup notification and the status report.
    */
-  readonly warnings: readonly string[];
-}
-
-/** The configuration a session starts with, after migrating renamed keys. */
-export interface StartupConfig extends LoadedConfig {
-  /** The file rewritten under the new key names, if any. */
-  readonly migrated: readonly string[];
-  /** One warning per file the migration could not rewrite. */
-  readonly migrationWarnings: readonly string[];
+  readonly outcome: ConfigOutcome<"user">;
 }
 
 /** Dotted path of every supported setting. */
@@ -89,66 +67,50 @@ export const DEFAULT_CONFIG = {
  * Notification Center has only the User scope, so it never reads a
  * Project file and never asks Pi whether the project is trusted. A
  * missing file yields the defaults silently. An unreadable, malformed, or
- * unsupported file yields the defaults, with its problem on `file`. A
- * missing setting takes its default silently; an invalid one takes its
- * default and adds a warning. Unknown keys are ignored.
+ * unsupported file yields the defaults, with its problem on the outcome's
+ * file. A missing setting takes its default silently; an invalid one
+ * takes its default and adds a value warning. Unknown keys are ignored.
  */
-export async function loadConfig(
-  ctx: ConfigContext,
-  options: ConfigOptions = {},
-): Promise<LoadedConfig> {
-  const { user: file } = await loadConfigFiles(ctx, {
-    agentDir: options.agentDir,
-    extension: CONFIG_EXTENSION,
-    fs: options.fs,
-    renamedKeys: RENAMED_CONFIG_KEYS,
-    scopes: ["user"],
-    version: CONFIG_VERSION,
-  });
+export async function loadConfig(ctx: ConfigContext): Promise<LoadedConfig> {
+  const outcome = await NOTIFICATION_CENTER_CONFIG.load(ctx);
+  const { user: file } = outcome.files;
+  const { config, warnings } = resolveConfig(
+    file.state === "loaded" ? file.data : {},
+  );
 
-  return {
-    ...resolveConfig(file.state === "loaded" ? file.data : {}),
-    file,
-  };
+  return { config, outcome: outcome.withValueWarnings(warnings) };
 }
 
 /**
- * Load the configuration for a new session, then rewrite a file that
- * still uses old key names under the new names with the current
- * `version`.
+ * Rewrite a file that still uses old key names under the new names with
+ * the current `version`, then load the configuration for a new session.
  *
  * The session uses the renamed values whether or not the rewrite
  * succeeds.
  */
 export async function loadStartupConfig(
   ctx: ConfigContext,
-  options: ConfigOptions = {},
-): Promise<StartupConfig> {
-  const loaded = await loadConfig(ctx, options);
-  const migration = await migrateRenamedConfigKeys(
-    [loaded.file],
-    CONFIG_VERSION,
-    options.atomicWriteFs,
-  );
+): Promise<LoadedConfig> {
+  const migration = await NOTIFICATION_CENTER_CONFIG.migrateKeys(ctx);
+  const loaded = await loadConfig(ctx);
 
-  return {
-    ...loaded,
-    migrated: migration.migrated,
-    migrationWarnings: migration.warnings,
-  };
+  return { ...loaded, outcome: loaded.outcome.withMigrations(migration) };
 }
 
-/** The slug that names Notification Center's configuration directory. */
-const CONFIG_EXTENSION = "notification-center";
+/** Notification Center's User `config.json`. */
+const NOTIFICATION_CENTER_CONFIG = defineConfigFile({
+  extension: "notification-center",
+  extensionName: EXTENSION_NAME,
+  renamedKeys: [
+    { from: "maxToastsVisible", to: "toast.maxVisible" },
+    { from: "toast.timeout", to: "toast.timeoutMs" },
+  ],
+  scopes: ["user"],
+  version: CONFIG_VERSION,
+});
 
 /** Supported setting paths, derived from the limits so none is skipped. */
 const CONFIG_PATHS = Object.keys(CONFIG_LIMITS) as readonly ConfigPath[];
-
-/** Keys read under their old name while the new name is absent. */
-const RENAMED_CONFIG_KEYS: readonly ConfigKeyRename[] = [
-  { from: "maxToastsVisible", to: "toast.maxVisible" },
-  { from: "toast.timeout", to: "toast.timeoutMs" },
-];
 
 function isValidSettingValue(
   raw: unknown,

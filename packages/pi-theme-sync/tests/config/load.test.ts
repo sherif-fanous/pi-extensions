@@ -1,18 +1,12 @@
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  CONFIG_VERSION,
   DEFAULT_CONFIG,
   isValidPollIntervalMs,
   loadConfig,
   type LoadConfigContext,
 } from "../../src/config/load.js";
-import {
-  configFileWarnings,
-  type ConfigFileFs,
-  type ConfigScope,
-} from "@sherif-fanous/pi-extensions-core";
+import type { ConfigScope } from "@sherif-fanous/pi-extensions-core";
 import {
   createProjectTrustContext,
   createTempConfigDirs,
@@ -60,7 +54,7 @@ describe("loadConfig", () => {
         "default",
       );
 
-      expect(result.warnings).toEqual([
+      expect(result.outcome.valueWarnings).toEqual([
         `${scope === "project" ? "Project" : "User"} setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not 60001. Using the default value 2000.`,
       ]);
     },
@@ -75,7 +69,7 @@ describe("loadConfig", () => {
     expect(result.runtimeConfigSources.detection.pollIntervalMs).toBe(
       "project",
     );
-    expect(result.warnings).toEqual([]);
+    expect(result.outcome.valueWarnings).toEqual([]);
   });
 
   test("uses valid project overrides and reports their source", async () => {
@@ -148,7 +142,7 @@ describe("loadConfig", () => {
       light: "user",
     });
     expect(result.runtimeConfigSources.detection.pollIntervalMs).toBe("user");
-    expect(result.warnings).toEqual([
+    expect(result.outcome.valueWarnings).toEqual([
       'Theme "missing-light" was not found in Pi. Ignored it.',
       'Theme "missing-dark" was not found in Pi. Ignored it.',
       'Project setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not 999. Ignored it.',
@@ -183,7 +177,7 @@ describe("loadConfig", () => {
       themes: { dark: "project", light: "project" },
     });
 
-    expect(result.warnings).toEqual([
+    expect(result.outcome.valueWarnings).toEqual([
       'User setting "syncEnabled" must be a boolean, not "no". Ignored it.',
       'Theme "missing-light" was not found in Pi. Ignored it.',
       'Theme "missing-dark" was not found in Pi. Ignored it.',
@@ -212,7 +206,7 @@ describe("loadConfig", () => {
       themes: { dark: "default", light: "default" },
     });
 
-    expect(result.warnings).toEqual([
+    expect(result.outcome.valueWarnings).toEqual([
       'Theme "missing-light" was not found in Pi. Using the default theme "light".',
       'Theme "user-missing" was not found in Pi. Using the default theme "light".',
       'Theme "missing-dark" was not found in Pi. Using the default theme "dark".',
@@ -229,7 +223,7 @@ describe("loadConfig", () => {
 
     expect(result.runtimeConfig.syncEnabled).toBe(false);
     expect(result.runtimeConfigSources.syncEnabled).toBe("user");
-    expect(result.warnings).toEqual([
+    expect(result.outcome.valueWarnings).toEqual([
       'Project setting "syncEnabled" must be a boolean, not "invalid". Ignored it.',
     ]);
   });
@@ -241,7 +235,7 @@ describe("loadConfig", () => {
 
     expect(result.runtimeConfig.syncEnabled).toBe(true);
     expect(result.runtimeConfigSources.syncEnabled).toBe("default");
-    expect(result.warnings).toEqual([
+    expect(result.outcome.valueWarnings).toEqual([
       'Project setting "syncEnabled" must be a boolean, not "invalid". Using the default value true.',
       'User setting "syncEnabled" must be a boolean, not "no". Using the default value true.',
     ]);
@@ -306,7 +300,7 @@ describe("loadConfig", () => {
       themes: { dark: "user", light: "user" },
     });
 
-    expect(result.warnings).toEqual([
+    expect(result.outcome.valueWarnings).toEqual([
       'Project setting "syncEnabled" must be a boolean, not null. Ignored it.',
     ]);
   });
@@ -318,152 +312,14 @@ describe("loadConfig", () => {
 
     expect(result.runtimeConfig.syncEnabled).toBe(false);
     expect(result.runtimeConfigSources.syncEnabled).toBe("user");
-    expect(result.warnings).toEqual([
+    expect(result.outcome.valueWarnings).toEqual([
       'Project setting "syncEnabled" must be a boolean, not "no". Ignored it.',
     ]);
 
-    expect(result.files.user).toMatchObject({
+    expect(result.outcome.files.user).toMatchObject({
       renamedKeys: ["isSyncActive"],
       state: "loaded",
     });
-  });
-
-  test("prefers syncEnabled over the old isSyncActive key in one file", async () => {
-    await writeConfigs({ isSyncActive: true, syncEnabled: false });
-
-    const result = await load();
-
-    expect(result.runtimeConfig.syncEnabled).toBe(false);
-  });
-
-  test("reports each scope's file as loaded or missing", async () => {
-    await writeConfigs({ syncEnabled: false });
-
-    const { files, warnings } = await load();
-
-    expect(files.user).toMatchObject({
-      path: configPath("user"),
-      scope: "user",
-      state: "loaded",
-    });
-
-    expect(files.project).toEqual({
-      path: configPath("project"),
-      scope: "project",
-      state: "missing",
-    });
-    expect(configFileWarnings([files.user, files.project])).toEqual([]);
-    expect(warnings).toEqual([]);
-  });
-
-  test("skips a project file in an untrusted project and warns once", async () => {
-    await writeConfigs(
-      { themes: { dark: "user-dark" } },
-      { syncEnabled: false, themes: { dark: "dark" } },
-    );
-
-    const { files, runtimeConfig, runtimeConfigSources, warnings } =
-      await load(false);
-
-    expect(runtimeConfig.syncEnabled).toBe(true);
-    expect(runtimeConfig.themes.dark).toBe("user-dark");
-    expect(runtimeConfigSources.themes.dark).toBe("user");
-    expect(files.project.state).toBe("untrusted");
-    expect(warnings).toEqual([]);
-    expect(configFileWarnings([files.user, files.project])).toEqual([
-      `Skipped project configuration at ${configPath("project")} because the project is not trusted. Trust the project to use it.`,
-    ]);
-  });
-
-  test("stays silent in an untrusted project without a project file", async () => {
-    const { files } = await load(false);
-
-    expect(files.project.state).toBe("missing");
-    expect(configFileWarnings([files.user, files.project])).toEqual([]);
-  });
-
-  test.each([
-    { version: CONFIG_VERSION, loaded: true },
-    { version: undefined, loaded: true },
-    { version: 1, loaded: false },
-    { version: 3, loaded: false },
-    { version: "2", loaded: false },
-  ])(
-    "reads a file with version $version: $loaded",
-    async ({ loaded, version }) => {
-      await writeConfigs({ syncEnabled: false, version });
-
-      const { files, runtimeConfig } = await load();
-
-      expect(runtimeConfig.syncEnabled).toBe(!loaded);
-      expect(files.user.state).toBe(loaded ? "loaded" : "invalid");
-
-      if (!loaded) {
-        expect(configFileWarnings([files.user])).toEqual([
-          `Configuration at ${configPath("user")} has version ${JSON.stringify(version)}, but only version 2 is supported. Ignored the file.`,
-        ]);
-      }
-    },
-  );
-
-  test.each(["{", "[]", "null", '"text"', "42", "true"])(
-    "ignores a malformed file %s with its reason in the file state",
-    async (content) => {
-      await dirs.writeText(configPath("project"), content);
-
-      const { files, runtimeConfig, warnings } = await load();
-
-      expect(runtimeConfig).toEqual(DEFAULT_CONFIG);
-      expect(warnings).toEqual([]);
-      expect(files.project.state).toBe("invalid");
-
-      const reason =
-        files.project.state === "invalid" ? files.project.reason : "";
-      const [warning] = configFileWarnings([files.project]);
-
-      if (content === "{") {
-        expect(reason).toMatch(/^not valid JSON: /);
-        expect(warning).toMatch(/ is not valid JSON: .* Ignored the file\.$/);
-      } else {
-        expect(reason).toBe("not a JSON object");
-        expect(warning).toBe(
-          `Configuration at ${configPath("project")} must be a JSON object. Ignored the file.`,
-        );
-      }
-
-      expect(warning).toContain(configPath("project"));
-    },
-  );
-
-  test("ignores an unreadable file and uses the other scope", async () => {
-    await writeConfigs(
-      { themes: { dark: "user-dark" } },
-      { themes: { dark: "dark" } },
-    );
-
-    const fs: ConfigFileFs = {
-      access: async () => {},
-      readFile: async (filePath, encoding) => {
-        if (filePath === configPath("project")) {
-          throw Object.assign(new Error("permission denied"), {
-            code: "EACCES",
-          });
-        }
-
-        return readFile(filePath, encoding);
-      },
-    };
-    const { files, runtimeConfig } = await load(true, fs);
-
-    expect(runtimeConfig.themes.dark).toBe("user-dark");
-    expect(files.project).toMatchObject({
-      reason: "unreadable: permission denied",
-      state: "invalid",
-    });
-
-    expect(configFileWarnings([files.project])).toEqual([
-      `Could not read configuration at ${configPath("project")}: permission denied. Ignored the file.`,
-    ]);
   });
 
   test("does not read the old settings.json or theme-sync.json files", async () => {
@@ -476,10 +332,10 @@ describe("loadConfig", () => {
       isSyncActive: false,
     });
 
-    const { files, runtimeConfig } = await load();
+    const { outcome, runtimeConfig } = await load();
 
     expect(runtimeConfig).toEqual(DEFAULT_CONFIG);
-    expect([files.user.state, files.project.state]).toEqual([
+    expect([outcome.files.user.state, outcome.files.project.state]).toEqual([
       "missing",
       "missing",
     ]);
@@ -492,9 +348,9 @@ function configPath(scope: ConfigScope): string {
     : path.join(dirs.cwd, ".pi", "theme-sync", "config.json");
 }
 
-function createContext(trusted: boolean): LoadConfigContext {
+function createContext(): LoadConfigContext {
   return {
-    ...createProjectTrustContext(dirs.cwd, trusted),
+    ...createProjectTrustContext(dirs.cwd, true),
     ui: {
       getAllThemes: () =>
         availableThemeNames.map((name) => ({ name, path: undefined })),
@@ -502,8 +358,8 @@ function createContext(trusted: boolean): LoadConfigContext {
   };
 }
 
-function load(trusted = true, fs?: ConfigFileFs) {
-  return loadConfig(createContext(trusted), { agentDir: dirs.agentDir, fs });
+function load() {
+  return loadConfig(createContext());
 }
 
 async function writeConfigs(

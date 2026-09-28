@@ -20,19 +20,15 @@ const ESC = "\x1b";
 const HELP_KEY = "\x1bOP";
 const CTRL_S = "\x13";
 
-const config: LoadedRuntimeConfig = {
-  files: {
-    project: {
-      path: "/a/very/long/project/configuration/path/config.json",
-      scope: "project",
-      state: "missing",
-    },
-    user: {
-      path: "/a/very/long/user/configuration/path/config.json",
-      scope: "user",
-      state: "missing",
-    },
-  },
+const configPaths = {
+  project: "/a/very/long/project/configuration/path/config.json",
+  user: "/a/very/long/user/configuration/path/config.json",
+};
+
+const config: Pick<
+  LoadedRuntimeConfig,
+  "runtimeConfig" | "runtimeConfigSources"
+> = {
   runtimeConfig: {
     detection: { pollIntervalMs: 5000 },
     syncEnabled: true,
@@ -43,7 +39,6 @@ const config: LoadedRuntimeConfig = {
     syncEnabled: "user",
     themes: { dark: "project", light: "default" },
   },
-  warnings: [],
 };
 
 const COLOR_CODES: Readonly<Record<string, string>> = {
@@ -129,8 +124,8 @@ test("offers each scope's config.json as a write target, Project first", () => {
 
   const body = bodyLines(overlay.component.render(120));
 
-  expect(body[0]).toBe(`→ Project (${config.files.project.path})`);
-  expect(body[1]).toBe(`  User (${config.files.user.path})`);
+  expect(body[0]).toBe(`→ Project (${configPaths.project})`);
+  expect(body[1]).toBe(`  User (${configPaths.user})`);
 });
 
 test("shows the sync value as on or off and saves the choice as a boolean", async () => {
@@ -545,6 +540,7 @@ function createOverlay(
   const save = overrides.save ?? vi.fn().mockResolvedValue(undefined);
   const component = new ConfigOverlayComponent({
     config,
+    configPaths,
     done,
     keybindings: createPiKeybindings(overrides.keybindings),
     requestRender,
