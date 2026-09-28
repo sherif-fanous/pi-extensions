@@ -1,6 +1,6 @@
 /** Covers how the fake handler context merges the members a test sets. */
 
-import { createFakeContext } from "../src/index.js";
+import { createFakeContext } from "../../src/index.js";
 import { describe, expect, it } from "vitest";
 
 describe("createFakeContext", () => {

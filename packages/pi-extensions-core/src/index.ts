@@ -9,7 +9,7 @@ export {
   atomicWrite,
   type AtomicWriteFs,
   writeJsonFile,
-} from "./atomic-write.js";
+} from "./config/atomic-write.js";
 export {
   type ConfigContext,
   type ConfigFile,
@@ -25,24 +25,24 @@ export {
   type ReadConfigFileOptions,
   updateConfigFile,
   writeConfigFile,
-} from "./config-file.js";
+} from "./config/file.js";
 export {
   type ConfigKeyRename,
   renameConfigKeys,
   type RenamedConfigKeys,
-} from "./config-keys.js";
+} from "./config/keys.js";
 export {
   type ConfigKeyMigration,
   configMigratedMessage,
   migrateRenamedConfigKeys,
-} from "./config-migration.js";
-export { configStatusLines } from "./config-report.js";
+} from "./config/migration.js";
+export { configStatusLines } from "./config/report.js";
 export {
   malformedConfigWarning,
   unreadableConfigWarning,
   unsupportedConfigVersionWarning,
   untrustedProjectConfigWarning,
-} from "./config-warnings.js";
+} from "./config/warnings.js";
 export { describeError, describeErrorSentence } from "./errors.js";
 export {
   guardCommand,
@@ -52,7 +52,7 @@ export {
   notifyWarnings,
   subcommandCompletions,
   type SubcommandCompletion,
-} from "./extension.js";
+} from "./commands/extension.js";
 export {
   frameBodyRows,
   frameBodyWidth,
@@ -63,10 +63,13 @@ export {
   frameTop,
   padToWidth,
   renderFrame,
-} from "./frame.js";
+} from "./tui/frame.js";
 export { isNotFoundError, isRecord } from "./guards.js";
-export { isInteractiveTui, requireInteractiveTui } from "./interactive.js";
-export { parseJsonObject, type ParseJsonObjectResult } from "./json.js";
+export {
+  isInteractiveTui,
+  requireInteractiveTui,
+} from "./commands/interactive.js";
+export { parseJsonObject, type ParseJsonObjectResult } from "./config/json.js";
 export {
   formatKeyId,
   keyHint,
@@ -75,7 +78,7 @@ export {
   matchSelectAction,
   type SelectAction,
   wrapKeyHints,
-} from "./key-hints.js";
+} from "./tui/key-hints.js";
 export {
   emptyStateLines,
   type ListMove,
@@ -85,18 +88,18 @@ export {
   moveListSelection,
   type ScrolledLines,
   scrollLines,
-} from "./list.js";
+} from "./tui/list.js";
 export {
   overlayMaxHeight,
   overlayOptions,
   type OverlaySize,
-} from "./overlay.js";
-export { extensionConfigPath, projectConfigPath } from "./paths.js";
+} from "./tui/overlay.js";
+export { extensionConfigPath, projectConfigPath } from "./config/paths.js";
 export {
   alignLabelRows,
   type CommandReport,
   type CommandReportChannel,
   createCommandReport,
   styleReport,
-} from "./report.js";
+} from "./commands/report.js";
 export { pluralize } from "./text.js";

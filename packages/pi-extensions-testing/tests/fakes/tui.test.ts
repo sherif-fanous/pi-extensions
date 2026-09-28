@@ -1,4 +1,4 @@
-import { createFakeKeybindings, createPiKeybindings } from "../src/index.js";
+import { createFakeKeybindings, createPiKeybindings } from "../../src/index.js";
 import { describe, expect, it } from "vitest";
 
 describe("createPiKeybindings", () => {

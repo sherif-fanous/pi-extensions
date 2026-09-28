@@ -3,7 +3,7 @@
  * extension configuration files.
  */
 
-import { isRecord } from "./guards.js";
+import { isRecord } from "../guards.js";
 
 /**
  * Outcome of `parseJsonObject`.

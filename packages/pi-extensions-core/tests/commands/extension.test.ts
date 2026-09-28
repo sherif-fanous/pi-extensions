@@ -10,7 +10,7 @@ import {
   notifyWarnings,
   subcommandCompletions,
   type GuardContext,
-} from "../src/index.js";
+} from "../../src/index.js";
 import type {
   BeforeAgentStartEvent,
   BeforeAgentStartEventResult,

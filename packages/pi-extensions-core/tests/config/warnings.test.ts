@@ -3,7 +3,7 @@ import {
   unreadableConfigWarning,
   unsupportedConfigVersionWarning,
   untrustedProjectConfigWarning,
-} from "../src/index.js";
+} from "../../src/index.js";
 import { describe, expect, it } from "vitest";
 
 describe("unreadableConfigWarning", () => {

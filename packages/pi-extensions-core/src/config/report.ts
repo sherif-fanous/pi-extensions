@@ -3,12 +3,8 @@
  * what reading it found.
  */
 
-import {
-  configScopeLabel,
-  type ConfigFile,
-  type ConfigScope,
-} from "./config-file.js";
-import { alignLabelRows } from "./report.js";
+import { alignLabelRows } from "../commands/report.js";
+import { configScopeLabel, type ConfigFile, type ConfigScope } from "./file.js";
 
 /** Scopes in the order the block lists them. */
 const SCOPE_ORDER: readonly ConfigScope[] = ["user", "project"];

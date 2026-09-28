@@ -4,8 +4,8 @@
  * argument completion for fixed subcommands.
  */
 
-import { describeErrorSentence } from "./errors.js";
-import { pluralize } from "./text.js";
+import { describeErrorSentence } from "../errors.js";
+import { pluralize } from "../text.js";
 import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 

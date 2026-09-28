@@ -5,7 +5,7 @@ import {
   createProjectTrustContext,
   createTempConfigDirs,
   type TempConfigDirs,
-} from "../src/index.js";
+} from "../../src/index.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 describe("createProjectTrustContext", () => {

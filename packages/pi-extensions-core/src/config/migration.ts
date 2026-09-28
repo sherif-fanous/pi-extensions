@@ -3,9 +3,9 @@
  * message that reports every migrated file.
  */
 
+import { describeErrorSentence } from "../errors.js";
 import type { AtomicWriteFs } from "./atomic-write.js";
-import { writeConfigFile, type ConfigFile } from "./config-file.js";
-import { describeErrorSentence } from "./errors.js";
+import { writeConfigFile, type ConfigFile } from "./file.js";
 
 /** Outcome of {@link migrateRenamedConfigKeys}. */
 export interface ConfigKeyMigration {

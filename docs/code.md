@@ -10,7 +10,9 @@ README for the full API.
   in `router.ts` when subcommands need modules of their own. Its entry point is
   `run<Command>Command(args, ctx, deps)`, where `deps` is one object holding
   anything else it needs, left out when it needs nothing. Overlays, dialogs, and
-  pickers live in `src/ui/`.
+  pickers live in `src/ui/`. Library packages group `src/` by area (`config/`,
+  `tui/`, `commands/`, `fakes/`), with only the entry point and cross-cutting
+  helpers at the top level.
 - Errors: `describeError` for thrown values. Register every command handler
   through `guardCommand("<Display Name>", handler)` and every `pi.on` handler
   that can throw through `guardEvent("<Display Name>", "<event>", handler)`, so

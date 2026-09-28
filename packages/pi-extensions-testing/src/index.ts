@@ -12,12 +12,12 @@ export {
   createTempConfigDirs,
   type ProjectTrustContext,
   type TempConfigDirs,
-} from "./config.js";
+} from "./fakes/config.js";
 export {
   createFakeCustom,
   type CustomComponent,
   type FakeCustomOptions,
-} from "./custom.js";
+} from "./fakes/custom.js";
 export {
   createFakePi,
   type FakeCommand,
@@ -27,12 +27,12 @@ export {
   type FakePi,
   type FakePiOverrides,
   type FakeShortcut,
-} from "./extension-api.js";
+} from "./fakes/extension-api.js";
 export {
   createFakeContext,
   type FakeContextOptions,
   type FakeSessionManager,
-} from "./extension-context.js";
+} from "./fakes/extension-context.js";
 export {
   findOverflowingLines,
   type OverflowingLine,
@@ -59,4 +59,4 @@ export {
   type FakeOverlay,
   type FakeTui,
   type FakeWidgets,
-} from "./tui.js";
+} from "./fakes/tui.js";

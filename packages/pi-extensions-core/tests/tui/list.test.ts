@@ -4,7 +4,7 @@ import {
   listWindow,
   moveListSelection,
   scrollLines,
-} from "../src/index.js";
+} from "../../src/index.js";
 import {
   createMarkerTheme,
   createPlainTheme,

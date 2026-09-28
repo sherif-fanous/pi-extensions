@@ -8,8 +8,8 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { atomicWrite, makeTmpPath } from "../src/atomic-write.js";
-import { writeJsonFile } from "../src/index.js";
+import { atomicWrite, makeTmpPath } from "../../src/config/atomic-write.js";
+import { writeJsonFile } from "../../src/index.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let dir: string;

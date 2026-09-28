@@ -3,7 +3,7 @@
  * every extension words these failures the same way.
  */
 
-import { describeErrorSentence } from "./errors.js";
+import { describeErrorSentence } from "../errors.js";
 import type { ParseJsonObjectResult } from "./json.js";
 
 /**

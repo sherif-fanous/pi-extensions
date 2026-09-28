@@ -6,7 +6,7 @@ import {
   frameTop,
   padToWidth,
   renderFrame,
-} from "../src/index.js";
+} from "../../src/index.js";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import {
   createMarkerTheme,

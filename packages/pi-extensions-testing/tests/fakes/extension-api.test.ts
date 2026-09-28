@@ -1,6 +1,6 @@
 /** Covers how the fake `ExtensionAPI` dispatches events and records appended entries. */
 
-import { createFakeContext, createFakePi } from "../src/index.js";
+import { createFakeContext, createFakePi } from "../../src/index.js";
 import { describe, expect, it } from "vitest";
 
 const SESSION_START = { reason: "startup", type: "session_start" } as const;

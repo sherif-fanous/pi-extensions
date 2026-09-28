@@ -8,7 +8,7 @@ import {
   createCommandReport,
   styleReport,
   type CommandReport,
-} from "../src/index.js";
+} from "../../src/index.js";
 import type {
   CustomEntry,
   ExtensionContext,

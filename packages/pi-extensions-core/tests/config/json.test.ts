@@ -1,4 +1,4 @@
-import { parseJsonObject } from "../src/index.js";
+import { parseJsonObject } from "../../src/index.js";
 import { describe, expect, it } from "vitest";
 
 describe("parseJsonObject", () => {

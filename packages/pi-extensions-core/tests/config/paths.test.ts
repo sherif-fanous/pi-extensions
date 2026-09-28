@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { extensionConfigPath, projectConfigPath } from "../src/index.js";
+import { extensionConfigPath, projectConfigPath } from "../../src/index.js";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 

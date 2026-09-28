@@ -10,7 +10,7 @@ import {
   updateConfigFile,
   writeConfigFile,
   type ConfigFile,
-} from "../src/index.js";
+} from "../../src/index.js";
 import {
   createProjectTrustContext,
   createTempConfigDirs,

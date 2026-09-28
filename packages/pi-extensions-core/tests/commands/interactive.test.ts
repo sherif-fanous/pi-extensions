@@ -2,7 +2,7 @@
  * Covers the interactive-terminal gate for commands that open an overlay:
  * it passes in the TUI and warns once in every other run mode.
  */
-import { requireInteractiveTui } from "../src/index.js";
+import { requireInteractiveTui } from "../../src/index.js";
 import { describe, expect, it, vi } from "vitest";
 
 describe("requireInteractiveTui", () => {

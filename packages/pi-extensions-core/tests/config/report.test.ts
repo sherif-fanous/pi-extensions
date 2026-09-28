@@ -1,4 +1,4 @@
-import { configStatusLines, type ConfigFile } from "../src/index.js";
+import { configStatusLines, type ConfigFile } from "../../src/index.js";
 import { describe, expect, it } from "vitest";
 
 const USER_PATH = "/home/me/.pi/agent/theme-sync/config.json";

@@ -6,7 +6,7 @@ import {
   loadConfigFiles,
   migrateRenamedConfigKeys,
   type AtomicWriteFs,
-} from "../src/index.js";
+} from "../../src/index.js";
 import {
   createProjectTrustContext,
   createTempConfigDirs,

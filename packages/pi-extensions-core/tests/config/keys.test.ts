@@ -1,4 +1,4 @@
-import { renameConfigKeys } from "../src/index.js";
+import { renameConfigKeys } from "../../src/index.js";
 import { describe, expect, it } from "vitest";
 
 describe("renameConfigKeys", () => {

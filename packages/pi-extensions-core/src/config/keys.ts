@@ -4,7 +4,7 @@
  * existing files.
  */
 
-import { isRecord } from "./guards.js";
+import { isRecord } from "../guards.js";
 
 /**
  * One renamed key, as dot-separated paths from the top of the document,

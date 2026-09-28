@@ -6,18 +6,18 @@
 
 import { access, readFile } from "node:fs/promises";
 
+import { describeError } from "../errors.js";
+import { isNotFoundError } from "../guards.js";
 import { writeJsonFile, type AtomicWriteFs } from "./atomic-write.js";
-import { renameConfigKeys, type ConfigKeyRename } from "./config-keys.js";
+import { parseJsonObject } from "./json.js";
+import { renameConfigKeys, type ConfigKeyRename } from "./keys.js";
+import { extensionConfigPath, projectConfigPath } from "./paths.js";
 import {
   malformedConfigWarning,
   unreadableConfigWarning,
   unsupportedConfigVersionWarning,
   untrustedProjectConfigWarning,
-} from "./config-warnings.js";
-import { describeError } from "./errors.js";
-import { isNotFoundError } from "./guards.js";
-import { parseJsonObject } from "./json.js";
-import { extensionConfigPath, projectConfigPath } from "./paths.js";
+} from "./warnings.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 /** The file-system calls the loader makes. Tests inject failures. */

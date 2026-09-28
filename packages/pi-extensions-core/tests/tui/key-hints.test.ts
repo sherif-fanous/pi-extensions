@@ -5,7 +5,7 @@ import {
   matchesHelpKey,
   matchSelectAction,
   wrapKeyHints,
-} from "../src/index.js";
+} from "../../src/index.js";
 import { Key } from "@earendil-works/pi-tui";
 import {
   createPiKeybindings,
