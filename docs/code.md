@@ -3,20 +3,32 @@
 Reach for `@sherif-fanous/pi-extensions-core` before writing a helper; see its
 README for the full API.
 
+- Layout: `src/index.ts` holds the default export, named after the extension
+  (`rtk`, `themeSync`, `presetsPlus`, `notificationCenter`, `sessionSlice`) and
+  returning `void`, which registers everything. Each slash command lives in
+  `src/commands/<command>.ts`, or in `src/commands/<command>/` with its dispatch
+  in `router.ts` when subcommands need modules of their own. Its entry point is
+  `run<Command>Command(args, ctx, deps)`, where `deps` is one object holding
+  anything else it needs, left out when it needs nothing. Overlays, dialogs, and
+  pickers live in `src/ui/`.
 - Errors: `describeError` for thrown values. Register every command handler
   through `guardCommand("<Display Name>", handler)` and every `pi.on` handler
   that can throw through `guardEvent("<Display Name>", "<event>", handler)`, so
   failures read `<Display Name> command failed: …` or
   `<Display Name> <event> failed: …`. Display names: `Theme Sync`,
   `Presets Plus`, `Notification Center`, `Session Slice`, `RTK`. Don't notify
-  from `session_shutdown`: Pi provides no UI during shutdown, so theme-sync
-  swallows cleanup errors there instead.
+  from `session_shutdown`: Pi provides no UI during shutdown, so the handler
+  swallows `dispose()` errors there instead.
 - Session runtimes: Pi fires `session_start` again on reload and session
   switches, so dispose any previous runtime (timers, overlays, wrappers) before
-  starting a new one, and dispose it on `session_shutdown`. If setup is async,
-  its cleanup must be able to abort it partway through (see theme-sync's
-  `runtime.ts`). There is no shared helper for this, because the extensions'
-  lifecycles differ.
+  starting a new one, and dispose it on `session_shutdown`. A runtime's
+  lifecycle methods are `startSession(ctx)` and `dispose()`; when each instance
+  lasts one session, `startSession` is the static factory that creates it. If
+  the start is async, `dispose()` must be able to abort it partway through (see
+  theme-sync's `runtime.ts`). The `session_shutdown` handler calls `dispose()`
+  inside `try { … } catch {}`, since it has no UI to report a failure to, then
+  drops its reference to a per-session runtime. There is no shared helper for
+  this, because the extensions' lifecycles differ.
 - Config: `loadConfigFiles` or `readConfigFile` to read `config.json`,
   `updateConfigFile` to save it, and the rest of [config.md](config.md). Other
   files, such as an old layout a migration reads, use `extensionConfigPath` and
@@ -59,6 +71,13 @@ README for the full API.
   the module does. Every exported function, type, and constant carries a short
   JSDoc saying what it does. Don't list what a module is not responsible for,
   and don't name sibling modules to disclaim them.
+- A function or method that acts is documented in the imperative:
+  `Build a fake TUI …`, `Open the picker …`. One that returns a value or answers
+  a question may instead name its result in a noun phrase:
+  `Whether Pi is running …`, `The path to …`. Never use the third person
+  (`Builds …`, `Returns …`). This covers functions exposed as constants or
+  interface members too. Types, constants, and other properties get noun
+  phrases.
 - Skip `@param`, `@returns`, and `@throws` tags that restate the signature. Add
   a second sentence to a doc block only when the caller needs it: an invariant
   to uphold, a non-obvious return contract, or a host quirk.
