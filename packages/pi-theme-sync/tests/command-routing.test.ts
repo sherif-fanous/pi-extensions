@@ -1,5 +1,3 @@
-import { promises as fs } from "node:fs";
-
 import { runThemeSyncCommand } from "../src/command.js";
 import type { ThemeSyncRuntime } from "../src/runtime.js";
 import type { RuntimeStatus } from "../src/types.js";
@@ -12,17 +10,13 @@ import { afterEach, expect, test, vi } from "vitest";
 const status: RuntimeStatus = {
   appliedTheme: "dark",
   availableDetectors: [],
-  configSources: {
-    detection: { pollIntervalMs: "default" },
-    isSyncActive: "default",
-    themes: { dark: "default", light: "default" },
-  },
+  configFiles: [],
   currentAppearance: "dark",
   desiredTheme: "dark",
   detectionStrategy: "OSC 11",
   lastEvent: "Updated.",
   pollIntervalMs: 5000,
-  syncStatus: "active",
+  syncEnabled: true,
   warnings: [],
 };
 
@@ -38,10 +32,6 @@ afterEach(() => {
 });
 
 test("bare command opens configuration directly at the main overlay size", async () => {
-  vi.spyOn(fs, "readFile").mockRejectedValue(
-    Object.assign(new Error("missing"), { code: "ENOENT" }),
-  );
-
   const custom = vi.fn().mockResolvedValue(undefined);
   const appendEntry = vi.fn();
   const notify = vi.fn();
@@ -99,6 +89,7 @@ function commandContext(
 ): ExtensionCommandContext {
   return {
     cwd: "/unused-command-routing",
+    isProjectTrusted: () => true,
     mode,
     ui: {
       custom,

@@ -1,14 +1,8 @@
 /** Implements the framed Theme Sync configuration form and its nested steps. */
 
-import {
-  isValidPollIntervalMs,
-  POLL_INTERVAL_MAX_MS,
-  POLL_INTERVAL_MIN_MS,
-  scopeLabel,
-} from "../config.js";
+import { CONFIG_LIMITS, isValidPollIntervalMs } from "../config/load.js";
 import { EXTENSION_NAME } from "../extension-name.js";
 import type {
-  ConfigScope,
   ConfigSource,
   EditableConfigChanges,
   LoadedRuntimeConfig,
@@ -24,6 +18,7 @@ import {
   type KeybindingsManager,
 } from "@earendil-works/pi-tui";
 import {
+  configScopeLabel,
   describeErrorSentence,
   emptyStateLines,
   frameBodyRows,
@@ -39,6 +34,7 @@ import {
   renderFrame,
   scrollLines,
   wrapKeyHints,
+  type ConfigScope,
   type SelectAction,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -48,12 +44,12 @@ export interface ConfigOverlayOptions {
   readonly done: () => void;
   /** Pi's keybindings; list movement, confirm, and cancel follow them. */
   readonly keybindings: Pick<KeybindingsManager, "getKeys" | "matches">;
-  readonly resolvePaths: () => Promise<Record<ConfigScope, string>>;
   readonly requestRender: () => void;
+  /** Saves changes to one scope's file; throws when the save fails. */
   readonly save: (
     scope: ConfigScope,
     changes: EditableConfigChanges,
-  ) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  ) => Promise<void>;
   readonly terminalRows: () => number;
   readonly theme: Theme;
   readonly themeNames: readonly string[];
@@ -87,11 +83,13 @@ type ConfigMode =
   | { kind: "pollIntervalEdit"; error?: string }
   | { kind: "syncSelect" }
   | { kind: "themeSelect"; fieldId: ThemeField }
-  | { kind: "writeTarget"; paths: Record<ConfigScope, string> };
+  | { kind: "writeTarget" };
 
 type DraftConfig = Record<ConfigField, string>;
 
 type ThemeField = "themes.light" | "themes.dark";
+
+const POLL_INTERVAL_LIMITS = CONFIG_LIMITS["detection.pollIntervalMs"];
 
 const SOURCE_HELP =
   "The tag after each value shows where it comes from: Default, User, or Project.";
@@ -124,7 +122,7 @@ const CONFIG_FIELDS: readonly ConfigFieldInfo[] = [
   {
     help: [
       "How often, in milliseconds, Theme Sync checks the appearance when your terminal cannot report changes itself. When it can, this is how often Theme Sync checks that Pi still shows the matching theme.",
-      `Press Enter to type a value from ${String(POLL_INTERVAL_MIN_MS)} to ${String(POLL_INTERVAL_MAX_MS)}.`,
+      `Press Enter to type a value from ${String(POLL_INTERVAL_LIMITS.min)} to ${String(POLL_INTERVAL_LIMITS.max)}.`,
       SOURCE_HELP,
       APPLY_HELP,
     ],
@@ -134,14 +132,14 @@ const CONFIG_FIELDS: readonly ConfigFieldInfo[] = [
   },
   {
     help: [
-      "Active switches Pi's theme to match the appearance. Inactive leaves the current theme alone.",
-      "Press Enter to choose Active or Inactive.",
+      "On switches Pi's theme to match the appearance. Off leaves the current theme alone.",
+      "Press Enter to choose on or off.",
       SOURCE_HELP,
       APPLY_HELP,
     ],
-    id: "isSyncActive",
-    label: "Sync status",
-    title: "Sync Status",
+    id: "syncEnabled",
+    label: "Sync",
+    title: "Sync",
   },
 ];
 
@@ -152,7 +150,7 @@ const LABEL_COLUMN_WIDTH =
 /** Focused component that edits and saves a theme sync configuration draft. */
 export class ConfigOverlayComponent implements Component, Focusable {
   private _focused = false;
-  /** Footer busy line while input waits on a save or a path lookup. */
+  /** Footer busy line while input waits on a save. */
   private busyText: string | undefined;
   private configIndex = 0;
   private readonly current: DraftConfig;
@@ -173,7 +171,7 @@ export class ConfigOverlayComponent implements Component, Focusable {
       "themes.light": runtime.themes.light,
       "themes.dark": runtime.themes.dark,
       "detection.pollIntervalMs": String(runtime.detection.pollIntervalMs),
-      isSyncActive: runtime.isSyncActive ? "active" : "inactive",
+      syncEnabled: runtime.syncEnabled ? "on" : "off",
     };
     this.desired = { ...this.current };
   }
@@ -273,8 +271,8 @@ export class ConfigOverlayComponent implements Component, Focusable {
       );
     }
 
-    if (this.desired.isSyncActive !== this.current.isSyncActive) {
-      changes.isSyncActive = this.desired.isSyncActive === "active";
+    if (this.desired.syncEnabled !== this.current.syncEnabled) {
+      changes.syncEnabled = this.desired.syncEnabled === "on";
     }
 
     return changes;
@@ -288,7 +286,7 @@ export class ConfigOverlayComponent implements Component, Focusable {
 
         break;
       case "syncSelect":
-        this.desired.isSyncActive = item.value;
+        this.desired.syncEnabled = item.value;
         this.setMode({ kind: "config" });
 
         break;
@@ -313,7 +311,7 @@ export class ConfigOverlayComponent implements Component, Focusable {
     } else if (id === "detection.pollIntervalMs") {
       this.openPollEditor();
     } else {
-      this.listIndex = this.desired.isSyncActive === "active" ? 0 : 1;
+      this.listIndex = this.desired.syncEnabled === "on" ? 0 : 1;
       this.setMode({ kind: "syncSelect" });
     }
   }
@@ -386,7 +384,9 @@ export class ConfigOverlayComponent implements Component, Focusable {
     }
 
     if (matchesKey(data, Key.ctrl("s"))) {
-      void this.openWriteTarget();
+      this.message = undefined;
+      this.listIndex = 0;
+      this.setMode({ kind: "writeTarget" });
 
       return;
     }
@@ -478,14 +478,19 @@ export class ConfigOverlayComponent implements Component, Focusable {
         }));
       case "syncSelect":
         return [
-          { label: "Active", value: "active" },
-          { label: "Inactive", value: "inactive" },
+          { label: "on", value: "on" },
+          { label: "off", value: "off" },
         ];
-      case "writeTarget":
+
+      case "writeTarget": {
+        const { files } = this.options.config;
+
         return [
-          { label: `Project (${this.mode.paths.project})`, value: "project" },
-          { label: `User (${this.mode.paths.global})`, value: "global" },
+          { label: `Project (${files.project.path})`, value: "project" },
+          { label: `User (${files.user.path})`, value: "user" },
         ];
+      }
+
       default:
         return [];
     }
@@ -522,7 +527,7 @@ export class ConfigOverlayComponent implements Component, Focusable {
       if (!isValidPollIntervalMs(parsed)) {
         this.mode = {
           kind: "pollIntervalEdit",
-          error: `Polling interval must be between ${POLL_INTERVAL_MIN_MS} and ${POLL_INTERVAL_MAX_MS} milliseconds.`,
+          error: `Polling interval must be between ${String(POLL_INTERVAL_LIMITS.min)} and ${String(POLL_INTERVAL_LIMITS.max)} milliseconds.`,
         };
         this.options.requestRender();
 
@@ -535,28 +540,6 @@ export class ConfigOverlayComponent implements Component, Focusable {
 
     this.pollInput.onEscape = () => this.setMode({ kind: "config" });
     this.setMode({ kind: "pollIntervalEdit" });
-  }
-
-  private async openWriteTarget(): Promise<void> {
-    this.busyText = "Resolving configuration paths…";
-    this.message = undefined;
-    this.options.requestRender();
-
-    try {
-      const paths = await this.options.resolvePaths();
-
-      this.listIndex = 0;
-      this.setMode({ kind: "writeTarget", paths });
-    } catch (error) {
-      this.message = {
-        text: `Could not resolve the configuration paths: ${describeErrorSentence(error)}`,
-        severity: "error",
-      };
-      this.setMode({ kind: "config" });
-    } finally {
-      this.busyText = undefined;
-      this.options.requestRender();
-    }
   }
 
   /**
@@ -695,7 +678,7 @@ export class ConfigOverlayComponent implements Component, Focusable {
 
     const errorMessage = this.mode.error;
     const instruction = wrapTextWithAnsi(
-      `Enter milliseconds (${POLL_INTERVAL_MIN_MS} to ${POLL_INTERVAL_MAX_MS}, inclusive).`,
+      `Enter milliseconds (${String(POLL_INTERVAL_LIMITS.min)} to ${String(POLL_INTERVAL_LIMITS.max)}, inclusive).`,
       Math.max(1, width),
     );
     const input = this.pollInput.render(Math.max(1, width));
@@ -736,20 +719,14 @@ export class ConfigOverlayComponent implements Component, Focusable {
     this.setMode({ kind: "config" });
 
     try {
-      const result = await this.options.save(scope, changes);
-
-      if (!result.ok) {
-        this.message = { text: result.reason, severity: "error" };
-
-        return;
-      }
+      await this.options.save(scope, changes);
 
       Object.assign(this.current, submitted);
       this.message = {
         text:
           count === 0
             ? "No changes to save."
-            : `Saved ${pluralize(count, "changed setting")} to ${scopeLabel(scope)}.`,
+            : `Saved ${pluralize(count, "changed setting")} to ${configScopeLabel(scope)}. Press Ctrl+R to reload and apply.`,
         severity: count === 0 ? "info" : "success",
       };
     } catch (error) {
@@ -779,8 +756,8 @@ export class ConfigOverlayComponent implements Component, Focusable {
         return sources.themes.dark;
       case "detection.pollIntervalMs":
         return sources.detection.pollIntervalMs;
-      case "isSyncActive":
-        return sources.isSyncActive;
+      case "syncEnabled":
+        return sources.syncEnabled;
     }
   }
 
@@ -811,7 +788,7 @@ export class ConfigOverlayComponent implements Component, Focusable {
       case "themeSelect":
         return fieldTitle(this.mode.fieldId);
       case "syncSelect":
-        return fieldTitle("isSyncActive");
+        return fieldTitle("syncEnabled");
       case "pollIntervalEdit":
         return fieldTitle("detection.pollIntervalMs");
       case "writeTarget":
@@ -831,5 +808,5 @@ function fieldTitle(id: ConfigField): string {
 }
 
 function formatSource(source: ConfigSource): string {
-  return source === "default" ? "Default" : scopeLabel(source);
+  return source === "default" ? "Default" : configScopeLabel(source);
 }

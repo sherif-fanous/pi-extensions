@@ -1,189 +1,101 @@
-import { promises as fs } from "node:fs";
 import path from "node:path";
 
+import { openThemeSyncOverlay } from "../src/command.js";
+import { CONFIG_VERSION } from "../src/config/load.js";
+import { createThemeSyncRuntime } from "../src/runtime.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
   createFakeCustom,
   createPiKeybindings,
+  createTempConfigDirs,
+  stripAnsi,
   type CustomComponent,
+  type TempConfigDirs,
 } from "@sherif-fanous/pi-extensions-testing";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-const projectDirectory = "/unused-overlay-project";
-const agentDirectory = "/unused-custom-agent";
-const projectPreferred = path.join(
-  projectDirectory,
-  ".pi",
-  "theme-sync",
-  "settings.json",
-);
-const projectLegacy = path.join(projectDirectory, ".pi", "theme-sync.json");
-const globalPreferred = path.join(
-  agentDirectory,
-  "theme-sync",
-  "settings.json",
-);
-const globalLegacy = path.join(agentDirectory, "theme-sync.json");
+const ENTER = "\r";
+const DOWN = "\x1b[B";
+const CTRL_S = "\x13";
 
-vi.mock("@sherif-fanous/pi-extensions-core", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@sherif-fanous/pi-extensions-core")>();
+let dirs: TempConfigDirs;
 
-  return { ...actual, writeJsonFile: vi.fn(actual.writeJsonFile) };
+beforeEach(async () => {
+  dirs = await createTempConfigDirs();
+  vi.stubEnv("PI_CODING_AGENT_DIR", dirs.agentDir);
 });
 
-afterEach(() => {
-  vi.restoreAllMocks();
+afterEach(async () => {
   vi.unstubAllEnvs();
-  vi.resetModules();
+  await dirs.cleanup();
 });
 
-test.each([
-  {
-    name: "missing",
-    files: [],
-    project: projectPreferred,
-    global: globalPreferred,
-  },
-  {
-    name: "preferred",
-    files: [projectPreferred, globalPreferred],
-    project: projectPreferred,
-    global: globalPreferred,
-  },
-  {
-    name: "legacy",
-    files: [projectLegacy, globalLegacy],
-    project: projectLegacy,
-    global: globalLegacy,
-  },
-  {
-    name: "both",
-    files: [projectPreferred, projectLegacy, globalPreferred, globalLegacy],
-    project: projectPreferred,
-    global: globalPreferred,
-  },
-  {
-    name: "mixed",
-    files: [projectLegacy, globalPreferred],
-    project: projectLegacy,
-    global: globalPreferred,
-  },
-])(
-  "shows resolved $name paths using the global override",
-  async ({ files, project, global }) => {
-    await withOverlay(new Set(files), async (overlay) => {
-      overlay.handleInput?.("\x13");
-      await vi.waitFor(() => {
-        const rendered = overlay.render(240).join("\n");
+test("offers each scope's config.json under the agent directory override", async () => {
+  await withOverlay(true, (overlay) => {
+    overlay.handleInput?.(CTRL_S);
 
-        expect(rendered).toContain(`Project (${project})`);
-        expect(rendered).toContain(`User (${global})`);
-      });
-    });
-  },
-);
+    const rendered = stripAnsi(overlay.render(240).join("\n"));
 
-test("refreshes paths when reopening after migration and retains pending edits", async () => {
-  const files = new Set([projectLegacy, globalLegacy]);
-
-  await withOverlay(files, async (overlay) => {
-    for (const event of ["\r", "\x1b[B", "\r", "\x13"]) {
-      overlay.handleInput?.(event);
-    }
-
-    await vi.waitFor(() =>
-      expect(overlay.render(240).join("\n")).toContain(
-        `Project (${projectLegacy})`,
-      ),
-    );
-    overlay.handleInput?.("\x1b");
-    files.add(projectPreferred);
-    files.delete(globalLegacy);
-    overlay.handleInput?.("\x13");
-    await vi.waitFor(() => {
-      const rendered = overlay.render(240).join("\n");
-
-      expect(rendered).toContain(`Project (${projectPreferred})`);
-      expect(rendered).toContain(`User (${globalPreferred})`);
-    });
-
-    const { writeJsonFile } = await import("@sherif-fanous/pi-extensions-core");
-    const writeSpy = vi.mocked(writeJsonFile).mockResolvedValue();
-
-    overlay.handleInput?.("\r");
-    await vi.waitFor(() =>
-      expect(writeSpy).toHaveBeenCalledExactlyOnceWith(projectPreferred, {
-        themes: { light: "dark" },
-      }),
-    );
+    expect(rendered).toContain(`Project (${projectPath()})`);
+    expect(rendered).toContain(`User (${userPath()})`);
   });
 });
 
-test("keeps an unreadable preferred file selected, refuses to save over it, and permits retry without losing edits", async () => {
-  await withOverlay(new Set([projectLegacy]), async (overlay) => {
-    for (const event of ["\r", "\x1b[B", "\r"]) {
-      overlay.handleInput?.(event);
+test("saves a changed setting to config.json with the current version", async () => {
+  await dirs.writeJson(userPath(), { keepThis: true });
+
+  await withOverlay(true, async (overlay) => {
+    // Pick "dark" for Light mode theme, then save to User.
+    for (const key of [ENTER, DOWN, ENTER, CTRL_S, DOWN, ENTER]) {
+      overlay.handleInput?.(key);
     }
 
-    const permissionDenied = Object.assign(new Error("permission denied"), {
-      code: "EACCES",
-    });
-
-    vi.mocked(fs.readFile).mockRejectedValueOnce(permissionDenied);
-    overlay.handleInput?.("\x13");
     await vi.waitFor(() =>
-      expect(overlay.render(240).join("\n")).toContain(
-        `Project (${projectPreferred})`,
+      expect(stripAnsi(overlay.render(240).join("\n"))).toContain(
+        "Saved 1 changed setting to User. Press Ctrl+R to reload and apply.",
       ),
-    );
-
-    const { writeJsonFile } = await import("@sherif-fanous/pi-extensions-core");
-    // Earlier tests in this file leave calls on the shared module mock.
-    const writeSpy = vi.mocked(writeJsonFile).mockClear().mockResolvedValue();
-
-    vi.mocked(fs.readFile).mockRejectedValueOnce(permissionDenied);
-    overlay.handleInput?.("\r");
-    await vi.waitFor(() =>
-      expect(overlay.render(240).join("\n")).toContain(
-        "must be readable and contain a valid JSON object.",
-      ),
-    );
-    expect(writeSpy).not.toHaveBeenCalled();
-
-    overlay.handleInput?.("\x13");
-    await vi.waitFor(() =>
-      expect(overlay.render(240).join("\n")).toContain(
-        `Project (${projectLegacy})`,
-      ),
-    );
-    overlay.handleInput?.("\r");
-    await vi.waitFor(() =>
-      expect(writeSpy).toHaveBeenCalledExactlyOnceWith(projectLegacy, {
-        themes: { light: "dark" },
-      }),
     );
   });
+
+  expect(await dirs.readJson(userPath())).toEqual({
+    keepThis: true,
+    themes: { light: "dark" },
+    version: CONFIG_VERSION,
+  });
 });
+
+test("refuses to save to an untrusted project and keeps the edit", async () => {
+  await withOverlay(false, async (overlay) => {
+    for (const key of [ENTER, DOWN, ENTER, CTRL_S, ENTER]) {
+      overlay.handleInput?.(key);
+    }
+
+    await vi.waitFor(() =>
+      expect(stripAnsi(overlay.render(400).join("\n"))).toContain(
+        `Could not save the configuration: The project is not trusted, so ${projectPath()} was not saved. Trust the project and try again.`,
+      ),
+    );
+
+    expect(stripAnsi(overlay.render(400).join("\n"))).toMatch(
+      /Light mode theme\s+dark/,
+    );
+  });
+
+  expect(await dirs.exists(projectPath())).toBe(false);
+});
+
+function projectPath(): string {
+  return path.join(dirs.cwd, ".pi", "theme-sync", "config.json");
+}
+
+function userPath(): string {
+  return path.join(dirs.agentDir, "theme-sync", "config.json");
+}
 
 async function withOverlay(
-  files: Set<string>,
-  exercise: (overlay: CustomComponent) => Promise<void>,
+  trusted: boolean,
+  exercise: (overlay: CustomComponent) => Promise<void> | void,
 ): Promise<void> {
-  vi.stubEnv("PI_CODING_AGENT_DIR", agentDirectory);
-  vi.resetModules();
-  vi.spyOn(fs, "readFile").mockImplementation((filePath) => {
-    if (typeof filePath === "string" && files.has(filePath)) {
-      return Promise.resolve("{}");
-    }
-
-    return Promise.reject(
-      Object.assign(new Error("Missing test config"), { code: "ENOENT" }),
-    );
-  });
-
-  const { openThemeSyncOverlay } = await import("../src/command.js");
-  const { createThemeSyncRuntime } = await import("../src/runtime.js");
   const custom = createFakeCustom({
     keybindings: createPiKeybindings(),
     onMount: async (overlay, done) => {
@@ -196,7 +108,8 @@ async function withOverlay(
   });
   const reload = vi.fn();
   const ctx = {
-    cwd: projectDirectory,
+    cwd: dirs.cwd,
+    isProjectTrusted: () => trusted,
     mode: "tui",
     reload,
     ui: {

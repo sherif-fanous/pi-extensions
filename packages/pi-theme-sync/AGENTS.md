@@ -24,9 +24,9 @@ The conventions below are the ones the linter cannot enforce.
 - Add a detector by writing its implementation, listing it in the registries in
   `src/detectors/index.ts`, and adding the matching `detectAppearance` switch
   arm. Nothing else should need to change.
-- `writeJson` is not atomic. The current single-writer, single-file pattern
-  makes that acceptable. If concurrent writes become possible, replace it with
-  an atomic write before extending the storage format.
+- Read and save `config.json` only through `src/config/` and core's config
+  helpers, which check project trust, stamp `version`, and write atomically.
+  The repository's `AGENTS.md` "Config" section is the standard they follow.
 - Expose new runtime state through `ThemeSyncRuntime` or `RuntimeStatus`, never
   through exported mutable bindings.
 - `getTuiHandle` acquires Pi's live TUI through a transient zero-line

@@ -61,8 +61,9 @@ behavior.
 
 - **WHEN** the user runs `/theme-sync status`
 - **THEN** the report shows current appearance, applied theme, desired theme,
-  sync active state, detection strategy, available detection methods, polling
-  interval, last update time, last event summary, and warnings when present
+  sync state, detection strategy, available detection methods, polling interval,
+  last update time, last event summary, the `Config:` block, and warnings when
+  present
 
 #### Scenario: Report words toggles and absent values the family way
 
@@ -78,25 +79,30 @@ behavior.
 - **THEN** the report identifies the concrete polling detector rather than only
   a generic polling label
 
-#### Scenario: Status omits config provenance
+#### Scenario: Status shows each configuration file
 
-- **WHEN** the status report is rendered
-- **THEN** it does not show config-source reporting
+- **WHEN** the status report is rendered after a session start
+- **THEN** after the main rows and a blank line, and before `Warnings:`, it
+  shows a `Config:` block with a `User:` and a `Project:` row, each with its
+  file's state (`loaded`, `not found`, `invalid: <reason>`, or
+  `skipped (untrusted)`) and the file's path on the next line
+- **AND** a file problem shows only in that block, not again under `Warnings:`
 
 ### Requirement: Theme sync notifies setup warnings once
 
 When session setup finishes, theme sync SHALL show every warning recorded during
-that setup, such as configuration, detector-probe, and detector-availability
-warnings, in one warning notification headed `Theme Sync: <n> warning(s)`. Setup
-without warnings SHALL NOT notify. Warnings recorded later by the recurring
-detection cycle SHALL appear only in the status report. A setup whose session
-was shut down or replaced before it finished SHALL NOT notify.
+that setup in one warning notification headed `Theme Sync: <n> warning(s)`, in
+this order: migration, configuration file, invalid value, then detector
+warnings. Setup without warnings, and a command that reads the configuration
+again, SHALL NOT notify. Later warnings from the recurring detection cycle, and
+warnings of a setup whose session ended first, SHALL NOT notify.
 
 #### Scenario: Setup records warnings
 
 - **WHEN** a session starts and its setup records one or more warnings
 - **THEN** theme sync shows one warning notification listing each of them
-- **AND** `/theme-sync status` lists the same warnings
+- **AND** `/theme-sync status` lists the same warnings, except the file
+  warnings, which its `Config:` block shows as file states
 
 #### Scenario: A detection cycle records a warning later
 

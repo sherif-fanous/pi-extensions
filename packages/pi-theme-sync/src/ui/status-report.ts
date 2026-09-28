@@ -4,6 +4,7 @@ import { EXTENSION_NAME } from "../extension-name.js";
 import type { RuntimeStatus } from "../types.js";
 import {
   alignLabelRows,
+  configStatusLines,
   createCommandReport,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -33,7 +34,7 @@ export function formatStatusReport(
       ["Appearance:", status.currentAppearance],
       ["Applied theme:", status.appliedTheme],
       ["Desired theme:", status.desiredTheme ?? "none"],
-      ["Sync:", status.syncStatus === "active" ? "on" : "off"],
+      ["Sync:", status.syncEnabled ? "on" : "off"],
       ["Detection strategy:", status.detectionStrategy],
       ["Available detectors:", status.availableDetectors.join(", ") || "none"],
       ["Polling interval:", `${String(status.pollIntervalMs)}ms`],
@@ -46,6 +47,10 @@ export function formatStatusReport(
       ["Last event:", status.lastEvent],
     ]),
   ];
+
+  if (status.configFiles.length > 0) {
+    lines.push("", ...configStatusLines(status.configFiles));
+  }
 
   if (status.warnings.length > 0) {
     lines.push(

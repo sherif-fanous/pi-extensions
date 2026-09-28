@@ -21,14 +21,26 @@ const HELP_KEY = "\x1bOP";
 const CTRL_S = "\x13";
 
 const config: LoadedRuntimeConfig = {
+  files: {
+    project: {
+      path: "/a/very/long/project/configuration/path/config.json",
+      scope: "project",
+      state: "missing",
+    },
+    user: {
+      path: "/a/very/long/user/configuration/path/config.json",
+      scope: "user",
+      state: "missing",
+    },
+  },
   runtimeConfig: {
     detection: { pollIntervalMs: 5000 },
-    isSyncActive: true,
+    syncEnabled: true,
     themes: { dark: "dark", light: "light" },
   },
   runtimeConfigSources: {
     detection: { pollIntervalMs: "default" },
-    isSyncActive: "global",
+    syncEnabled: "user",
     themes: { dark: "project", light: "default" },
   },
   warnings: [],
@@ -49,7 +61,7 @@ const theme = {
     `\x1b[${COLOR_CODES[color] ?? "35"}m${text}\x1b[39m`,
 } as Theme;
 
-test("renders the form and every nested step in a complete frame with a Title Case title", async () => {
+test("renders the form and every nested step in a complete frame with a Title Case title", () => {
   const overlay = createOverlay();
 
   assertFrame(overlay.component.render(58), "Theme Sync Config", 58);
@@ -60,15 +72,10 @@ test("renders the form and every nested step in a complete frame with a Title Ca
   overlay.input(ESC, DOWN, ENTER);
   assertFrame(overlay.component.render(58), "Polling Interval", 58);
   overlay.input(ESC, DOWN, ENTER);
-  assertFrame(overlay.component.render(58), "Sync Status", 58);
+  assertFrame(overlay.component.render(58), "Sync", 58);
   overlay.input(ESC, HELP_KEY);
-  assertFrame(overlay.component.render(58), "Sync Status Help", 58);
+  assertFrame(overlay.component.render(58), "Sync Help", 58);
   overlay.input(ESC, CTRL_S);
-  await vi.waitFor(() =>
-    expect(topBorder(overlay.component.render(58))).toContain(
-      "Write Config To",
-    ),
-  );
   assertFrame(overlay.component.render(58), "Write Config To", 58);
 });
 
@@ -106,14 +113,50 @@ test.each([
   },
 );
 
-test("write target footer offers Save and Back", async () => {
+test("write target footer offers Save and Back", () => {
   const overlay = createOverlay();
 
   overlay.input(CTRL_S);
+  expect(footerText(overlay.component.render(120))).toBe(
+    "↑/↓ Move · Enter Save · Esc Back",
+  );
+});
+
+test("offers each scope's config.json as a write target, Project first", () => {
+  const overlay = createOverlay();
+
+  overlay.input(CTRL_S);
+
+  const body = bodyLines(overlay.component.render(120));
+
+  expect(body[0]).toBe(`→ Project (${config.files.project.path})`);
+  expect(body[1]).toBe(`  User (${config.files.user.path})`);
+});
+
+test("shows the sync value as on or off and saves the choice as a boolean", async () => {
+  const overlay = createOverlay();
+
+  expect(bodyLines(overlay.component.render(80))[3]).toMatch(
+    /Sync\s+on \[User\]$/,
+  );
+
+  overlay.input(UP, ENTER);
+
+  expect(bodyLines(overlay.component.render(80)).slice(0, 2)).toEqual([
+    "→ on",
+    "  off",
+  ]);
+
+  overlay.input(DOWN, ENTER);
+  expect(bodyLines(overlay.component.render(80))[3]).toMatch(
+    /Sync\s+off \[User\]$/,
+  );
+
+  overlay.input(CTRL_S, DOWN, ENTER);
   await vi.waitFor(() =>
-    expect(footerText(overlay.component.render(120))).toBe(
-      "↑/↓ Move · Enter Save · Esc Back",
-    ),
+    expect(overlay.save).toHaveBeenCalledExactlyOnceWith("user", {
+      syncEnabled: false,
+    }),
   );
 });
 
@@ -261,9 +304,9 @@ test.each([
     text: "milliseconds",
   },
   {
-    expected: "Sync Status Help",
+    expected: "Sync Help",
     keys: [UP, "\x1b[57364u"],
-    text: "Inactive leaves",
+    text: "Off leaves",
   },
 ])(
   "F1 opens help for the focused row: $expected",
@@ -334,8 +377,10 @@ test.each([40, 30, 20, 8, 3, 1])(
     overlay.input(ESC, HELP_KEY);
     check();
     overlay.input(ESC, CTRL_S);
+    check();
+    overlay.input(ENTER);
     await flushPromises();
-    expect(overlay.resolvePaths).toHaveBeenCalledOnce();
+    expect(overlay.save).toHaveBeenCalledOnce();
     check();
   },
 );
@@ -398,56 +443,31 @@ test("polling input keeps focus, supports editing, validates, cancels, and resto
   expect(overlay.component.render(58).join("\n")).toContain("1000ms");
 });
 
-test("keeps wrapped path failures inside a short complete frame", async () => {
-  const failed = createOverlay({
-    resolvePaths: vi
-      .fn()
-      .mockRejectedValue(
-        new Error("permission denied for a deeply nested configuration path"),
-      ),
-    rows: 12,
-  });
-
-  failed.input(CTRL_S);
-  await vi.waitFor(() =>
-    expect(stripAnsi(failed.component.render(34).join("\n"))).toContain(
-      "Could not resolve the",
-    ),
-  );
-
-  const lines = failed.component.render(34);
-
-  expect(lines.length).toBeLessThanOrEqual(overlayMaxHeight(12));
-  expect(lines.join("\n")).toContain("\x1b[31m");
-  expect(stripAnsi(lines.at(-1) ?? "").startsWith("└")).toBe(true);
-});
-
 test.each([
   {
-    expected: "Fix the invalid configuration",
-    result: {
-      ok: false as const,
-      reason:
-        "Fix the invalid configuration file at this unusually long location and try again.",
-    },
+    expected: "Could not save the",
+    save: () =>
+      Promise.reject(
+        new Error(
+          "/x is invalid (not valid JSON: Unexpected end of JSON input). Fix the file and try again.",
+        ),
+      ),
     style: "\x1b[31m",
   },
   {
     expected: "Saved 1 changed setting to Project.",
-    result: { ok: true as const },
+    save: () => Promise.resolve(),
     style: "\x1b[32m",
   },
 ])(
   "renders a changed save result inside a short complete frame: $expected",
-  async ({ expected, result, style }) => {
-    const save = vi.fn().mockResolvedValue(result);
+  async ({ expected, save: outcome, style }) => {
+    const save = vi.fn(outcome);
     const overlay = createOverlay({ rows: 10, save });
 
     overlay.input(ENTER, DOWN, ENTER, CTRL_S);
-    await vi.waitFor(() =>
-      expect(topBorder(overlay.component.render(42))).toContain(
-        "Write Config To",
-      ),
+    expect(topBorder(overlay.component.render(42))).toContain(
+      "Write Config To",
     );
     overlay.input(ENTER);
     await vi.waitFor(() =>
@@ -465,44 +485,24 @@ test.each([
   },
 );
 
-test("shows a dim busy line in place of the hints while it resolves paths and saves", async () => {
-  let finishPaths!: (paths: { global: string; project: string }) => void;
-  const resolvePaths = vi.fn(
-    () =>
-      new Promise<{ global: string; project: string }>((resolve) => {
-        finishPaths = resolve;
-      }),
-  );
-  let finishSave!: (value: { ok: true }) => void;
+test("shows a dim busy line in place of the hints while it saves", async () => {
+  let finishSave!: () => void;
   const save = vi.fn(
     () =>
-      new Promise<{ ok: true }>((resolve) => {
+      new Promise<void>((resolve) => {
         finishSave = resolve;
       }),
   );
-  const overlay = createOverlay({ resolvePaths, save });
+  const overlay = createOverlay({ save });
 
-  overlay.input(CTRL_S);
+  overlay.input(CTRL_S, ENTER);
 
   let lines = overlay.component.render(58);
 
-  expect(footerLines(lines)).toEqual(["Resolving configuration paths…"]);
-  expect(lines.join("\n")).toContain(
-    "\x1b[90mResolving configuration paths…\x1b[39m",
-  );
-
-  finishPaths({ global: "/user.json", project: "/project.json" });
-  await vi.waitFor(() =>
-    expect(topBorder(overlay.component.render(58))).toContain(
-      "Write Config To",
-    ),
-  );
-  overlay.input(ENTER);
-  lines = overlay.component.render(58);
   expect(footerLines(lines)).toEqual(["Saving configuration…"]);
   expect(lines.join("\n")).toContain("\x1b[90mSaving configuration…\x1b[39m");
 
-  finishSave({ ok: true });
+  finishSave();
   await vi.waitFor(() =>
     expect(stripAnsi(overlay.component.render(58).join("\n"))).toContain(
       "No changes to save.",
@@ -511,21 +511,6 @@ test("shows a dim busy line in place of the hints while it resolves paths and sa
   lines = overlay.component.render(58);
   expect(lines.join("\n")).toContain("\x1b[37m  No changes to save.\x1b[39m");
   expect(footerText(lines)).toContain("Esc Close");
-});
-
-test("renders a path failure inline in the error color", async () => {
-  const failed = createOverlay({
-    resolvePaths: vi.fn().mockRejectedValue(new Error("permission denied")),
-  });
-
-  failed.input(CTRL_S);
-  await vi.waitFor(() => {
-    const rendered = stripAnsi(failed.component.render(60).join("\n"));
-
-    expect(rendered).toContain("Could not resolve the configuration paths:");
-    expect(rendered).toContain("denied.");
-  });
-  expect(failed.component.render(60).join("\n")).toContain("\x1b[31m");
 });
 
 function assertFrame(lines: string[], title: string, width: number): void {
@@ -550,27 +535,19 @@ function bodyLines(lines: readonly string[]): string[] {
 function createOverlay(
   overrides: {
     keybindings?: KeybindingsConfig;
-    resolvePaths?: () => Promise<{ global: string; project: string }>;
     rows?: number;
-    save?: () => Promise<{ ok: true } | { ok: false; reason: string }>;
+    save?: () => Promise<void>;
     themeNames?: string[];
   } = {},
 ) {
   const done = vi.fn();
   const requestRender = vi.fn();
-  const resolvePaths =
-    overrides.resolvePaths ??
-    vi.fn().mockResolvedValue({
-      global: "/a/very/long/global/configuration/path/settings.json",
-      project: "/a/very/long/project/configuration/path/settings.json",
-    });
-  const save = overrides.save ?? vi.fn().mockResolvedValue({ ok: true });
+  const save = overrides.save ?? vi.fn().mockResolvedValue(undefined);
   const component = new ConfigOverlayComponent({
     config,
     done,
     keybindings: createPiKeybindings(overrides.keybindings),
     requestRender,
-    resolvePaths,
     save,
     terminalRows: () => overrides.rows ?? 30,
     theme,
@@ -583,7 +560,6 @@ function createOverlay(
     input: (...keys: string[]) => {
       for (const key of keys) component.handleInput(key);
     },
-    resolvePaths,
     save,
   };
 }

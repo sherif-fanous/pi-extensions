@@ -1,8 +1,5 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { CONFIG_PATHS } from "../src/config.js";
 import { detectAppearanceViaColorScheme } from "../src/detectors/pi/color-scheme.js";
 import { detectAppearanceViaSystem } from "../src/detectors/system/appearance.js";
 import { probeDecMode2031Support } from "../src/detectors/terminal/dec-mode-2031.js";
@@ -18,9 +15,11 @@ import {
   createPiKeybindings,
   createPlainTheme,
   createShownTextRecorder,
+  createTempConfigDirs,
   findShownTextViolations,
   type FakeCustomOptions,
   type ShownTextRecorder,
+  type TempConfigDirs,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -44,17 +43,22 @@ vi.mock("../src/detectors/terminal/osc-11.js", () => ({
 
 type CommandOptions = Omit<RegisteredCommand, "name" | "sourceInfo">;
 
-let testRoot: string;
-let projectDirectory: string;
-const originalUserConfigPath = CONFIG_PATHS.global;
+let dirs: TempConfigDirs;
 
 beforeEach(async () => {
-  testRoot = await mkdtemp(path.join(tmpdir(), "pi-theme-sync-shown-text-"));
-  projectDirectory = path.join(testRoot, "project");
-  CONFIG_PATHS.global = path.join(testRoot, "agent", "theme-sync.json");
-  await mkdir(path.dirname(CONFIG_PATHS.global), { recursive: true });
-  // An invalid User value makes setup show a configuration warning.
-  await writeFile(CONFIG_PATHS.global, JSON.stringify({ isSyncActive: "no" }));
+  dirs = await createTempConfigDirs();
+  vi.stubEnv("PI_CODING_AGENT_DIR", dirs.agentDir);
+  // An old User file migrates, and its invalid value shows a warning.
+  await dirs.writeJson(
+    path.join(dirs.agentDir, "theme-sync", "settings.json"),
+    { isSyncActive: "no" },
+  );
+
+  // The project is untrusted, so its file is skipped with a warning.
+  await dirs.writeJson(
+    path.join(dirs.cwd, ".pi", "theme-sync", "config.json"),
+    {},
+  );
   vi.mocked(detectAppearanceViaColorScheme).mockResolvedValue("unknown");
   vi.mocked(detectAppearanceViaOsc11Background).mockResolvedValue("unknown");
   vi.mocked(detectAppearanceViaSystem).mockResolvedValue("unknown");
@@ -62,9 +66,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  CONFIG_PATHS.global = originalUserConfigPath;
+  vi.unstubAllEnvs();
   vi.resetAllMocks();
-  await rm(testRoot, { force: true, recursive: true });
+  await dirs.cleanup();
 });
 
 test("everything Theme Sync shows follows the family text standard", async () => {
@@ -109,8 +113,15 @@ test("everything Theme Sync shows follows the family text standard", async () =>
 
   expect(shown.texts.map(({ text }) => text)).toEqual(
     expect.arrayContaining([
-      expect.stringContaining("User setting"),
-      expect.stringContaining("Saved 1 changed setting to User."),
+      expect.stringContaining(
+        `${EXTENSION_NAME} migrated its configuration to `,
+      ),
+      expect.stringContaining("Skipped project configuration at "),
+      expect.stringContaining('User setting "syncEnabled"'),
+      expect.stringContaining("Config:"),
+      expect.stringContaining(
+        "Saved 1 changed setting to User. Press Ctrl+R to reload and apply.",
+      ),
       expect.stringContaining(`${EXTENSION_NAME} Status`),
       expect.stringContaining('Unknown subcommand "status foo"'),
     ]),
@@ -130,8 +141,9 @@ function commandContext(
   onMount?: FakeCustomOptions["onMount"],
 ): ExtensionCommandContext {
   return {
-    cwd: projectDirectory,
+    cwd: dirs.cwd,
     hasUI: mode === "tui",
+    isProjectTrusted: () => false,
     mode,
     reload: vi.fn(),
     ui: {

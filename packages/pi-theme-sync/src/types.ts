@@ -1,10 +1,12 @@
 /** Defines configuration, detector, and runtime state shared across the extension. */
 
+import type {
+  ConfigFile,
+  ConfigScope,
+} from "@sherif-fanous/pi-extensions-core";
+
 /** Appearance reported by a detector. */
 export type Appearance = "light" | "dark" | "unknown";
-
-/** Configuration file scope. */
-export type ConfigScope = "project" | "global";
 
 /** Origin of an effective configuration value. */
 export type ConfigSource = ConfigScope | "default";
@@ -14,25 +16,15 @@ export type EditableConfigChanges = Partial<{
   "themes.light": string;
   "themes.dark": string;
   "detection.pollIntervalMs": number;
-  isSyncActive: boolean;
+  syncEnabled: boolean;
 }>;
 
-/** Supported fields in a configuration file before defaults are applied. */
-export type LoadedConfig = {
-  isSyncActive?: boolean;
-
-  themes?: {
-    light?: string;
-    dark?: string;
-  };
-
-  detection?: {
-    pollIntervalMs?: number;
-  };
-};
-
-/** Effective runtime configuration, value sources, and load warnings. */
+/**
+ * Effective runtime configuration, value sources, each scope's file, and
+ * the warnings for invalid values.
+ */
 export type LoadedRuntimeConfig = {
+  files: Record<ConfigScope, ConfigFile>;
   runtimeConfig: RuntimeConfig;
   runtimeConfigSources: RuntimeConfigSources;
   warnings: string[];
@@ -43,7 +35,7 @@ export type PollingDetector = "color-scheme" | "osc-11" | "system";
 
 /** Effective configuration used by the runtime. */
 export type RuntimeConfig = {
-  isSyncActive: boolean;
+  syncEnabled: boolean;
 
   themes: {
     light: string;
@@ -57,7 +49,7 @@ export type RuntimeConfig = {
 
 /** Source of each effective runtime configuration value. */
 export type RuntimeConfigSources = {
-  isSyncActive: ConfigSource;
+  syncEnabled: ConfigSource;
 
   themes: {
     light: ConfigSource;
@@ -77,10 +69,11 @@ export type RuntimeStatus = {
 
   detectionStrategy: string;
   availableDetectors: string[];
-  syncStatus: "active" | "inactive";
+  syncEnabled: boolean;
   pollIntervalMs: number;
 
-  configSources: RuntimeConfigSources;
+  /** Each scope's file as the session start read it; empty before then. */
+  configFiles: readonly ConfigFile[];
   warnings: string[];
 
   lastUpdateAt?: number;

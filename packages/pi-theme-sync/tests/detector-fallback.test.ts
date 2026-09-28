@@ -1,5 +1,3 @@
-import { promises as fs } from "node:fs";
-
 import {
   probeAvailablePollingDetectors,
   probeAvailableSubscriptionDetectors,
@@ -35,9 +33,6 @@ beforeEach(() => {
   vi.mocked(detectAppearanceViaOsc11Background).mockResolvedValue("dark");
   vi.mocked(detectAppearanceViaSystem).mockResolvedValue("dark");
   vi.mocked(probeDecMode2031Support).mockResolvedValue("unsupported");
-  vi.spyOn(fs, "readFile").mockRejectedValue(
-    Object.assign(new Error("Missing test config"), { code: "ENOENT" }),
-  );
 });
 
 afterEach(() => {
@@ -297,6 +292,7 @@ function createContext(): ExtensionContext {
   return {
     cwd: "/unused-detector-fallback-test",
     hasUI: true,
+    isProjectTrusted: () => true,
     mode: "tui",
     ui: {
       getAllThemes: () => [{ name: "light" }, { name: "dark" }],

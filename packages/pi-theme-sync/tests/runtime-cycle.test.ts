@@ -32,11 +32,11 @@ async function createRuntimeHarness(
 ): Promise<RuntimeHarness> {
   const cwd = await mkdtemp(path.join(tmpdir(), "pi-theme-sync-test-"));
 
-  await mkdir(path.join(cwd, ".pi"));
+  await mkdir(path.join(cwd, ".pi", "theme-sync"), { recursive: true });
   await writeFile(
-    path.join(cwd, ".pi", "theme-sync.json"),
+    path.join(cwd, ".pi", "theme-sync", "config.json"),
     JSON.stringify({
-      isSyncActive: true,
+      syncEnabled: true,
       themes: { light: "light-theme", dark: "dark-theme" },
       detection: { pollIntervalMs: 1000 },
     }),
@@ -106,6 +106,7 @@ async function createRuntimeHarness(
   const ctx = {
     cwd,
     hasUI: true,
+    isProjectTrusted: () => true,
     mode: "tui",
     ui,
   } as unknown as ExtensionContext;

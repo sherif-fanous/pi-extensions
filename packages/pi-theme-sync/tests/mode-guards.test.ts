@@ -1,5 +1,3 @@
-import { promises as fs } from "node:fs";
-
 import { openThemeSyncOverlay } from "../src/command.js";
 import { getTuiHandle } from "../src/detectors/pi/tui-handle.js";
 import { queryWithTerminalListener } from "../src/detectors/terminal/query.js";
@@ -74,15 +72,12 @@ test("TUI queries still receive replies and remove their listener", async () => 
 });
 
 test("TUI mode still opens the custom overlay", async () => {
-  vi.spyOn(fs, "readFile").mockRejectedValue(
-    Object.assign(new Error("Missing test config"), { code: "ENOENT" }),
-  );
-
   const custom = vi.fn().mockResolvedValue(undefined);
   const notify = vi.fn();
   const ctx = {
     cwd: "/unused-mode-guard-test",
     hasUI: true,
+    isProjectTrusted: () => true,
     mode: "tui",
     ui: { custom, getAllThemes: () => [], notify },
   } as unknown as ExtensionCommandContext;

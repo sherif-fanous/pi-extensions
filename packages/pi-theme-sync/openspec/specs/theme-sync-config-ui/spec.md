@@ -36,7 +36,7 @@ the frame. The footer SHALL wrap between hints rather than truncate one.
 
 - **WHEN** the user opens a nested view
 - **THEN** its title is `Light Mode Theme`, `Dark Mode Theme`,
-  `Polling Interval`, `Sync Status`, `Write Config To`, or `<Field> Help`
+  `Polling Interval`, `Sync`, `Write Config To`, or `<Field> Help`
 
 #### Scenario: Footer wraps on a narrow window
 
@@ -45,8 +45,8 @@ the frame. The footer SHALL wrap between hints rather than truncate one.
 
 #### Scenario: Nested config view keeps the same presentation
 
-- **WHEN** the user opens theme selection, sync status selection, polling
-  interval editing, or write-target selection
+- **WHEN** the user opens theme selection, sync selection, polling interval
+  editing, or write-target selection
 - **THEN** the nested view uses the same complete frame, title treatment,
   content padding, and contained footer as the main configuration view
 
@@ -75,8 +75,8 @@ the frame. The footer SHALL wrap between hints rather than truncate one.
 
 - **WHEN** a view shows a list
 - **THEN** the focused row of the configuration form carries an accent `▌` at
-  its left edge, and the selected row of a nested theme, sync status, or write
-  target list starts with an accent `→ `
+  its left edge, and the selected row of a nested theme, sync, or write target
+  list starts with an accent `→ `
 
 #### Scenario: No themes to choose from
 
@@ -96,25 +96,22 @@ consistent semantic styling.
 
 #### Scenario: Recoverable save error stays inline
 
-- **WHEN** path resolution or configuration persistence returns a recoverable
-  error
+- **WHEN** saving the configuration fails, including a refusal to overwrite an
+  invalid file or to save to an untrusted project
 - **THEN** the error appears inside the configuration frame in error styling and
   the overlay remains open for retry
 
 #### Scenario: Thrown save error names the failed action
 
-- **WHEN** resolving the write-target paths or saving the configuration throws
-- **THEN** the inline error reads
-  `Could not resolve the configuration paths: <message>` or
-  `Could not save the configuration: <message>`, where `<message>` is the
-  error description ending in one full stop
+- **WHEN** saving the configuration fails
+- **THEN** the inline error reads `Could not save the configuration: <message>`,
+  where `<message>` is the error description ending in one full stop
 
 #### Scenario: Busy states replace the footer hints
 
-- **WHEN** the overlay waits for the write-target paths or for a save
-- **THEN** the footer shows only the dim line `Resolving configuration paths…`
-  or `Saving configuration…` in place of the key hints, and input is ignored
-  until the work finishes
+- **WHEN** the overlay waits for a save
+- **THEN** the footer shows only the dim line `Saving configuration…` in place
+  of the key hints, and input is ignored until the work finishes
 
 #### Scenario: No-change message is neutral
 
@@ -125,14 +122,15 @@ consistent semantic styling.
 #### Scenario: Save result counts changed settings
 
 - **WHEN** a save writes one or more changed settings
-- **THEN** the overlay shows `Saved <n> changed setting to <Project|User>.`
+- **THEN** the overlay shows
+  `Saved <n> changed setting to <Project|User>. Press Ctrl+R to reload and apply.`
   with `setting` pluralized for any count other than one, in success styling
 
 #### Scenario: Error dialog uses a complete frame
 
 - **WHEN** a configuration action presents an error in a nested dialog
-- **THEN** the dialog uses a complete border, semantic error styling,
-  wrapped body text, and a contained dismissal footer
+- **THEN** the dialog uses a complete border, semantic error styling, wrapped
+  body text, and a contained dismissal footer
 
 ### Requirement: Polling interval editor exposes normal text-input focus
 
@@ -197,7 +195,7 @@ config overlay.
 
 - **WHEN** the config overlay is shown
 - **THEN** it offers `Light mode theme`, `Dark mode theme`, `Polling interval`,
-  and `Sync status`
+  and `Sync`
 
 ### Requirement: Theme sync config overlay selects theme mappings from available Pi themes
 
@@ -234,76 +232,56 @@ it.
 - **THEN** the overlay keeps the user in the polling interval editor and shows
   an inline error-styled validation message
 
-### Requirement: Theme sync config overlay edits sync status
+### Requirement: Theme sync config overlay edits the sync setting
 
-The extension SHALL let the user change sync status from the config overlay.
+The extension SHALL let the user turn sync on or off from the config overlay.
+The `Sync` row SHALL show `on` or `off`.
 
-#### Scenario: Sync status can be set active
+#### Scenario: Sync can be turned on
 
-- **WHEN** the user edits `Sync status` and chooses `active`
-- **THEN** the overlay stages `isSyncActive = true` for saving
+- **WHEN** the user edits `Sync` and chooses `on`
+- **THEN** the overlay stages `syncEnabled = true` for saving
 
-#### Scenario: Sync status can be set inactive
+#### Scenario: Sync can be turned off
 
-- **WHEN** the user edits `Sync status` and chooses `inactive`
-- **THEN** the overlay stages `isSyncActive = false` for saving
+- **WHEN** the user edits `Sync` and chooses `off`
+- **THEN** the overlay stages `syncEnabled = false` for saving
 
 ### Requirement: Theme sync config save flow asks where to write changes
 
-The extension SHALL ask the user whether to write saved config changes to
-project or global config. Each write-target label SHALL show the resolved
-destination for its scope using the same preferred-path and missing-only legacy
-fallback rules as configuration persistence. The extension SHALL resolve these
-labels from current filesystem state whenever the write-target view opens.
+The extension SHALL ask the user whether to write saved config changes to the
+Project or the User file. Each write-target label SHALL show the full path of
+that scope's `config.json`, Project first.
 
-#### Scenario: Save chooses project write target
+#### Scenario: Save chooses the Project write target
 
 - **WHEN** the user saves config changes and chooses `Project (<path>)`
-- **THEN** the extension writes the saved config changes to the project config
-  file
+- **THEN** the extension writes the saved config changes to the Project
+  `config.json`
 
-#### Scenario: Save chooses global write target
+#### Scenario: Save chooses the User write target
 
 - **WHEN** the user saves config changes and chooses `User (<path>)`
-- **THEN** the extension writes the saved config changes to the global config
-  file
+- **THEN** the extension writes the saved config changes to the User
+  `config.json`
 
-#### Scenario: Preferred destination is displayed
+#### Scenario: Destinations are displayed
 
-- **WHEN** a scope's preferred file exists or neither candidate exists
-- **THEN** that scope's write-target label shows the full path to
-  `theme-sync/settings.json` under its Pi directory
-
-#### Scenario: Legacy destination is displayed
-
-- **WHEN** a scope's preferred file is missing and its legacy file exists
-- **THEN** that scope's write-target label shows the full path to the selected
-  `theme-sync.json` file
-
-#### Scenario: Write targets resolve independently
-
-- **WHEN** one scope selects a preferred destination and the other selects a
-  legacy destination
-- **THEN** each label shows its own resolved destination, including the custom
-  global agent directory when configured
-
-#### Scenario: Reopening write targets reflects manual migration
-
-- **WHEN** the user migrates config files and subsequently reopens the
-  write-target view
-- **THEN** the labels reflect the current selected paths rather than previously
-  displayed paths
+- **WHEN** the write-target view opens
+- **THEN** its labels show the full paths to `.pi/theme-sync/config.json` under
+  the project and to `theme-sync/config.json` under Pi's agent directory,
+  including a custom agent directory when configured
 
 ### Requirement: Theme sync config overlay shows config provenance alongside settings
 
-The extension SHALL surface where the effective config values come from in the
-config overlay rather than in the status overlay.
+The extension SHALL show where each effective config value comes from in the
+config overlay. The status report shows each file's state instead.
 
 #### Scenario: Config overlay shows per-setting source context
 
 - **WHEN** the config overlay is rendered
-- **THEN** it shows source context for the editable settings using
-  the labels `Project`, `User`, and `Default`
+- **THEN** it shows source context for the editable settings using the labels
+  `Project`, `User`, and `Default`
 
 ### Requirement: Theme sync config overlay supports keyboard-driven editing
 
@@ -333,17 +311,23 @@ config changes.
 
 - **WHEN** a view is shown with Pi's default keybindings
 - **THEN** the footer reads
-  `↑/↓ Move · Enter Edit · F1 Help · Ctrl+S Save · Ctrl+R Reload · Esc Close`
-  on the configuration form, `↑/↓ Move · Enter Select · Esc Back` on theme and
-  sync status selection, `↑/↓ Move · Enter Save · Esc Back` on write-target
-  selection, `Enter Confirm · Esc Cancel` in the polling interval editor, and
-  `Esc Back` on help, with `PgUp/PgDn Page` after the movement hint (and
+  `↑/↓ Move · Enter Edit · F1 Help · Ctrl+S Save · Ctrl+R Reload · Esc Close` on
+  the configuration form, `↑/↓ Move · Enter Select · Esc Back` on theme and sync
+  selection, `↑/↓ Move · Enter Save · Esc Back` on write-target selection,
+  `Enter Confirm · Esc Cancel` in the polling interval editor, and `Esc Back` on
+  help, with `PgUp/PgDn Page` after the movement hint (and
   `↑/↓ Scroll · PgUp/PgDn Page` on help) only while the content scrolls
 
 #### Scenario: Config overlay reload shortcut reloads Pi runtime
 
 - **WHEN** the config overlay is open and the user presses `Ctrl+R`
 - **THEN** the extension triggers Pi runtime reload explicitly
+
+#### Scenario: Failed reload is reported
+
+- **WHEN** the reload after `Ctrl+R` fails
+- **THEN** the overlay has already closed and the extension shows the error
+  `Could not reload Pi: <message>`
 
 ### Requirement: Theme sync config form offers help for the focused field
 
@@ -366,8 +350,8 @@ the same overlay.
 #### Scenario: Long help scrolls
 
 - **WHEN** the help text is taller than the view
-- **THEN** `↑`, `↓`, `PgUp`, and `PgDn` scroll it, and the first or last
-  visible row shows a dim `↑` or `↓` where more text is hidden
+- **THEN** `↑`, `↓`, `PgUp`, and `PgDn` scroll it, and the first or last visible
+  row shows a dim `↑` or `↓` where more text is hidden
 
 ### Requirement: Theme sync config overlay preserves alignment when messages wrap
 

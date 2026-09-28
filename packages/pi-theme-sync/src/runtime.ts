@@ -1,6 +1,7 @@
 /** Detects appearance changes, applies mapped themes, and reports runtime status. */
 
-import { DEFAULT_CONFIG, loadConfig } from "./config.js";
+import { DEFAULT_CONFIG } from "./config/load.js";
+import { loadStartupConfig } from "./config/migrate.js";
 import {
   detectAppearance,
   probeAvailablePollingDetectors,
@@ -25,7 +26,12 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
-import { notifyWarnings } from "@sherif-fanous/pi-extensions-core";
+import {
+  configFileWarnings,
+  configMigratedMessage,
+  notifyWarnings,
+  type ConfigFile,
+} from "@sherif-fanous/pi-extensions-core";
 
 type ScheduleRecurringCycle = (
   cycle: () => void,
@@ -69,12 +75,11 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
   let lastUpdateAt: number | undefined;
   let lastEvent = "Not yet updated";
   let warnings: string[] = [];
-
-  let runtimeConfigSources = {
-    isSyncActive: "default",
-    themes: { light: "default", dark: "default" },
-    detection: { pollIntervalMs: "default" },
-  } as RuntimeStatus["configSources"];
+  let migrationWarnings: string[] = [];
+  let configFiles: readonly ConfigFile[] = [];
+  // Shown once at session start, but not in the status report, whose
+  // Config block shows each file's state instead.
+  let configFileNotices: string[] = [];
 
   let stopRecurringCycle: (() => void) | undefined;
   let isRecurringCycleRunning = false;
@@ -90,7 +95,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     ctx: ExtensionContext,
     detectedAppearance: "light" | "dark",
   ) => {
-    if (!runtimeConfig.isSyncActive) {
+    if (!runtimeConfig.syncEnabled) {
       return;
     }
 
@@ -203,15 +208,29 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     ctx: ExtensionContext,
     schedule: ScheduleRecurringCycle,
   ) => {
-    const loadedConfig = await loadConfig(ctx);
+    const startup = await loadStartupConfig(ctx);
 
     if (isShutDown) {
       return;
     }
 
-    runtimeConfig = loadedConfig.runtimeConfig;
-    runtimeConfigSources = loadedConfig.runtimeConfigSources;
-    warnings = [...loadedConfig.warnings];
+    const [firstMigrated, ...otherMigrated] = startup.migrated;
+
+    if (firstMigrated !== undefined) {
+      ctx.ui.notify(
+        configMigratedMessage(EXTENSION_NAME, [
+          firstMigrated,
+          ...otherMigrated,
+        ]),
+        "info",
+      );
+    }
+
+    runtimeConfig = startup.config.runtimeConfig;
+    configFiles = [startup.config.files.user, startup.config.files.project];
+    configFileNotices = configFileWarnings(configFiles);
+    migrationWarnings = [...startup.warnings];
+    warnings = [...startup.config.warnings];
 
     const tui = getTuiHandle(ctx);
 
@@ -271,7 +290,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
       markEvent("Appearance detection failed");
     }
 
-    if (!runtimeConfig.isSyncActive) {
+    if (!runtimeConfig.syncEnabled) {
       detectionStrategy = "Inactive";
 
       return;
@@ -284,9 +303,9 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
       warnings.push("No appearance detectors are available on this terminal.");
     }
 
-    if (currentAppearance === "unknown" && runtimeConfig.isSyncActive) {
+    if (currentAppearance === "unknown" && runtimeConfig.syncEnabled) {
       warnings.push(
-        "Sync is active but the appearance is unknown. Did not apply a theme.",
+        "Sync is on but the appearance is unknown. Did not apply a theme.",
       );
     }
 
@@ -454,7 +473,11 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     // Any cleanup since, from shutdown or a newer setup, means this
     // session is gone and its warnings are no longer current.
     if (cleanupCount === setupCleanupCount) {
-      notifyWarnings(ctx, EXTENSION_NAME, warnings);
+      notifyWarnings(ctx, EXTENSION_NAME, [
+        ...migrationWarnings,
+        ...configFileNotices,
+        ...warnings,
+      ]);
     }
   };
 
@@ -473,11 +496,11 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
 
       detectionStrategy,
       availableDetectors,
-      syncStatus: runtimeConfig.isSyncActive ? "active" : "inactive",
+      syncEnabled: runtimeConfig.syncEnabled,
       pollIntervalMs: runtimeConfig.detection.pollIntervalMs,
 
-      configSources: runtimeConfigSources,
-      warnings,
+      configFiles,
+      warnings: [...migrationWarnings, ...warnings],
       lastUpdateAt,
       lastEvent,
     };

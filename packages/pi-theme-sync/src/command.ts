@@ -1,6 +1,7 @@
 /** Routes `/theme-sync` and orchestrates configuration and status delivery. */
 
-import { getConfigPath, loadConfig, writeConfigChanges } from "./config.js";
+import { loadConfig } from "./config/load.js";
+import { writeConfigChanges } from "./config/save.js";
 import { EXTENSION_NAME } from "./extension-name.js";
 import type { ThemeSyncRuntime } from "./runtime.js";
 import { ConfigOverlayComponent } from "./ui/config-overlay.js";
@@ -10,6 +11,7 @@ import type {
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 import {
+  describeErrorSentence,
   notifyUsageWarning,
   overlayOptions,
   requireInteractiveTui,
@@ -31,16 +33,8 @@ export async function openThemeSyncOverlay(
         config,
         done,
         keybindings,
-        resolvePaths: async () => {
-          const [project, global] = await Promise.all([
-            getConfigPath("project", ctx.cwd),
-            getConfigPath("global", ctx.cwd),
-          ]);
-
-          return { project, global };
-        },
         requestRender: () => tui.requestRender(),
-        save: (scope, changes) => writeConfigChanges(scope, ctx.cwd, changes),
+        save: (scope, changes) => writeConfigChanges(scope, ctx, changes),
         terminalRows: () => tui.terminal?.rows ?? 24,
         theme,
         themeNames: ctx.ui.getAllThemes().map((item) => item.name),
@@ -51,8 +45,17 @@ export async function openThemeSyncOverlay(
     { overlay: true, overlayOptions: overlayOptions("main") },
   );
 
-  // Reload only after the overlay closes so the command observes failures.
-  if (component?.reloadRequested) await ctx.reload();
+  if (!component?.reloadRequested) return;
+
+  // Reload only after the overlay closes, so no stale overlay survives it.
+  try {
+    await ctx.reload();
+  } catch (error) {
+    ctx.ui.notify(
+      `Could not reload Pi: ${describeErrorSentence(error)}`,
+      "error",
+    );
+  }
 }
 
 /** Routes the command argument to configuration, status, or a usage warning. */

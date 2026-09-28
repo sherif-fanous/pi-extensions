@@ -32,7 +32,7 @@ No configuration is needed. Once installed, Theme Sync detects your current appe
 
 Run `/theme-sync` to open the configuration overlay. Run `/theme-sync status` to add the current runtime status to the transcript.
 
-The overlay lists the light and dark mode themes, the polling interval, and the sync status, each with the source of its value. Press `Enter` to change a setting, `F1` to read about it, and `Ctrl+S` to save your changes to the User or Project configuration. The footer shows the keys that work in the current step.
+The overlay lists the light and dark mode themes, the polling interval, and whether sync is on, each with the source of its value. Press `Enter` to change a setting, `F1` to read about it, and `Ctrl+S` to save your changes to the User or Project configuration. The footer shows the keys that work in the current step.
 
 | Key             | Action                                    |
 | :-------------- | :---------------------------------------- |
@@ -52,32 +52,31 @@ Pi has its own automatic theme setting of the form `auto:<light-theme>,<dark-the
 
 Use one or the other. When Theme Sync applies a theme it calls Pi's `setTheme`, which persists a concrete theme name into your Pi settings. If your Pi `theme` setting was `auto:...`, that value is replaced by the applied theme name and Pi's built-in auto-switching stops on its own.
 
-To go back to Pi's built-in behavior, set `isSyncActive` to `false` in the `/theme-sync` Config overlay (or uninstall the extension), then set your Pi `theme` setting back to `auto:<light-theme>,<dark-theme>`.
+To go back to Pi's built-in behavior, set **Sync** to **off** in the `/theme-sync` overlay and save it (or uninstall the extension), then set your Pi `theme` setting back to `auto:<light-theme>,<dark-theme>`.
 
 ## Configuration
 
-Theme Sync selects one file for each scope:
+Theme Sync reads one `config.json` in each scope:
 
-| Scope   | Preferred path                         | Legacy fallback               |
-| ------- | -------------------------------------- | ----------------------------- |
-| Project | `.pi/theme-sync/settings.json`         | `.pi/theme-sync.json`         |
-| User    | `~/.pi/agent/theme-sync/settings.json` | `~/.pi/agent/theme-sync.json` |
+| Scope   | Path                                 |
+| :------ | :----------------------------------- |
+| User    | `~/.pi/agent/theme-sync/config.json` |
+| Project | `.pi/theme-sync/config.json`         |
 
-`PI_CODING_AGENT_DIR` replaces `~/.pi/agent` for user settings. Project
-settings override user settings per key.
-
-Legacy paths are deprecated but still supported for reads and saves when the
-preferred file is missing. To migrate, move `theme-sync.json` to
-`theme-sync/settings.json` without overwriting an existing file, then run `/reload`.
-
-### Example
+The Project path is relative to the directory Pi starts in.
+`PI_CODING_AGENT_DIR` replaces `~/.pi/agent`. Each setting comes from the
+Project file, then the User file, then the default, and an invalid value is
+skipped with a warning so the next one applies. Theme Sync reads the Project
+file only when Pi trusts the project; in an untrusted project it skips the file
+and warns once.
 
 ```json
 {
-  "isSyncActive": true,
+  "version": 2,
+  "syncEnabled": true,
   "themes": {
-    "light": "catppuccin-latte",
-    "dark": "catppuccin-macchiato"
+    "light": "light",
+    "dark": "dark"
   },
   "detection": {
     "pollIntervalMs": 2000
@@ -85,22 +84,39 @@ preferred file is missing. To migrate, move `theme-sync.json` to
 }
 ```
 
-| Field                      | Default   | Description                                                                 |
-| -------------------------- | --------- | --------------------------------------------------------------------------- |
-| `isSyncActive`             | `true`    | Whether the extension actively applies mapped themes in the current runtime |
-| `themes.light`             | `"light"` | Pi theme to use when light appearance is detected                           |
-| `themes.dark`              | `"dark"`  | Pi theme to use when dark appearance is detected                            |
-| `detection.pollIntervalMs` | `2000`    | Polling interval in milliseconds (1000 to 60000, inclusive)                 |
+| Key                        | Default   | Description                                                                                                                |
+| :------------------------- | :-------- | :------------------------------------------------------------------------------------------------------------------------- |
+| `version`                  | `2`       | Layout of the file. A file without it is read as version 2; a file with any other version is ignored with a warning        |
+| `syncEnabled`              | `true`    | Whether Theme Sync switches Pi's theme to match the appearance                                                             |
+| `themes.light`             | `"light"` | Pi theme for light mode. A theme Pi doesn't have is skipped with a warning; without any valid one, Theme Sync uses `light` |
+| `themes.dark`              | `"dark"`  | Pi theme for dark mode. A theme Pi doesn't have is skipped with a warning; without any valid one, Theme Sync uses `dark`   |
+| `detection.pollIntervalMs` | `2000`    | How often, in milliseconds, Theme Sync checks the appearance, from 1000 to 60000                                           |
 
-Each setting comes from the project config, then the user config, then the default. An invalid value, such as a theme name that does not exist in Pi or an out-of-range polling interval, is skipped with a warning, so the next source applies. If no source has a valid theme name, Theme Sync uses the corresponding built-in theme (`light` or `dark`).
+Pi reads this file at session start. Run `/reload` after editing it. Saving from
+the `/theme-sync` overlay writes the file but doesn't change the running session
+either; press `Ctrl+R` in the overlay to reload Pi and apply your changes.
+`/theme-sync status` lists each file with its state: `loaded`, `not found`,
+`invalid` with the reason, or `skipped (untrusted)`.
 
-## Reload behavior
+### Migrating from 0.5 and earlier
 
-Configuration changes are **not** applied automatically. Saving changes from the config overlay, or manually editing config files, writes to disk only. To apply changes, run:
+Theme Sync 0.5 read `theme-sync/settings.json`, or `theme-sync.json` one
+directory up when that was missing, and called the sync setting `isSyncActive`.
+At session start, Theme Sync moves the file each scope used to
+`theme-sync/config.json`, renames `isSyncActive` to `syncEnabled`, adds
+`version`, and deletes the old file once the new one is written. It shows one
+message naming the new files. It also renames `isSyncActive` in a `config.json`
+you wrote by hand.
 
-```shell
-/reload
-```
+A scope that already has a `config.json` is left alone, and a Project file moves
+only when Pi trusts the project. When both old files exist, only `settings.json`
+moves; `theme-sync.json`, which 0.5 already ignored, stays and you can delete
+it.
+
+If an old file can't be read or isn't a JSON object, Theme Sync warns, leaves
+the file where it is, and uses the other scope and the defaults. Fix the file
+and run `/reload` to migrate it, or copy its settings into `config.json`
+yourself.
 
 ## How it works
 

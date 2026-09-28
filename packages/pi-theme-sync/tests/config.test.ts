@@ -1,49 +1,37 @@
-import { promises as fs } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, open, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  CONFIG_PATHS,
+  CONFIG_VERSION,
   DEFAULT_CONFIG,
-  getConfigPath,
   isValidPollIntervalMs,
   loadConfig,
-  writeConfigChanges,
-} from "../src/config.js";
-import type { ConfigScope, LoadedConfig } from "../src/types.js";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { writeJsonFile } from "@sherif-fanous/pi-extensions-core";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+  type LoadConfigContext,
+} from "../src/config/load.js";
+import { writeConfigChanges } from "../src/config/save.js";
+import {
+  configFileWarnings,
+  type AtomicWriteFs,
+  type ConfigFileFs,
+  type ConfigScope,
+} from "@sherif-fanous/pi-extensions-core";
+import {
+  createProjectTrustContext,
+  createTempConfigDirs,
+  type TempConfigDirs,
+} from "@sherif-fanous/pi-extensions-testing";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
-vi.mock("@sherif-fanous/pi-extensions-core", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@sherif-fanous/pi-extensions-core")>();
+const availableThemeNames = ["light", "dark", "project-light", "user-dark"];
 
-  return { ...actual, writeJsonFile: vi.fn(actual.writeJsonFile) };
-});
-
-const availableThemeNames = ["light", "dark", "project-light", "global-dark"];
-
-let testRoot: string;
-let projectDirectory: string;
+let dirs: TempConfigDirs;
 
 beforeEach(async () => {
-  testRoot = await mkdtemp(path.join(tmpdir(), "pi-theme-sync-config-test-"));
-  projectDirectory = path.join(testRoot, "project");
-  CONFIG_PATHS.global = path.join(
-    testRoot,
-    "home",
-    ".pi",
-    "theme-sync",
-    "settings.json",
-  );
+  dirs = await createTempConfigDirs();
 });
 
 afterEach(async () => {
-  vi.restoreAllMocks();
-  vi.mocked(writeJsonFile).mockReset();
-  await rm(testRoot, { force: true, recursive: true });
+  await dirs.cleanup();
 });
 
 describe("isValidPollIntervalMs", () => {
@@ -60,14 +48,14 @@ describe("isValidPollIntervalMs", () => {
 });
 
 describe("loadConfig", () => {
-  test.each(["project", "global"] as const)(
-    "uses default value and source for an oversized %s interval",
+  test.each(["project", "user"] as const)(
+    "uses the default value and source for an oversized %s interval",
     async (scope) => {
-      await writeConfigFile(getConfigFilePath(scope), {
+      await dirs.writeJson(configPath(scope), {
         detection: { pollIntervalMs: 60_001 },
       });
 
-      const result = await loadConfig(createContext());
+      const result = await load();
 
       expect(result.runtimeConfig.detection.pollIntervalMs).toBe(2000);
       expect(result.runtimeConfigSources.detection.pollIntervalMs).toBe(
@@ -83,7 +71,7 @@ describe("loadConfig", () => {
   test("retains the maximum interval and its configured source", async () => {
     await writeConfigs(undefined, { detection: { pollIntervalMs: 60_000 } });
 
-    const result = await loadConfig(createContext());
+    const result = await load();
 
     expect(result.runtimeConfig.detection.pollIntervalMs).toBe(60_000);
     expect(result.runtimeConfigSources.detection.pollIntervalMs).toBe(
@@ -96,35 +84,35 @@ describe("loadConfig", () => {
     await writeConfigs(
       {
         detection: { pollIntervalMs: 3000 },
-        isSyncActive: false,
-        themes: { dark: "global-dark", light: "light" },
+        syncEnabled: false,
+        themes: { dark: "user-dark", light: "light" },
       },
       {
         detection: { pollIntervalMs: 4000 },
-        isSyncActive: true,
+        syncEnabled: true,
         themes: { dark: "dark", light: "project-light" },
       },
     );
 
-    const result = await loadConfig(createContext());
+    const result = await load();
 
     expect(result.runtimeConfig).toEqual({
       detection: { pollIntervalMs: 4000 },
-      isSyncActive: true,
+      syncEnabled: true,
       themes: { dark: "dark", light: "project-light" },
     });
 
     expect(result.runtimeConfigSources).toEqual({
       detection: { pollIntervalMs: "project" },
-      isSyncActive: "project",
+      syncEnabled: "project",
       themes: { dark: "project", light: "project" },
     });
   });
 
-  test("uses global values and defaults for missing values", async () => {
+  test("uses user values and defaults for missing values", async () => {
     await writeConfigs({ themes: { light: "project-light" } });
 
-    const result = await loadConfig(createContext());
+    const result = await load();
 
     expect(result.runtimeConfig).toEqual({
       ...DEFAULT_CONFIG,
@@ -133,16 +121,16 @@ describe("loadConfig", () => {
 
     expect(result.runtimeConfigSources).toEqual({
       detection: { pollIntervalMs: "default" },
-      isSyncActive: "default",
-      themes: { dark: "default", light: "global" },
+      syncEnabled: "default",
+      themes: { dark: "default", light: "user" },
     });
   });
 
-  test("uses valid global themes and interval after invalid project values", async () => {
+  test("uses valid user themes and interval after invalid project values", async () => {
     await writeConfigs(
       {
         detection: { pollIntervalMs: 5000 },
-        themes: { dark: "global-dark", light: "light" },
+        themes: { dark: "user-dark", light: "light" },
       },
       {
         detection: { pollIntervalMs: 999 },
@@ -150,18 +138,18 @@ describe("loadConfig", () => {
       },
     );
 
-    const result = await loadConfig(createContext());
+    const result = await load();
 
     expect(result.runtimeConfig.themes).toEqual({
-      dark: "global-dark",
+      dark: "user-dark",
       light: "light",
     });
     expect(result.runtimeConfig.detection.pollIntervalMs).toBe(5000);
     expect(result.runtimeConfigSources.themes).toEqual({
-      dark: "global",
-      light: "global",
+      dark: "user",
+      light: "user",
     });
-    expect(result.runtimeConfigSources.detection.pollIntervalMs).toBe("global");
+    expect(result.runtimeConfigSources.detection.pollIntervalMs).toBe("user");
     expect(result.warnings).toEqual([
       'Theme "missing-light" was not found in Pi. Ignored it.',
       'Theme "missing-dark" was not found in Pi. Ignored it.',
@@ -169,36 +157,36 @@ describe("loadConfig", () => {
     ]);
   });
 
-  test("ignores invalid global values when valid project values apply", async () => {
-    await writeUncheckedConfigs(
+  test("ignores invalid user values when valid project values apply", async () => {
+    await writeConfigs(
       {
         detection: { pollIntervalMs: 60_001 },
-        isSyncActive: "no",
+        syncEnabled: "no",
         themes: { dark: "missing-dark", light: "missing-light" },
       },
       {
         detection: { pollIntervalMs: 3000 },
-        isSyncActive: false,
-        themes: { dark: "global-dark", light: "project-light" },
+        syncEnabled: false,
+        themes: { dark: "user-dark", light: "project-light" },
       },
     );
 
-    const result = await loadConfig(createContext());
+    const result = await load();
 
     expect(result.runtimeConfig).toEqual({
       detection: { pollIntervalMs: 3000 },
-      isSyncActive: false,
-      themes: { dark: "global-dark", light: "project-light" },
+      syncEnabled: false,
+      themes: { dark: "user-dark", light: "project-light" },
     });
 
     expect(result.runtimeConfigSources).toEqual({
       detection: { pollIntervalMs: "project" },
-      isSyncActive: "project",
+      syncEnabled: "project",
       themes: { dark: "project", light: "project" },
     });
 
     expect(result.warnings).toEqual([
-      'User setting "isSyncActive" must be a boolean, not "no". Ignored it.',
+      'User setting "syncEnabled" must be a boolean, not "no". Ignored it.',
       'Theme "missing-light" was not found in Pi. Ignored it.',
       'Theme "missing-dark" was not found in Pi. Ignored it.',
       'User setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not 60001. Ignored it.',
@@ -206,10 +194,10 @@ describe("loadConfig", () => {
   });
 
   test("uses default themes and interval when no scope supplies a valid one", async () => {
-    await writeUncheckedConfigs(
+    await writeConfigs(
       {
         detection: { pollIntervalMs: "3000" },
-        themes: { dark: 42, light: "global-missing" },
+        themes: { dark: 42, light: "user-missing" },
       },
       {
         detection: { pollIntervalMs: 999 },
@@ -217,18 +205,18 @@ describe("loadConfig", () => {
       },
     );
 
-    const result = await loadConfig(createContext());
+    const result = await load();
 
     expect(result.runtimeConfig).toEqual(DEFAULT_CONFIG);
     expect(result.runtimeConfigSources).toEqual({
       detection: { pollIntervalMs: "default" },
-      isSyncActive: "default",
+      syncEnabled: "default",
       themes: { dark: "default", light: "default" },
     });
 
     expect(result.warnings).toEqual([
       'Theme "missing-light" was not found in Pi. Using the default theme "light".',
-      'Theme "global-missing" was not found in Pi. Using the default theme "light".',
+      'Theme "user-missing" was not found in Pi. Using the default theme "light".',
       'Theme "missing-dark" was not found in Pi. Using the default theme "dark".',
       'Theme 42 was not found in Pi. Using the default theme "dark".',
       'Project setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not 999. Using the default value 2000.',
@@ -236,75 +224,59 @@ describe("loadConfig", () => {
     ]);
   });
 
-  test("uses a valid global activation value after an invalid project value", async () => {
-    await writeConfigs({ isSyncActive: false }, {
-      isSyncActive: "invalid",
-    } as unknown as LoadedConfig);
+  test("uses a valid user sync value after an invalid project value", async () => {
+    await writeConfigs({ syncEnabled: false }, { syncEnabled: "invalid" });
 
-    const result = await loadConfig(createContext());
+    const result = await load();
 
-    expect(result.runtimeConfig.isSyncActive).toBe(false);
-    expect(result.runtimeConfigSources.isSyncActive).toBe("global");
+    expect(result.runtimeConfig.syncEnabled).toBe(false);
+    expect(result.runtimeConfigSources.syncEnabled).toBe("user");
     expect(result.warnings).toEqual([
-      'Project setting "isSyncActive" must be a boolean, not "invalid". Ignored it.',
+      'Project setting "syncEnabled" must be a boolean, not "invalid". Ignored it.',
     ]);
   });
 
-  test("uses the default activation value when no scope supplies a valid one", async () => {
-    for (const [scope, value] of [
-      ["global", "no"],
-      ["project", "invalid"],
-    ] as const) {
-      const filePath = getConfigFilePath(scope);
+  test("uses the default sync value when no scope supplies a valid one", async () => {
+    await writeConfigs({ syncEnabled: "no" }, { syncEnabled: "invalid" });
 
-      await mkdir(path.dirname(filePath), { recursive: true });
-      await writeFile(filePath, JSON.stringify({ isSyncActive: value }));
-    }
+    const result = await load();
 
-    const result = await loadConfig(createContext());
-
-    expect(result.runtimeConfig.isSyncActive).toBe(true);
-    expect(result.runtimeConfigSources.isSyncActive).toBe("default");
+    expect(result.runtimeConfig.syncEnabled).toBe(true);
+    expect(result.runtimeConfigSources.syncEnabled).toBe("default");
     expect(result.warnings).toEqual([
-      'Project setting "isSyncActive" must be a boolean, not "invalid". Using the default value true.',
-      'User setting "isSyncActive" must be a boolean, not "no". Using the default value true.',
+      'Project setting "syncEnabled" must be a boolean, not "invalid". Using the default value true.',
+      'User setting "syncEnabled" must be a boolean, not "no". Using the default value true.',
     ]);
   });
 
-  test("reports mixed project, global, and default sources", async () => {
+  test("reports mixed project, user, and default sources", async () => {
     await writeConfigs(
-      {
-        detection: { pollIntervalMs: 3000 },
-        themes: { dark: "global-dark" },
-      },
+      { detection: { pollIntervalMs: 3000 }, themes: { dark: "user-dark" } },
       { themes: { light: "project-light" } },
     );
 
-    const result = await loadConfig(createContext());
+    const result = await load();
 
     expect(result.runtimeConfigSources).toEqual({
-      detection: { pollIntervalMs: "global" },
-      isSyncActive: "default",
-      themes: { dark: "global", light: "project" },
+      detection: { pollIntervalMs: "user" },
+      syncEnabled: "default",
+      themes: { dark: "user", light: "project" },
     });
   });
 
   test("retains configured sources for valid values equal to defaults", async () => {
     await writeConfigs(
-      { isSyncActive: true, themes: { dark: "dark" } },
-      {
-        detection: { pollIntervalMs: 2000 },
-        themes: { light: "light" },
-      },
+      { syncEnabled: true, themes: { dark: "dark" } },
+      { detection: { pollIntervalMs: 2000 }, themes: { light: "light" } },
     );
 
-    const result = await loadConfig(createContext());
+    const result = await load();
 
     expect(result.runtimeConfig).toEqual(DEFAULT_CONFIG);
     expect(result.runtimeConfigSources).toEqual({
       detection: { pollIntervalMs: "project" },
-      isSyncActive: "global",
-      themes: { dark: "global", light: "project" },
+      syncEnabled: "user",
+      themes: { dark: "user", light: "project" },
     });
   });
 
@@ -312,595 +284,405 @@ describe("loadConfig", () => {
     await writeConfigs(
       {
         detection: { pollIntervalMs: 3000 },
-        isSyncActive: false,
-        themes: { dark: "global-dark", light: "project-light" },
+        syncEnabled: false,
+        themes: { dark: "user-dark", light: "project-light" },
       },
       {
         detection: { pollIntervalMs: null },
-        isSyncActive: null,
+        syncEnabled: null,
         themes: { dark: null, light: null },
-      } as unknown as LoadedConfig,
+      },
     );
 
-    const result = await loadConfig(createContext());
+    const result = await load();
 
-    expect(result.runtimeConfig).toMatchObject({
+    expect(result.runtimeConfig).toEqual({
       detection: { pollIntervalMs: 3000 },
-      isSyncActive: false,
-      themes: { dark: "global-dark", light: "project-light" },
+      syncEnabled: false,
+      themes: { dark: "user-dark", light: "project-light" },
     });
 
-    expect(result.runtimeConfigSources).toMatchObject({
-      detection: { pollIntervalMs: "global" },
-      isSyncActive: "global",
-      themes: { dark: "global", light: "global" },
+    expect(result.runtimeConfigSources).toEqual({
+      detection: { pollIntervalMs: "user" },
+      syncEnabled: "user",
+      themes: { dark: "user", light: "user" },
     });
-    expect(result.warnings).toHaveLength(1);
+
+    expect(result.warnings).toEqual([
+      'Project setting "syncEnabled" must be a boolean, not null. Ignored it.',
+    ]);
   });
-});
 
-describe("writeConfigChanges", () => {
+  test("reads the old isSyncActive key while syncEnabled is absent", async () => {
+    await writeConfigs({ isSyncActive: false }, { isSyncActive: "no" });
+
+    const result = await load();
+
+    expect(result.runtimeConfig.syncEnabled).toBe(false);
+    expect(result.runtimeConfigSources.syncEnabled).toBe("user");
+    expect(result.warnings).toEqual([
+      'Project setting "syncEnabled" must be a boolean, not "no". Ignored it.',
+    ]);
+
+    expect(result.files.user).toMatchObject({
+      renamedKeys: ["isSyncActive"],
+      state: "loaded",
+    });
+  });
+
+  test("prefers syncEnabled over the old isSyncActive key in one file", async () => {
+    await writeConfigs({ isSyncActive: true, syncEnabled: false });
+
+    const result = await load();
+
+    expect(result.runtimeConfig.syncEnabled).toBe(false);
+  });
+
+  test("reports each scope's file as loaded or missing", async () => {
+    await writeConfigs({ syncEnabled: false });
+
+    const { files, warnings } = await load();
+
+    expect(files.user).toMatchObject({
+      path: configPath("user"),
+      scope: "user",
+      state: "loaded",
+    });
+
+    expect(files.project).toEqual({
+      path: configPath("project"),
+      scope: "project",
+      state: "missing",
+    });
+    expect(configFileWarnings([files.user, files.project])).toEqual([]);
+    expect(warnings).toEqual([]);
+  });
+
+  test("skips a project file in an untrusted project and warns once", async () => {
+    await writeConfigs(
+      { themes: { dark: "user-dark" } },
+      { syncEnabled: false, themes: { dark: "dark" } },
+    );
+
+    const { files, runtimeConfig, runtimeConfigSources, warnings } =
+      await load(false);
+
+    expect(runtimeConfig.syncEnabled).toBe(true);
+    expect(runtimeConfig.themes.dark).toBe("user-dark");
+    expect(runtimeConfigSources.themes.dark).toBe("user");
+    expect(files.project.state).toBe("untrusted");
+    expect(warnings).toEqual([]);
+    expect(configFileWarnings([files.user, files.project])).toEqual([
+      `Skipped project configuration at ${configPath("project")} because the project is not trusted. Trust the project to use it.`,
+    ]);
+  });
+
+  test("stays silent in an untrusted project without a project file", async () => {
+    const { files } = await load(false);
+
+    expect(files.project.state).toBe("missing");
+    expect(configFileWarnings([files.user, files.project])).toEqual([]);
+  });
+
   test.each([
-    { scope: "project" as const, targetName: "project" },
-    { scope: "global" as const, targetName: "global" },
+    { version: CONFIG_VERSION, loaded: true },
+    { version: undefined, loaded: true },
+    { version: 1, loaded: false },
+    { version: 3, loaded: false },
+    { version: "2", loaded: false },
   ])(
-    "writes multiple changes to the $targetName target with one read and write",
-    async ({ scope }) => {
-      const filePath = getConfigFilePath(scope);
-      const existingConfig = {
-        detection: { pollIntervalMs: 3000, strategy: "custom" },
-        isSyncActive: true,
-        pluginSetting: { enabled: true },
-        themes: { dark: "global-dark", light: "light" },
-      };
+    "reads a file with version $version: $loaded",
+    async ({ loaded, version }) => {
+      await writeConfigs({ syncEnabled: false, version });
 
-      await writeConfigFile(filePath, existingConfig);
+      const { files, runtimeConfig } = await load();
 
-      const readSpy = vi.spyOn(fs, "readFile");
-      const writeSpy = vi.mocked(writeJsonFile);
+      expect(runtimeConfig.syncEnabled).toBe(!loaded);
+      expect(files.user.state).toBe(loaded ? "loaded" : "invalid");
 
-      try {
-        const result = await writeConfigChanges(scope, projectDirectory, {
-          "detection.pollIntervalMs": 4500,
-          "themes.light": "project-light",
-          isSyncActive: false,
-        });
-
-        expect(result).toEqual({ ok: true });
-        expect(readSpy).toHaveBeenCalledTimes(1);
-        expect(writeSpy).toHaveBeenCalledTimes(1);
-        expect(await readJson(filePath)).toEqual({
-          detection: { pollIntervalMs: 4500, strategy: "custom" },
-          isSyncActive: false,
-          pluginSetting: { enabled: true },
-          themes: { dark: "global-dark", light: "project-light" },
-        });
-      } finally {
-        readSpy.mockRestore();
-        writeSpy.mockRestore();
+      if (!loaded) {
+        expect(configFileWarnings([files.user])).toEqual([
+          `Configuration at ${configPath("user")} has version ${JSON.stringify(version)}, but only version 2 is supported. Ignored the file.`,
+        ]);
       }
-    },
-  );
-
-  test("rereads the selected file for each batch write", async () => {
-    const filePath = CONFIG_PATHS.project(projectDirectory);
-
-    await writeConfigFile(filePath, {
-      themes: { dark: "dark", light: "light" },
-    });
-
-    await writeConfigChanges("project", projectDirectory, {
-      "themes.dark": "global-dark",
-    });
-
-    await writeFile(
-      filePath,
-      JSON.stringify({
-        externalRevision: 2,
-        themes: { dark: "external-dark" },
-      }),
-    );
-
-    await writeConfigChanges("project", projectDirectory, {
-      "themes.light": "project-light",
-    });
-
-    expect(await readJson(filePath)).toEqual({
-      externalRevision: 2,
-      themes: { dark: "external-dark", light: "project-light" },
-    });
-  });
-
-  test("does no filesystem work when there are no changes", async () => {
-    const readSpy = vi.spyOn(fs, "readFile");
-    const writeSpy = vi.mocked(writeJsonFile);
-
-    try {
-      expect(await writeConfigChanges("project", projectDirectory, {})).toEqual(
-        { ok: true },
-      );
-
-      expect(readSpy).not.toHaveBeenCalled();
-      expect(writeSpy).not.toHaveBeenCalled();
-    } finally {
-      readSpy.mockRestore();
-      writeSpy.mockRestore();
-    }
-  });
-
-  test.each(["project", "global"] as const)(
-    "preserves invalid JSON in %s and permits retry after repair",
-    async (scope) => {
-      const filePath = getConfigFilePath(scope);
-      const malformedContents = '{ "keepThis": true,\n';
-      const changes = { isSyncActive: false };
-
-      await mkdir(path.dirname(filePath), { recursive: true });
-      await writeFile(filePath, malformedContents);
-
-      const writeSpy = vi.mocked(writeJsonFile);
-
-      try {
-        expect(
-          await writeConfigChanges(scope, projectDirectory, changes),
-        ).toEqual({
-          ok: false,
-          reason: `Could not save the ${scope === "project" ? "Project" : "User"} configuration: ${filePath} must be readable and contain a valid JSON object. Fix the file and try again.`,
-        });
-        expect(writeSpy).not.toHaveBeenCalled();
-        expect(await readFile(filePath, "utf8")).toBe(malformedContents);
-
-        await writeFile(filePath, '{ "keepThis": true }');
-        writeSpy.mockClear();
-
-        expect(
-          await writeConfigChanges(scope, projectDirectory, changes),
-        ).toEqual({ ok: true });
-        expect(writeSpy).toHaveBeenCalledTimes(1);
-        expect(await readJson(filePath)).toEqual({
-          isSyncActive: false,
-          keepThis: true,
-        });
-      } finally {
-        writeSpy.mockRestore();
-      }
-    },
-  );
-
-  test.each(
-    (["project", "global"] as const).flatMap((scope) =>
-      [
-        "[]",
-        '[{"keepThis":true}]',
-        "null",
-        '"settings"',
-        "123",
-        "true",
-        "false",
-      ].map((content) => ({ scope, content })),
-    ),
-  )(
-    "rejects $scope config root $content without changing it",
-    async ({ scope, content }) => {
-      const filePath = getConfigFilePath(scope);
-
-      await mkdir(path.dirname(filePath), { recursive: true });
-      await writeFile(filePath, content);
-
-      const loaded = await loadConfig(createContext());
-
-      expect(loaded.runtimeConfig).toEqual(DEFAULT_CONFIG);
-      expect(loaded.runtimeConfigSources.isSyncActive).toBe("default");
-      expect(loaded.warnings).toEqual([
-        `Configuration at ${filePath} must be a JSON object. Ignored the file.`,
-      ]);
-
-      const writeSpy = vi.mocked(writeJsonFile);
-
-      try {
-        expect(
-          await writeConfigChanges(scope, projectDirectory, {
-            isSyncActive: false,
-          }),
-        ).toEqual({
-          ok: false,
-          reason: `Could not save the ${scope === "project" ? "Project" : "User"} configuration: ${filePath} must be readable and contain a valid JSON object. Fix the file and try again.`,
-        });
-        expect(writeSpy).not.toHaveBeenCalled();
-        expect(await readFile(filePath, "utf8")).toBe(content);
-
-        await writeFile(filePath, "{}");
-        writeSpy.mockClear();
-
-        expect(
-          await writeConfigChanges(scope, projectDirectory, {
-            isSyncActive: false,
-          }),
-        ).toEqual({ ok: true });
-        expect(writeSpy).toHaveBeenCalledOnce();
-        expect(await readJson(filePath)).toEqual({ isSyncActive: false });
-      } finally {
-        writeSpy.mockRestore();
-      }
-    },
-  );
-
-  test.each(["project", "global"] as const)(
-    "creates a missing %s config file",
-    async (scope) => {
-      expect(
-        await writeConfigChanges(scope, projectDirectory, {
-          isSyncActive: false,
-        }),
-      ).toEqual({ ok: true });
-
-      expect(await readJson(getConfigFilePath(scope))).toEqual({
-        isSyncActive: false,
-      });
-    },
-  );
-
-  test("reports a write failure after one attempted batch write", async () => {
-    const filePath = CONFIG_PATHS.project(projectDirectory);
-
-    await writeConfigFile(filePath, { isSyncActive: true });
-
-    const readSpy = vi.spyOn(fs, "readFile");
-    const writeSpy = vi
-      .mocked(writeJsonFile)
-      .mockRejectedValueOnce(new Error("expected write failure"));
-
-    try {
-      await expect(
-        writeConfigChanges("project", projectDirectory, {
-          "themes.light": "project-light",
-          isSyncActive: false,
-        }),
-      ).rejects.toThrow("expected write failure");
-
-      expect(readSpy).toHaveBeenCalledTimes(1);
-      expect(writeSpy).toHaveBeenCalledTimes(1);
-    } finally {
-      readSpy.mockRestore();
-      writeSpy.mockRestore();
-    }
-  });
-});
-
-describe.each(["project", "global"] as const)("%s file selection", (scope) => {
-  function paths() {
-    const preferred = getConfigFilePath(scope);
-    const legacy = path.join(
-      path.dirname(path.dirname(preferred)),
-      "theme-sync.json",
-    );
-
-    return { preferred, legacy };
-  }
-
-  test.each(["neither", "legacy", "preferred", "both"] as const)(
-    "resolves and saves with %s files present",
-    async (layout) => {
-      const { preferred, legacy } = paths();
-      const original = {
-        isSyncActive: false,
-        extra: "preserved",
-        themes: { light: "project-light", other: "kept" },
-      };
-
-      if (layout === "legacy" || layout === "both") {
-        await writeConfigFile(legacy, original);
-      }
-
-      if (layout === "preferred" || layout === "both") {
-        await writeConfigFile(preferred, original);
-      }
-
-      const selected = layout === "legacy" ? legacy : preferred;
-
-      expect(await getConfigPath(scope, projectDirectory)).toBe(selected);
-
-      const loaded = await loadConfig(createContext());
-
-      expect(loaded.runtimeConfig.isSyncActive).toBe(layout === "neither");
-      expect(loaded.warnings).toEqual([]);
-      expect(
-        await writeConfigChanges(scope, projectDirectory, {
-          isSyncActive: true,
-          "themes.dark": "global-dark",
-        }),
-      ).toEqual({ ok: true });
-
-      expect(await readJson(selected)).toEqual(
-        layout === "neither"
-          ? { isSyncActive: true, themes: { dark: "global-dark" } }
-          : {
-              ...original,
-              isSyncActive: true,
-              themes: { ...original.themes, dark: "global-dark" },
-            },
-      );
-
-      if (layout === "both") {
-        expect(await readJson(legacy)).toEqual(original);
-      } else {
-        await expect(
-          readFile(selected === legacy ? preferred : legacy),
-        ).rejects.toMatchObject({ code: "ENOENT" });
-      }
-    },
-  );
-
-  test.each([{}, { themes: { dark: "global-dark" } }])(
-    "does not merge legacy values into preferred %j",
-    async (preferredConfig) => {
-      const { preferred, legacy } = paths();
-
-      await writeConfigFile(legacy, {
-        isSyncActive: false,
-        themes: { light: "project-light" },
-      });
-      await writeConfigFile(preferred, preferredConfig);
-
-      const loaded = await loadConfig(createContext());
-
-      expect(loaded.runtimeConfig.isSyncActive).toBe(true);
-      expect(loaded.runtimeConfig.themes.light).toBe("light");
     },
   );
 
   test.each(["{", "[]", "null", '"text"', "42", "true"])(
-    "warns and refuses invalid preferred %s without legacy fallback",
+    "ignores a malformed file %s with its reason in the file state",
     async (content) => {
-      const { preferred, legacy } = paths();
+      await dirs.writeText(configPath("project"), content);
 
-      await writeConfigFile(legacy, { isSyncActive: false });
-      await mkdir(path.dirname(preferred), { recursive: true });
-      await writeFile(preferred, content);
-      expect(await getConfigPath(scope, projectDirectory)).toBe(preferred);
+      const { files, runtimeConfig, warnings } = await load();
 
-      const loaded = await loadConfig(createContext());
+      expect(runtimeConfig).toEqual(DEFAULT_CONFIG);
+      expect(warnings).toEqual([]);
+      expect(files.project.state).toBe("invalid");
 
-      expect(loaded.runtimeConfig).toEqual(DEFAULT_CONFIG);
-      expect(loaded.warnings).toHaveLength(1);
-      expect(loaded.warnings[0]).toContain(preferred);
+      const reason =
+        files.project.state === "invalid" ? files.project.reason : "";
+      const [warning] = configFileWarnings([files.project]);
 
-      const saved = await writeConfigChanges(scope, projectDirectory, {
-        isSyncActive: false,
-      });
-
-      expect(saved.ok).toBe(false);
-
-      if (!saved.ok) {
-        expect(saved.reason).toContain(preferred);
+      if (content === "{") {
+        expect(reason).toMatch(/^not valid JSON: /);
+        expect(warning).toMatch(/ is not valid JSON: .* Ignored the file\.$/);
+      } else {
+        expect(reason).toBe("not a JSON object");
+        expect(warning).toBe(
+          `Configuration at ${configPath("project")} must be a JSON object. Ignored the file.`,
+        );
       }
 
-      expect(await readFile(preferred, "utf8")).toBe(content);
-      expect(await readJson(legacy)).toEqual({ isSyncActive: false });
+      expect(warning).toContain(configPath("project"));
     },
   );
 
-  test.each(["{", "[]", "null"])(
-    "protects invalid selected legacy %s",
-    async (content) => {
-      const { preferred, legacy } = paths();
-
-      await mkdir(path.dirname(legacy), { recursive: true });
-      await writeFile(legacy, content);
-      expect(await getConfigPath(scope, projectDirectory)).toBe(legacy);
-      expect(
-        await writeConfigChanges(scope, projectDirectory, {
-          isSyncActive: false,
-        }),
-      ).toMatchObject({ ok: false });
-      expect(await readFile(legacy, "utf8")).toBe(content);
-      await expect(readFile(preferred)).rejects.toMatchObject({
-        code: "ENOENT",
-      });
-    },
-  );
-
-  test("refreshes selection after preferred creation and removal", async () => {
-    const { preferred, legacy } = paths();
-
-    await writeConfigFile(legacy, { isSyncActive: false });
-    expect((await loadConfig(createContext())).runtimeConfig.isSyncActive).toBe(
-      false,
+  test("ignores an unreadable file and uses the other scope", async () => {
+    await writeConfigs(
+      { themes: { dark: "user-dark" } },
+      { themes: { dark: "dark" } },
     );
 
-    await writeConfigFile(preferred, {
-      isSyncActive: true,
-      externalKey: "keep",
+    const fs: ConfigFileFs = {
+      access: async () => {},
+      readFile: async (filePath, encoding) => {
+        if (filePath === configPath("project")) {
+          throw Object.assign(new Error("permission denied"), {
+            code: "EACCES",
+          });
+        }
+
+        return readFile(filePath, encoding);
+      },
+    };
+    const { files, runtimeConfig } = await load(true, fs);
+
+    expect(runtimeConfig.themes.dark).toBe("user-dark");
+    expect(files.project).toMatchObject({
+      reason: "unreadable: permission denied",
+      state: "invalid",
     });
 
-    expect(
-      await writeConfigChanges(scope, projectDirectory, {
-        "themes.dark": "global-dark",
-      }),
-    ).toEqual({ ok: true });
-
-    expect(await readJson(preferred)).toEqual({
-      isSyncActive: true,
-      externalKey: "keep",
-      themes: { dark: "global-dark" },
-    });
-    expect(await readJson(legacy)).toEqual({ isSyncActive: false });
-    expect((await loadConfig(createContext())).runtimeConfig.isSyncActive).toBe(
-      true,
-    );
-    await rm(preferred);
-    expect((await loadConfig(createContext())).runtimeConfig.isSyncActive).toBe(
-      false,
-    );
-
-    await writeConfigChanges(scope, projectDirectory, {
-      "themes.dark": "global-dark",
-    });
-
-    expect(await readJson(legacy)).toEqual({
-      isSyncActive: false,
-      themes: { dark: "global-dark" },
-    });
-    await rm(legacy);
-    expect((await loadConfig(createContext())).runtimeConfig).toEqual(
-      DEFAULT_CONFIG,
-    );
+    expect(configFileWarnings([files.project])).toEqual([
+      `Could not read configuration at ${configPath("project")}: permission denied. Ignored the file.`,
+    ]);
   });
 
-  test.each(["EACCES", "EISDIR", "ENOTDIR"])(
-    "warns, ignores, and protects the preferred file on read error %s without legacy fallback",
-    async (code) => {
-      const { preferred, legacy } = paths();
+  test("does not read the old settings.json or theme-sync.json files", async () => {
+    await dirs.writeJson(
+      path.join(dirs.agentDir, "theme-sync", "settings.json"),
+      { isSyncActive: false },
+    );
 
-      await writeConfigFile(legacy, { isSyncActive: false });
+    await dirs.writeJson(path.join(dirs.cwd, ".pi", "theme-sync.json"), {
+      isSyncActive: false,
+    });
 
-      const readSpy = vi
-        .spyOn(fs, "readFile")
-        .mockImplementation(async (filePath, options) => {
-          if (filePath === preferred) {
-            throw Object.assign(new Error("expected read failure"), { code });
-          }
+    const { files, runtimeConfig } = await load();
 
-          return readFile(filePath, options);
-        });
-
-      expect(await getConfigPath(scope, projectDirectory)).toBe(preferred);
-
-      const loaded = await loadConfig(createContext());
-
-      expect(loaded.runtimeConfig).toEqual(DEFAULT_CONFIG);
-      expect(loaded.warnings).toEqual([
-        `Could not read configuration at ${preferred}: expected read failure. Ignored the file.`,
-      ]);
-
-      expect(
-        await writeConfigChanges(scope, projectDirectory, {
-          isSyncActive: true,
-        }),
-      ).toEqual({
-        ok: false,
-        reason: `Could not save the ${scope === "project" ? "Project" : "User"} configuration: ${preferred} must be readable and contain a valid JSON object. Fix the file and try again.`,
-      });
-      expect(vi.mocked(writeJsonFile)).not.toHaveBeenCalled();
-
-      expect(readSpy.mock.calls.some(([filePath]) => filePath === legacy)).toBe(
-        false,
-      );
-      expect(await readJson(legacy)).toEqual({ isSyncActive: false });
-    },
-  );
-
-  test("does not try legacy after a preferred write failure", async () => {
-    const { preferred, legacy } = paths();
-
-    await writeConfigFile(preferred, { isSyncActive: true });
-    await writeConfigFile(legacy, { isSyncActive: false });
-
-    const writeSpy = vi
-      .mocked(writeJsonFile)
-      .mockRejectedValue(
-        Object.assign(new Error("expected write failure"), { code: "EACCES" }),
-      );
-
-    await expect(
-      writeConfigChanges(scope, projectDirectory, { isSyncActive: false }),
-    ).rejects.toMatchObject({ code: "EACCES" });
-    expect(writeSpy).toHaveBeenCalledOnce();
-    expect(writeSpy.mock.calls[0]?.[0]).toBe(preferred);
-    expect(await readJson(preferred)).toEqual({ isSyncActive: true });
-    expect(await readJson(legacy)).toEqual({ isSyncActive: false });
+    expect(runtimeConfig).toEqual(DEFAULT_CONFIG);
+    expect([files.user.state, files.project.state]).toEqual([
+      "missing",
+      "missing",
+    ]);
   });
 });
 
-test.each(["project", "global"] as const)(
-  "preserves per-key precedence with legacy %s and preferred other scope",
-  async (legacyScope) => {
-    const globalPreferred = CONFIG_PATHS.global;
-    const projectPreferred = CONFIG_PATHS.project(projectDirectory);
-    const legacyPath = path.join(
-      path.dirname(path.dirname(getConfigFilePath(legacyScope))),
-      "theme-sync.json",
-    );
+describe("writeConfigChanges", () => {
+  test.each(["project", "user"] as const)(
+    "merges changes into the %s file with version first and other keys kept",
+    async (scope) => {
+      await dirs.writeJson(configPath(scope), {
+        detection: { pollIntervalMs: 3000, strategy: "custom" },
+        pluginSetting: { enabled: true },
+        syncEnabled: true,
+        themes: { dark: "user-dark", light: "light" },
+      });
 
-    await writeConfigFile(
-      legacyScope === "global" ? legacyPath : globalPreferred,
-      {
-        isSyncActive: false,
-        themes: { dark: "global-dark", light: "light" },
-      },
-    );
+      await save(scope, {
+        "detection.pollIntervalMs": 4500,
+        syncEnabled: false,
+        "themes.light": "project-light",
+      });
 
-    await writeConfigFile(
-      legacyScope === "project" ? legacyPath : projectPreferred,
-      {
-        themes: { light: "project-light" },
-      },
-    );
+      const text = await readFile(configPath(scope), "utf8");
 
-    const loaded = await loadConfig(createContext());
-
-    expect(loaded.runtimeConfig).toEqual({
-      ...DEFAULT_CONFIG,
-      isSyncActive: false,
-      themes: { light: "project-light", dark: "global-dark" },
-    });
-
-    expect(loaded.runtimeConfigSources.themes).toEqual({
-      light: "project",
-      dark: "global",
-    });
-    expect(loaded.warnings).toEqual([]);
-  },
-);
-
-function createContext(): ExtensionContext {
-  return {
-    cwd: projectDirectory,
-    ui: {
-      getAllThemes: () => availableThemeNames.map((name) => ({ name })),
+      expect(JSON.parse(text)).toEqual({
+        detection: { pollIntervalMs: 4500, strategy: "custom" },
+        pluginSetting: { enabled: true },
+        syncEnabled: false,
+        themes: { dark: "user-dark", light: "project-light" },
+        version: CONFIG_VERSION,
+      });
+      expect(Object.keys(JSON.parse(text) as object)[0]).toBe("version");
     },
-  } as unknown as ExtensionContext;
+  );
+
+  test.each(["project", "user"] as const)(
+    "creates a missing %s config.json with the current version",
+    async (scope) => {
+      await save(scope, { syncEnabled: false });
+
+      expect(await dirs.readJson(configPath(scope))).toEqual({
+        syncEnabled: false,
+        version: CONFIG_VERSION,
+      });
+    },
+  );
+
+  test("renames the old isSyncActive key when it saves", async () => {
+    await dirs.writeJson(configPath("user"), {
+      isSyncActive: false,
+      themes: { dark: "dark" },
+    });
+
+    await save("user", { "themes.light": "project-light" });
+
+    expect(await dirs.readJson(configPath("user"))).toEqual({
+      syncEnabled: false,
+      themes: { dark: "dark", light: "project-light" },
+      version: CONFIG_VERSION,
+    });
+  });
+
+  test("rereads the file for each save", async () => {
+    await save("project", { "themes.dark": "user-dark" });
+    await dirs.writeJson(configPath("project"), {
+      externalRevision: 2,
+      themes: { dark: "external-dark" },
+    });
+    await save("project", { "themes.light": "project-light" });
+
+    expect(await dirs.readJson(configPath("project"))).toEqual({
+      externalRevision: 2,
+      themes: { dark: "external-dark", light: "project-light" },
+      version: CONFIG_VERSION,
+    });
+  });
+
+  test("does not create a file when there are no changes", async () => {
+    await save("project", {});
+
+    expect(await dirs.exists(configPath("project"))).toBe(false);
+  });
+
+  test.each(["{", "[]", "null", '"text"', "42", "true"])(
+    "refuses to overwrite a malformed file %s and saves after it is fixed",
+    async (content) => {
+      await dirs.writeText(configPath("user"), content);
+
+      await expect(save("user", { syncEnabled: false })).rejects.toThrow(
+        `${configPath("user")} is invalid (`,
+      );
+      expect(await readFile(configPath("user"), "utf8")).toBe(content);
+
+      await dirs.writeText(configPath("user"), '{ "keepThis": true }');
+      await save("user", { syncEnabled: false });
+
+      expect(await dirs.readJson(configPath("user"))).toEqual({
+        keepThis: true,
+        syncEnabled: false,
+        version: CONFIG_VERSION,
+      });
+    },
+  );
+
+  test("refuses to overwrite a file with another version", async () => {
+    await dirs.writeJson(configPath("user"), { syncEnabled: true, version: 3 });
+
+    await expect(save("user", { syncEnabled: false })).rejects.toThrow(
+      `${configPath("user")} is invalid (unsupported version 3). Fix the file and try again.`,
+    );
+
+    expect(await dirs.readJson(configPath("user"))).toEqual({
+      syncEnabled: true,
+      version: 3,
+    });
+  });
+
+  test("refuses to save to an untrusted project", async () => {
+    await expect(
+      save("project", { syncEnabled: false }, false),
+    ).rejects.toThrow(
+      `The project is not trusted, so ${configPath("project")} was not saved. Trust the project and try again.`,
+    );
+    expect(await dirs.exists(configPath("project"))).toBe(false);
+  });
+
+  test("saves to the User file in an untrusted project", async () => {
+    await save("user", { syncEnabled: false }, false);
+
+    expect(await dirs.readJson(configPath("user"))).toEqual({
+      syncEnabled: false,
+      version: CONFIG_VERSION,
+    });
+  });
+
+  test("leaves the file unchanged when the write fails", async () => {
+    await dirs.writeJson(configPath("project"), { syncEnabled: true });
+
+    const atomicWriteFs: AtomicWriteFs = {
+      mkdir,
+      open,
+      rename: () => Promise.reject(new Error("expected write failure")),
+      unlink,
+    };
+
+    await expect(
+      writeConfigChanges(
+        "project",
+        createProjectTrustContext(dirs.cwd, true),
+        { syncEnabled: false },
+        { agentDir: dirs.agentDir, atomicWriteFs },
+      ),
+    ).rejects.toThrow("expected write failure");
+
+    expect(await dirs.readJson(configPath("project"))).toEqual({
+      syncEnabled: true,
+    });
+  });
+});
+
+function configPath(scope: ConfigScope): string {
+  return scope === "user"
+    ? path.join(dirs.agentDir, "theme-sync", "config.json")
+    : path.join(dirs.cwd, ".pi", "theme-sync", "config.json");
 }
 
-function getConfigFilePath(scope: ConfigScope): string {
-  return scope === "project"
-    ? CONFIG_PATHS.project(projectDirectory)
-    : CONFIG_PATHS.global;
+function createContext(trusted: boolean): LoadConfigContext {
+  return {
+    ...createProjectTrustContext(dirs.cwd, trusted),
+    ui: {
+      getAllThemes: () =>
+        availableThemeNames.map((name) => ({ name, path: undefined })),
+    },
+  };
 }
 
-async function readJson(filePath: string): Promise<unknown> {
-  return JSON.parse(await readFile(filePath, "utf8")) as unknown;
+function load(trusted = true, fs?: ConfigFileFs) {
+  return loadConfig(createContext(trusted), { agentDir: dirs.agentDir, fs });
 }
 
-async function writeConfigFile(
-  filePath: string,
-  config: LoadedConfig & Record<string, unknown>,
+function save(
+  scope: ConfigScope,
+  changes: Parameters<typeof writeConfigChanges>[2],
+  trusted = true,
 ): Promise<void> {
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, JSON.stringify(config));
+  return writeConfigChanges(
+    scope,
+    createProjectTrustContext(dirs.cwd, trusted),
+    changes,
+    { agentDir: dirs.agentDir },
+  );
 }
 
 async function writeConfigs(
-  globalConfig?: LoadedConfig,
-  projectConfig?: LoadedConfig,
+  userConfig?: Record<string, unknown>,
+  projectConfig?: Record<string, unknown>,
 ): Promise<void> {
-  if (globalConfig) {
-    await writeConfigFile(CONFIG_PATHS.global, globalConfig);
-  }
+  if (userConfig) await dirs.writeJson(configPath("user"), userConfig);
 
   if (projectConfig) {
-    await writeConfigFile(
-      CONFIG_PATHS.project(projectDirectory),
-      projectConfig,
-    );
+    await dirs.writeJson(configPath("project"), projectConfig);
   }
-}
-
-/** Writes both scope files without the `LoadedConfig` shape, for invalid values. */
-async function writeUncheckedConfigs(
-  globalConfig: Record<string, unknown>,
-  projectConfig: Record<string, unknown>,
-): Promise<void> {
-  await writeConfigFile(CONFIG_PATHS.global, globalConfig);
-  await writeConfigFile(CONFIG_PATHS.project(projectDirectory), projectConfig);
 }

@@ -1,5 +1,3 @@
-import { promises as fs } from "node:fs";
-
 import { openThemeSyncOverlay } from "../src/command.js";
 import { createThemeSyncRuntime } from "../src/runtime.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
@@ -34,17 +32,20 @@ test("closes the overlay before reloading and waits for reload completion", asyn
   expect(completed).toBe(true);
 });
 
-test("propagates reload failure to the command caller", async () => {
+test("reports a failed reload as Could not reload Pi", async () => {
   const reload = vi
     .fn()
     .mockRejectedValue(new Error("expected reload failure"));
-  const ctx = createContext(["\x12"], reload);
+  const notify = vi.fn();
+  const ctx = createContext(["\x12"], reload, notify);
 
-  await expect(
-    openThemeSyncOverlay(createThemeSyncRuntime(), ctx),
-  ).rejects.toThrow("expected reload failure");
+  await openThemeSyncOverlay(createThemeSyncRuntime(), ctx);
 
   expect(reload).toHaveBeenCalledOnce();
+  expect(notify).toHaveBeenCalledExactlyOnceWith(
+    "Could not reload Pi: expected reload failure.",
+    "error",
+  );
 });
 
 test.each([
@@ -62,11 +63,8 @@ test.each([
 function createContext(
   input: string[],
   reload: ExtensionCommandContext["reload"],
+  notify = vi.fn(),
 ): ExtensionCommandContext {
-  vi.spyOn(fs, "readFile").mockRejectedValue(
-    Object.assign(new Error("Missing test config"), { code: "ENOENT" }),
-  );
-
   const done = vi.fn();
   const custom = createFakeCustom({
     keybindings: createPiKeybindings(),
@@ -81,8 +79,9 @@ function createContext(
   return {
     cwd: "/unused-overlay-reload-test",
     hasUI: true,
+    isProjectTrusted: () => true,
     mode: "tui",
     reload,
-    ui: { custom, getAllThemes: () => [], notify: vi.fn() },
+    ui: { custom, getAllThemes: () => [], notify },
   } as unknown as ExtensionCommandContext;
 }

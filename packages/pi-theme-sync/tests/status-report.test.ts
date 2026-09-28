@@ -12,22 +12,32 @@ import { expect, test, vi } from "vitest";
 const status: RuntimeStatus = {
   appliedTheme: "solarized-dark",
   availableDetectors: ["OSC 11", "System Appearance"],
-  configSources: {
-    detection: { pollIntervalMs: "project" },
-    isSyncActive: "global",
-    themes: { dark: "project", light: "default" },
-  },
+  configFiles: [
+    {
+      data: {},
+      path: "/agent/theme-sync/config.json",
+      renamedKeys: [],
+      scope: "user",
+      state: "loaded",
+    },
+    {
+      path: "/repo/.pi/theme-sync/config.json",
+      scope: "project",
+      state: "untrusted",
+      warning: "Skipped project configuration.",
+    },
+  ],
   currentAppearance: "dark",
   desiredTheme: "solarized-dark",
   detectionStrategy: "OSC 11",
   lastEvent: "Detected dark appearance",
   lastUpdateAt: 123,
   pollIntervalMs: 5000,
-  syncStatus: "active",
+  syncEnabled: true,
   warnings: ["First warning.", "Second warning."],
 };
 
-test("formats every runtime status field while omitting config provenance", () => {
+test("formats every runtime status field, then the Config block, then warnings", () => {
   const report = formatStatusReport(status, () => "formatted time");
 
   expect(report).toBe(
@@ -43,12 +53,24 @@ test("formats every runtime status field while omitting config provenance", () =
       `  ${"Last update:".padEnd(20)} formatted time`,
       `  ${"Last event:".padEnd(20)} Detected dark appearance`,
       "",
+      "Config:",
+      "  User:    loaded",
+      "           /agent/theme-sync/config.json",
+      "  Project: skipped (untrusted)",
+      "           /repo/.pi/theme-sync/config.json",
+      "",
       "Warnings:",
       "- First warning.",
       "- Second warning.",
     ].join("\n"),
   );
-  expect(report).not.toContain("Config");
+  expect(report).not.toContain("Skipped project configuration.");
+});
+
+test("leaves out the Config block before a session has read the files", () => {
+  const report = formatStatusReport({ ...status, configFiles: [] });
+
+  expect(report).not.toContain("Config:");
 });
 
 test("formats absent status values without a warning section", () => {
@@ -57,7 +79,7 @@ test("formats absent status values without a warning section", () => {
     availableDetectors: [],
     desiredTheme: undefined,
     lastUpdateAt: undefined,
-    syncStatus: "inactive",
+    syncEnabled: false,
     warnings: [],
   });
 

@@ -1,7 +1,5 @@
-import { promises as fs } from "node:fs";
-
 import { openThemeSyncOverlay } from "../src/command.js";
-import { writeConfigChanges } from "../src/config.js";
+import { writeConfigChanges } from "../src/config/save.js";
 import { createThemeSyncRuntime } from "../src/runtime.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
@@ -11,37 +9,35 @@ import {
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, expect, test, vi } from "vitest";
 
-type SaveResult = Awaited<ReturnType<typeof writeConfigChanges>>;
-
-vi.mock("../src/config.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../src/config.js")>()),
+vi.mock("../src/config/save.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/config/save.js")>()),
   writeConfigChanges: vi.fn(),
 }));
+
+const cwd = "/unused-overlay-save-test";
 
 afterEach(() => {
   vi.resetAllMocks();
   vi.restoreAllMocks();
 });
 
-test.each(["success", "refusal", "rejection"] as const)(
+test.each(["success", "failure"] as const)(
   "blocks input during save and restores it after %s",
   async (outcome) => {
     let finishSave = () => {};
-    const pendingSave = new Promise<SaveResult>((resolve, reject) => {
+    const pendingSave = new Promise<void>((resolve, reject) => {
       finishSave = () => {
-        if (outcome === "rejection") {
+        if (outcome === "failure") {
           reject(new Error("expected write failure"));
-        } else if (outcome === "refusal") {
-          resolve({ ok: false, reason: "Fix the config file and try again." });
         } else {
-          resolve({ ok: true });
+          resolve();
         }
       };
     });
     const write = vi
       .mocked(writeConfigChanges)
       .mockReturnValueOnce(pendingSave)
-      .mockResolvedValue({ ok: true });
+      .mockResolvedValue();
     const overlay = await startOverlay();
 
     try {
@@ -49,7 +45,7 @@ test.each(["success", "refusal", "rejection"] as const)(
 
       expect(write).toHaveBeenCalledExactlyOnceWith(
         "project",
-        "/unused-overlay-save-test",
+        expect.objectContaining({ cwd }),
         { "themes.light": "dark" },
       );
 
@@ -75,7 +71,7 @@ test.each(["success", "refusal", "rejection"] as const)(
       expect(write).toHaveBeenCalledTimes(2);
       expect(write).toHaveBeenLastCalledWith(
         "project",
-        "/unused-overlay-save-test",
+        expect.objectContaining({ cwd }),
         outcome === "success" ? {} : { "themes.light": "dark" },
       );
 
@@ -95,10 +91,6 @@ test.each(["success", "refusal", "rejection"] as const)(
 );
 
 async function startOverlay() {
-  vi.spyOn(fs, "readFile").mockRejectedValue(
-    Object.assign(new Error("Missing test config"), { code: "ENOENT" }),
-  );
-
   let acceptInput: (data: string) => void = () => {};
   const ready = createDeferred();
   const done = vi.fn();
@@ -112,8 +104,9 @@ async function startOverlay() {
     },
   });
   const ctx = {
-    cwd: "/unused-overlay-save-test",
+    cwd,
     hasUI: true,
+    isProjectTrusted: () => true,
     mode: "tui",
     reload,
     ui: {
