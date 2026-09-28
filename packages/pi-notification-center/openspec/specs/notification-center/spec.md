@@ -170,7 +170,8 @@ card may be drawn rather than a fixed size. Defaults SHALL be 5 visible toasts,
   or a supported value is outside its documented valid range
 - **THEN** the extension uses the default for each invalid value, remains
   operational, and records one warning notification, headed
-  `Notification Center: <n> warning(s)`, that lists every rejected value
+  `Notification Center: 1 warning` or `Notification Center: <n> warnings`, that
+  lists every rejected value
 
 ### Requirement: Toasts expire independently
 
@@ -220,7 +221,8 @@ command SHALL open a two-pane browser: a list pane naming every notification on
 the active branch newest first, and a detail pane showing the selected
 notification's local date and time, severity, and complete message. Severities
 SHALL be visually distinguished by color, and the command SHALL close on Pi's
-configured cancel input.
+configured cancel input. The command takes no argument: given one, it SHALL
+warn with the standard usage reply and do nothing else.
 
 #### Scenario: User opens populated history
 
@@ -251,6 +253,13 @@ configured cancel input.
 - **WHEN** the user runs `/notifications` before any notification has been
   captured in the active session
 - **THEN** the command shows a clear empty-state message
+
+#### Scenario: User passes an argument
+
+- **WHEN** the user runs `/notifications` followed by any non-blank argument
+- **THEN** no browser or summary is shown, and the extension warns
+  `Unknown subcommand "<argument>". Try /notifications.` under the
+  `Notification Center: 1 warning` heading
 
 #### Scenario: User closes history
 

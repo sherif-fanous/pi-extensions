@@ -1,11 +1,24 @@
-import type { LoadConfigResult } from "../src/config.js";
+import { loadConfig, type LoadConfigResult } from "../src/config.js";
+import { EXTENSION_NAME } from "../src/extension-name.js";
+import { createNotificationEntry } from "../src/history.js";
 import notificationCenter from "../src/index.js";
-import { CUSTOM_ENTRY_TYPE, DEFAULT_CONFIG } from "../src/types.js";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
+  CUSTOM_ENTRY_TYPE,
+  DEFAULT_CONFIG,
+  type NotificationEntry,
+} from "../src/types.js";
+import type {
+  ExtensionAPI,
+  ExtensionUIContext,
+} from "@earendil-works/pi-coding-agent";
+import {
+  createFakeCustom,
   createFakeTui,
   createFakeWidgets,
+  createShownTextRecorder,
+  findShownTextViolations,
   type FakeTui,
+  type ShownTextRecorder,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,6 +35,32 @@ describe("notification-center lifecycle", () => {
     const harness = setup();
 
     expect(harness.commands.has("notifications")).toBe(true);
+  });
+
+  it("rejects an argument with a usage warning instead of running", async () => {
+    const harness = setup(undefined, { mode: "rpc" });
+
+    await harness.run(" foo ");
+
+    expect(harness.notify).toHaveBeenCalledExactlyOnceWith(
+      'Notification Center: 1 warning\n- Unknown subcommand "foo". Try /notifications.',
+      "warning",
+    );
+    expect(harness.branchReads).toBe(0);
+  });
+
+  it("runs the command when the argument is only whitespace", async () => {
+    const harness = setup(undefined, {
+      entries: [createNotificationEntry("one", "info", 0)],
+      mode: "rpc",
+    });
+
+    await harness.run("  ");
+
+    expect(harness.notify).toHaveBeenCalledExactlyOnceWith(
+      "1 notification has been captured in this session.",
+      "info",
+    );
   });
 
   it("records no warning when configuration is absent or valid", () => {
@@ -173,57 +212,205 @@ describe("notification-center lifecycle", () => {
   });
 });
 
+describe("notification-center shown text", () => {
+  it("follows the family text and naming standard", async () => {
+    const shown = createShownTextRecorder();
+    const invalidConfig = (): LoadConfigResult =>
+      loadConfig("/agent", {
+        readFileSync: () =>
+          JSON.stringify({ maxToastsVisible: 99, toast: "wide" }),
+      });
+    const entries = [
+      createNotificationEntry("first", "info", 0),
+      createNotificationEntry("second", "warning", 1000),
+    ];
+
+    // The TUI session start uses the toast bridge widget and records its
+    // configuration warning as a history entry.
+    const tui = setup(invalidConfig(), { shown });
+
+    await shown.recordCommand(tui.command());
+    tui.start();
+    tui.shutdown();
+
+    // Outside the TUI, every answer is a plain notification.
+    const rpc = setup(invalidConfig(), { mode: "rpc", shown });
+
+    rpc.start();
+
+    for (const branch of [[], entries.slice(0, 1), entries]) {
+      rpc.setEntries(branch);
+      await rpc.run("");
+    }
+
+    await rpc.run("foo");
+
+    rpc.configLoader.mockImplementation(() => {
+      throw new Error("disk on fire");
+    });
+    rpc.start();
+
+    // The history browser, populated and empty.
+    for (const branch of [entries, []]) {
+      const rendered: string[] = [];
+      const browser = setup(undefined, {
+        custom: createFakeCustom({ keys: ["\u001B"], rendered }),
+        entries: branch,
+        shown,
+      });
+
+      await browser.run("");
+
+      for (const line of rendered) shown.record("text", line);
+    }
+
+    // Guard against a vacuous pass: each surface actually recorded text.
+    expect(shown.texts).toEqual(
+      expect.arrayContaining([
+        {
+          surface: "description",
+          text: "Browse this session's notifications",
+        },
+        {
+          surface: "notification",
+          text: "2 notifications have been captured in this session.",
+        },
+        {
+          surface: "notification",
+          text: 'Notification Center: 1 warning\n- Unknown subcommand "foo". Try /notifications.',
+        },
+        {
+          surface: "notification",
+          text: "Notification Center session_start failed: disk on fire.",
+        },
+      ]),
+    );
+
+    expect(shown.keys).toEqual(
+      expect.arrayContaining([
+        { key: "notification-center:bridge", kind: "widget" },
+        { key: CUSTOM_ENTRY_TYPE, kind: "entry" },
+      ]),
+    );
+
+    expect(
+      findShownTextViolations(shown, {
+        displayName: EXTENSION_NAME,
+        slug: "notification-center",
+      }),
+    ).toEqual([]);
+  });
+});
+
+/** A registered command, typed as loosely as the fake `pi` passes it on. */
+interface HarnessCommand {
+  description?: string;
+  handler: (args: string, ctx: unknown) => Promise<void>;
+}
+
 interface IndexHarness {
   appended: { customType: string; data: unknown }[];
-  commands: Map<string, unknown>;
+  branchReads: number;
+  command: () => HarnessCommand;
+  commands: Map<string, HarnessCommand>;
   configLoader: ReturnType<typeof vi.fn<() => LoadConfigResult>>;
-  ctx: { mode: string; ui: { notify: (m: string, t?: string) => void } };
+  ctx: { mode: string; ui: { notify: Notify } };
   fake: FakeTui;
-  notify: ReturnType<typeof vi.fn>;
-  original: (message: string, type?: string) => void;
+  notify: ReturnType<typeof vi.fn<Notify>>;
+  original: Notify;
+  run: (args: string) => Promise<void>;
+  setEntries: (entries: NotificationEntry[]) => void;
   shutdown: () => void;
   start: () => void;
 }
 
+interface SetupOptions {
+  /** Stand-in for `ctx.ui.custom`, which opens the history browser. */
+  custom?: ExtensionUIContext["custom"];
+  /** Notifications on the active branch. */
+  entries?: NotificationEntry[];
+  mode?: "json" | "print" | "rpc" | "tui";
+  /** Receives every notification, widget, entry, and command. */
+  shown?: ShownTextRecorder;
+}
+
+type Notify = (message: string, type?: "error" | "info" | "warning") => void;
+
 function setup(
   result: LoadConfigResult = { config: DEFAULT_CONFIG, warnings: [] },
-  options: { mode?: "json" | "print" | "rpc" | "tui" } = {},
+  options: SetupOptions = {},
 ): IndexHarness {
   const fake = createFakeTui();
+  const widgets = createFakeWidgets(fake);
   const appended: { customType: string; data: unknown }[] = [];
-  const commands = new Map<string, unknown>();
+  const commands = new Map<string, HarnessCommand>();
   const handlers = new Map<string, (event: unknown, ctx: unknown) => void>();
-  const notify = vi.fn();
+  const notify = vi.fn<Notify>(options.shown?.notify);
   const configLoader = vi.fn<() => LoadConfigResult>(() => result);
+
+  let entries = options.entries ?? [];
+
   const ctx = {
     mode: options.mode ?? "tui",
+    sessionManager: {
+      getBranch: () => {
+        harness.branchReads += 1;
+
+        return entries.map((data) => ({
+          customType: CUSTOM_ENTRY_TYPE,
+          data,
+          type: "custom",
+        }));
+      },
+    },
     ui: {
+      custom: options.custom,
       notify,
-      setWidget: createFakeWidgets(fake).setWidget,
+      setWidget: (
+        key: string,
+        content: Parameters<typeof widgets.setWidget>[1],
+      ) => {
+        options.shown?.setWidget(key, content);
+        widgets.setWidget(key, content);
+      },
     },
   };
   const pi = {
     appendEntry: (customType: string, data?: unknown) => {
       appended.push({ customType, data });
+      options.shown?.appendEntry(customType, data);
     },
     on: (event: string, handler: (e: unknown, c: unknown) => void) => {
       handlers.set(event, handler);
     },
-    registerCommand: (name: string, config: unknown) => {
+    registerCommand: (name: string, config: HarnessCommand) => {
       commands.set(name, config);
     },
   } as unknown as ExtensionAPI;
 
   notificationCenter(pi, configLoader);
 
-  return {
+  const command = (): HarnessCommand => {
+    const registered = commands.get("notifications");
+
+    if (!registered) throw new Error("/notifications is not registered");
+
+    return registered;
+  };
+  const harness: IndexHarness = {
     appended,
+    branchReads: 0,
+    command,
     commands,
     configLoader,
     ctx,
     fake,
     notify,
     original: notify,
+    run: (args) => command().handler(args, ctx),
+    setEntries: (next) => {
+      entries = next;
+    },
     shutdown: () => {
       handlers.get("session_shutdown")?.({}, ctx);
     },
@@ -231,4 +418,6 @@ function setup(
       handlers.get("session_start")?.({ reason: "startup" }, ctx);
     },
   };
+
+  return harness;
 }

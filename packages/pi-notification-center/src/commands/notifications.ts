@@ -15,7 +15,7 @@ import {
   HistoryViewComponent,
 } from "../ui/history-view.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { isInteractiveTui } from "@sherif-fanous/pi-extensions-core";
+import { isInteractiveTui, pluralize } from "@sherif-fanous/pi-extensions-core";
 
 /** Command-context surface used to open the overlay. */
 export type NotificationsCommandContext = Pick<
@@ -90,7 +90,7 @@ function defaultTerminalWidth(): number | undefined {
 function summarize(entries: readonly NotificationEntry[]): string {
   if (entries.length === 0) return HISTORY_EMPTY_MESSAGE;
 
-  return entries.length === 1
-    ? "1 notification has been captured in this session."
-    : `${String(entries.length)} notifications have been captured in this session.`;
+  const verb = entries.length === 1 ? "has" : "have";
+
+  return `${pluralize(entries.length, "notification")} ${verb} been captured in this session.`;
 }

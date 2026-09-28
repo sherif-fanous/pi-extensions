@@ -7,10 +7,12 @@
 import { CaptureRuntime } from "./capture.js";
 import { runNotificationsCommand } from "./commands/notifications.js";
 import { loadConfig, type LoadConfigResult } from "./config.js";
+import { EXTENSION_NAME } from "./extension-name.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   guardCommand,
   guardEvent,
+  notifyUsageWarning,
   notifyWarnings,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -29,16 +31,21 @@ export default function notificationCenter(
   let runtime: CaptureRuntime | undefined;
 
   pi.registerCommand("notifications", {
-    description:
-      "Browse notifications captured in this session, newest first, with their local date, time, and severity.",
-    handler: guardCommand("Notification Center", (_args, ctx) =>
-      runNotificationsCommand(ctx),
-    ),
+    description: "Browse this session's notifications",
+    handler: guardCommand(EXTENSION_NAME, async (args, ctx) => {
+      if (args.trim() !== "") {
+        notifyUsageWarning(ctx, EXTENSION_NAME, args, ["/notifications"]);
+
+        return;
+      }
+
+      await runNotificationsCommand(ctx);
+    }),
   });
 
   pi.on(
     "session_start",
-    guardEvent("Notification Center", "session_start", (_event, ctx) => {
+    guardEvent(EXTENSION_NAME, "session_start", (_event, ctx) => {
       // A reload fires `session_start` again, so drop the previous runtime
       // before installing a new wrapper or its timers and overlay leak.
       runtime?.dispose();
@@ -63,7 +70,7 @@ export default function notificationCenter(
           }
         : ctx;
 
-      notifyWarnings(warningContext, "Notification Center", warnings);
+      notifyWarnings(warningContext, EXTENSION_NAME, warnings);
     }),
   );
 
