@@ -1,0 +1,25 @@
+{
+  "name": "@sherif-fanous/pi-extensions-release",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Release tooling for the Pi extensions workspace: Changesets versioning with Common Changelog entries.",
+  "license": "MIT",
+  "author": "Sherif Fanous",
+  "type": "module",
+  "dependencies": {
+    "@changesets/apply-release-plan": "catalog:",
+    "@changesets/assemble-release-plan": "catalog:",
+    "@changesets/config": "catalog:",
+    "@changesets/read": "catalog:",
+    "@changesets/types": "catalog:",
+    "@manypkg/get-packages": "catalog:",
+    "prettier": "catalog:"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "@ianvs/prettier-plugin-sort-imports": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

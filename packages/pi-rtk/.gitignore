@@ -1,5 +1,0 @@
-.env
-.pi/
-node_modules
-package-lock.json
-pi-rtk.code-workspace

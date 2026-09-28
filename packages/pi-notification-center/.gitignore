@@ -1,7 +1,0 @@
-.DS_Store
-.env
-.pi/
-node_modules/
-openspec/changes/*
-pi-notification-center.code-workspace
-!openspec/changes/archive/

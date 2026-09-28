@@ -16,8 +16,8 @@ The conventions below are the ones the linter cannot enforce.
   trigger, such as a validation error, a missing file, or malformed JSON, is an
   expected failure that comes back as a structured result or a warning.
 - Keep no module-level caches of on-disk state. Re-reading on every call is
-  deliberate because it makes `ctx.reload()` pick up an edit. Do not add a
-  cache to shorten a hot path.
+  deliberate because it makes `ctx.reload()` pick up an edit. Do not add a cache
+  to shorten a hot path.
 - Expose test seams as optional last parameters that default to the real
   implementation. Never reach for a DI container or an injection layer to make
   something testable.
@@ -25,37 +25,36 @@ The conventions below are the ones the linter cannot enforce.
   `src/detectors/index.ts`, and adding the matching `detectAppearance` switch
   arm. Nothing else should need to change.
 - Read and save `config.json` only through `src/config/` and core's config
-  helpers, which check project trust, stamp `version`, and write atomically.
-  The repository's `AGENTS.md` "Config" section is the standard they follow.
+  helpers, which check project trust, stamp `version`, and write atomically. The
+  repository's `AGENTS.md` "Config" section is the standard they follow.
 - Expose new runtime state through `ThemeSyncRuntime` or `RuntimeStatus`, never
   through exported mutable bindings.
 - `getTuiHandle` acquires Pi's live TUI through a transient zero-line
   `setWidget` factory because `ExtensionUIContext` does not expose the color
   scheme API. Keep the workaround isolated, acquire it once per
-  `setupAppearanceMonitoring` call, and never cache the handle across
-  sessions.
+  `setupAppearanceMonitoring` call, and never cache the handle across sessions.
 
 ### Detection
 
 - Pi's color scheme API is the primary terminal source. Pi owns DSR 996/997
-  parsing and the notification lifecycle. Do not parse color scheme reports
-  from raw terminal input.
+  parsing and the notification lifecycle. Do not parse color scheme reports from
+  raw terminal input.
 - Write a raw terminal query only for OSC 11 polling and the DEC mode 2031
-  DECRQM support probe. Route any new query through
-  `queryWithTerminalListener` instead of adding a listener of your own.
-- Prefer a subscription over polling. With a subscription active, the only
-  timer is the low-frequency drift-correction interval, which catches a user
-  changing Pi's theme by hand after we set it.
+  DECRQM support probe. Route any new query through `queryWithTerminalListener`
+  instead of adding a listener of your own.
+- Prefer a subscription over polling. With a subscription active, the only timer
+  is the low-frequency drift-correction interval, which catches a user changing
+  Pi's theme by hand after we set it.
 - Never disable terminal color scheme notifications. They are shared host state,
   and turning them off breaks Pi's own automatic theme controller. Cleanup
   removes this extension's listener and nothing else.
 
 ### Comments
 
-Every source file opens with a module JSDoc: one or two sentences saying what
-it does. Every exported function, type, and constant carries a short JSDoc
-saying what it does. Do not list what a module is not responsible for, and do
-not name sibling modules to disclaim them.
+Every source file opens with a module JSDoc: one or two sentences saying what it
+does. Every exported function, type, and constant carries a short JSDoc saying
+what it does. Do not list what a module is not responsible for, and do not name
+sibling modules to disclaim them.
 
 Skip `@param`, `@returns`, and `@throws` tags that restate the signature. Add a
 second sentence to a doc block only when the caller needs it: an invariant to
@@ -91,20 +90,20 @@ extension, so leave out internal names, event names, and mechanism. A user
 cannot act on `ctx.ui.notify`. `CONTRIBUTING.md` is for someone changing the
 code, so technical terms belong there. The prose rules above apply to both.
 
-Prose in notifications, dialog bodies, inline editor notices, warnings, and
-lead sentences uses complete sentences with terminal periods. Single-line
-labels do not carry one. Key/value labels in dialogs and status rows use
-sentence case with a trailing colon, as in `Appearance:`, `Applied theme:`,
+Prose in notifications, dialog bodies, inline editor notices, warnings, and lead
+sentences uses complete sentences with terminal periods. Single-line labels do
+not carry one. Key/value labels in dialogs and status rows use sentence case
+with a trailing colon, as in `Appearance:`, `Applied theme:`,
 `Detection strategy:`, and `Available detectors:`. Editor form rows and nested
 view titles use the same sentence-case text without the colon. The overlay and
 report headings are `Theme Sync Config` and `Theme Sync Status`. Button and
 footer action labels use Title Case. The repository's `AGENTS.md` "Text and
-naming" section is the family standard these rules follow, and its "TUI"
-section governs the overlay's frame, key hints (such as `↑/↓ Move · Enter Edit
-· Esc Close`), keys, lists, and selection markers.
+naming" section is the family standard these rules follow, and its "TUI" section
+governs the overlay's frame, key hints (such as
+`↑/↓ Move · Enter Edit · Esc Close`), keys, lists, and selection markers.
 
-Detector strategy labels live in `DETECTOR_LABELS` in `src/runtime.ts`. Read
-the label from there instead of repeating the text at a call site.
+Detector strategy labels live in `DETECTOR_LABELS` in `src/runtime.ts`. Read the
+label from there instead of repeating the text at a call site.
 
 `Pi` is the product, `pi` the binary, and Pi command names stay literal:
 `/theme-sync` and `/reload`.

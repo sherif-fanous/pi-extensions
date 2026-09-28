@@ -9,43 +9,15 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "prettier": {
-    "importOrder": [
-      "<BUILTIN_MODULES>",
-      "",
-      "<THIRD_PARTY_MODULES>"
-    ],
-    "importOrderTypeScriptVersion": "6.0.0",
-    "overrides": [
-      {
-        "files": [
-          "*.md",
-          "*.mdx"
-        ],
-        "options": {
-          "printWidth": 80,
-          "proseWrap": "always"
-        }
-      }
-    ],
-    "plugins": [
-      "@ianvs/prettier-plugin-sort-imports"
-    ]
-  },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.12",
+    "@biomejs/biome": "catalog:",
     "@earendil-works/pi-coding-agent": "catalog:",
     "@earendil-works/pi-tui": "catalog:",
-    "@eslint/js": "^10.0.1",
-    "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
-    "@stylistic/eslint-plugin": "^5.10.0",
-    "eslint": "^10.9.1",
-    "eslint-plugin-perfectionist": "^5.11.0",
-    "eslint-plugin-unicorn": "^74.0.0",
-    "prettier": "^3.9.6",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.69.0",
-    "vitest": "^5.0.0"
+    "@ianvs/prettier-plugin-sort-imports": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",

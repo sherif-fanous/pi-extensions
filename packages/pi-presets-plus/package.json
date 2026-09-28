@@ -1,7 +1,7 @@
 {
   "name": "@sherif-fanous/pi-presets-plus",
   "version": "0.12.1",
-  "description": "Pi extension: model + thinking + tools + system-prompt presets, with a UI on top.",
+  "description": "Pi extension that bundles a model, thinking level, tools, and system prompt into switchable presets",
   "keywords": [
     "pi",
     "pi-coding-agent",
@@ -31,58 +31,21 @@
     "CHANGELOG.md",
     "package.json"
   ],
-  "scripts": {
-    "format": "prettier --write eslint.config.mjs package.json src/. tests/. tsconfig.json vitest.config.ts",
-    "format-check": "prettier --check eslint.config.mjs package.json src/. tests/. tsconfig.json vitest.config.ts",
-    "lint": "biome lint src/. tests/. && eslint src/. tests/.",
-    "sort-package-json": "npx sort-package-json",
-    "test": "vitest",
-    "type-check": "tsc --noEmit"
-  },
-  "prettier": {
-    "importOrder": [
-      "<BUILTIN_MODULES>",
-      "",
-      "<THIRD_PARTY_MODULES>"
-    ],
-    "importOrderTypeScriptVersion": "6.0.0",
-    "overrides": [
-      {
-        "files": [
-          "*.md",
-          "*.mdx"
-        ],
-        "options": {
-          "printWidth": 80,
-          "proseWrap": "always"
-        }
-      }
-    ],
-    "plugins": [
-      "@ianvs/prettier-plugin-sort-imports"
-    ]
-  },
   "dependencies": {
     "@sherif-fanous/pi-extensions-core": "workspace:*"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.16",
+    "@biomejs/biome": "catalog:",
     "@earendil-works/pi-ai": "catalog:",
     "@earendil-works/pi-coding-agent": "catalog:",
     "@earendil-works/pi-tui": "catalog:",
-    "@eslint/js": "^10.0.1",
-    "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
+    "@ianvs/prettier-plugin-sort-imports": "catalog:",
     "@sherif-fanous/pi-extensions-testing": "workspace:*",
-    "@stylistic/eslint-plugin": "^5.10.0",
-    "eslint": "^10.4.1",
-    "eslint-plugin-perfectionist": "^5.9.0",
-    "eslint-plugin-unicorn": "^64.0.0",
-    "fallow": "^2.86.0",
-    "prettier": "^3.8.3",
-    "sort-package-json": "^3.6.1",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.60.1",
-    "vitest": "^4.1.8"
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "sort-package-json": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",

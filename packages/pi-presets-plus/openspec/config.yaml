@@ -1,1 +1,18 @@
 schema: spec-driven
+
+context: |
+  This OpenSpec root belongs to the sherif-fanous/pi-extensions monorepo, a
+  pnpm workspace of Pi coding agent extensions. Shared runtime helpers live in
+  @sherif-fanous/pi-extensions-core and test doubles in
+  @sherif-fanous/pi-extensions-testing. AGENTS.md at the repository root is
+  the family style guide for text, config, TUI, and tooling.
+
+  Pi documentation (also installed under
+  node_modules/@earendil-works/pi-coding-agent/docs/):
+  - Extensions: https://raw.githubusercontent.com/earendil-works/pi/refs/heads/main/packages/coding-agent/docs/extensions.md
+  - Packages: https://raw.githubusercontent.com/earendil-works/pi/refs/heads/main/packages/coding-agent/docs/packages.md
+  - TUI: https://raw.githubusercontent.com/earendil-works/pi/refs/heads/main/packages/coding-agent/docs/tui.md
+
+rules:
+  specs:
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD).

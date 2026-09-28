@@ -1,5 +1,10 @@
 .DS_Store
-node_modules/
+.agents/
+.env
 .pi/
-openspec/changes/*
-!openspec/changes/archive/
+*.code-workspace
+node_modules/
+package-lock.json
+skills-lock.json
+**/openspec/changes/*
+!**/openspec/changes/archive/

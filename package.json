@@ -1,4 +1,18 @@
 {
   "name": "pi-extensions",
-  "private": true
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@changesets/cli": "catalog:",
+    "@eslint/js": "catalog:",
+    "@ianvs/prettier-plugin-sort-imports": "catalog:",
+    "@stylistic/eslint-plugin": "catalog:",
+    "eslint": "catalog:",
+    "eslint-plugin-perfectionist": "catalog:",
+    "eslint-plugin-unicorn": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:",
+    "vitest": "catalog:"
+  }
 }

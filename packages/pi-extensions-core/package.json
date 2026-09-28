@@ -1,7 +1,7 @@
 {
   "name": "@sherif-fanous/pi-extensions-core",
-  "version": "0.1.0",
-  "description": "Shared runtime helpers for Pi extensions.",
+  "version": "0.0.0",
+  "description": "Pi extension library that provides shared helpers for errors, config files, reports, and TUI surfaces",
   "keywords": [
     "pi",
     "pi-coding-agent"
@@ -28,45 +28,17 @@
     "CHANGELOG.md",
     "package.json"
   ],
-  "prettier": {
-    "importOrder": [
-      "<BUILTIN_MODULES>",
-      "",
-      "<THIRD_PARTY_MODULES>"
-    ],
-    "importOrderTypeScriptVersion": "6.0.0",
-    "plugins": [
-      "@ianvs/prettier-plugin-sort-imports"
-    ],
-    "overrides": [
-      {
-        "files": [
-          "*.md",
-          "*.mdx"
-        ],
-        "options": {
-          "printWidth": 80,
-          "proseWrap": "always"
-        }
-      }
-    ]
-  },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.12",
+    "@biomejs/biome": "catalog:",
     "@earendil-works/pi-coding-agent": "catalog:",
     "@earendil-works/pi-tui": "catalog:",
-    "@eslint/js": "^10.0.1",
-    "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
+    "@ianvs/prettier-plugin-sort-imports": "catalog:",
     "@sherif-fanous/pi-extensions-testing": "workspace:*",
-    "@stylistic/eslint-plugin": "^5.10.0",
-    "eslint": "^10.9.1",
-    "eslint-plugin-perfectionist": "^5.11.0",
-    "eslint-plugin-unicorn": "^74.0.0",
-    "prettier": "^3.9.6",
-    "sort-package-json": "^4.0.0",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.69.0",
-    "vitest": "^5.0.0"
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "sort-package-json": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",

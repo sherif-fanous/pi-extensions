@@ -1,5 +1,7 @@
 # Changelog
 
+This changelog follows [Common Changelog](https://common-changelog.org/).
+
 ## [0.1.0] - 2026-09-14
 
 _Initial release._

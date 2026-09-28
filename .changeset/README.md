@@ -1,0 +1,25 @@
+# Changesets
+
+Each file here records a change that the next release of one or more packages
+ships. `mise run changeset` adds one. `mise run version` turns them into version
+bumps and Common Changelog sections, then deletes them. A bare
+`changeset version` refuses to run, because it would write Changesets' own
+changelog headings.
+
+Write the summary as `- ` bullets, one per changelog entry. Start each bullet
+with the group it belongs to: `Added:`, `Changed:`, `Removed:`, or `Fixed:`. The
+prefix is dropped from the changelog. Write the rest in the family text
+standard: an imperative sentence without a trailing full stop that names the
+extension by its display name, with `**Breaking:**` first when the change breaks
+something.
+
+```markdown
+---
+"@sherif-fanous/pi-theme-sync": minor
+---
+
+- Changed: **Breaking:** Rename `isSyncActive` to `syncEnabled`
+- Fixed: Fall back to the User value when a Project value is invalid
+```
+
+Breaking changes bump the minor version while a package is below 1.0.0.

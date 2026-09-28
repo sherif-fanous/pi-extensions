@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@4.0.1/schema.json",
+  "access": "public",
+  "baseBranch": "main",
+  "changelog": "../packages/pi-extensions-release/src/changelog.ts",
+  "commit": false,
+  "ignore": [
+    "@sherif-fanous/pi-extensions-release",
+    "@sherif-fanous/pi-extensions-testing"
+  ],
+  "updateInternalDependencies": "patch",
+  "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
+    "updateInternalDependents": "always"
+  }
+}

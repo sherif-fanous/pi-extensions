@@ -1,6 +1,36 @@
+[env]
+_.file = ".env"
+_.path = ["{{config_root}}/node_modules/.bin"]
+
+[tasks.changeset]
+run = "changeset add"
+
+[tasks.check]
+depends = ["format-check"]
+run = 'for d in packages/*/; do echo "== $d"; (cd "$d" && mise run check) || exit 1; done'
+
+[tasks.format]
+run = "prettier --no-error-on-unmatched-pattern --write .changeset .prettierrc.json AGENTS.md README.md biome.json eslint.config.mjs openspec/config.yaml openspec/specs package.json pnpm-workspace.yaml tsconfig.base.json vitest.config.base.ts"
+
+[tasks.format-check]
+run = "prettier --no-error-on-unmatched-pattern --check .changeset .prettierrc.json AGENTS.md README.md biome.json eslint.config.mjs openspec/config.yaml openspec/specs package.json pnpm-workspace.yaml tsconfig.base.json vitest.config.base.ts"
+
+[tasks.publish]
+depends = ["check"]
+# Publishes every package whose version is not on npm yet, dependencies
+# first, and tags each release `<name>@<version>`. pnpm 12 stopped expanding
+# `${NPM_ACCESS_TOKEN}` from .npmrc, so the token goes straight to pnpm as
+# npm-style config instead.
+run = '''
+: "${NPM_ACCESS_TOKEN:?Set NPM_ACCESS_TOKEN in .env to an npm token with publish rights for @sherif-fanous}"
+exec env "npm_config_//registry.npmjs.org/:_authToken=$NPM_ACCESS_TOKEN" changeset publish
+'''
+
+[tasks.version]
+# Use this instead of `changeset version`, which refuses to run: see
+# packages/pi-extensions-release.
+run = "node packages/pi-extensions-release/src/version.ts"
+
 [tools]
 node = "lts"
 "npm:pnpm" = "latest"
-
-[tasks.check]
-run = 'for d in packages/*/; do echo "== $d"; (cd "$d" && mise run check) || exit 1; done'

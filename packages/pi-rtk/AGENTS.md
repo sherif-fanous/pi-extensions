@@ -36,37 +36,34 @@ mise run <task>
 
 ## Code conventions
 
-The `fallow-*` tasks (and their `fallow` aggregator) are **advisory
-audits, not gates**. Run them periodically — e.g. before a release or
-when cleaning up a module — and use human judgement on the output.
-They are intentionally excluded from `check` because their reports
-routinely contain legitimate false positives (public API exports,
-intentionally-parallel code) that would make the pre-commit gate
-noisy and encourage reflexive "fix it to shut the tool up" refactors.
+The `fallow-*` tasks (and their `fallow` aggregator) are **advisory audits, not
+gates**. Run them periodically — e.g. before a release or when cleaning up a
+module — and use human judgement on the output. They are intentionally excluded
+from `check` because their reports routinely contain legitimate false positives
+(public API exports, intentionally-parallel code) that would make the pre-commit
+gate noisy and encourage reflexive "fix it to shut the tool up" refactors.
 
-Prettier, Biome, ESLint, and `tsc` enforce formatting, import order,
-naming, file-section ordering, kebab-case filenames, function-declaration
-style, and bans on `any` / `!` / `console.*` / one-letter identifiers.
-Run `mise run check` to surface violations across all four tools — most
-are auto-fixable via `mise run format` or `mise run lint-fix`.
+Prettier, Biome, ESLint, and `tsc` enforce formatting, import order, naming,
+file-section ordering, kebab-case filenames, function-declaration style, and
+bans on `any` / `!` / `console.*` / one-letter identifiers. Run `mise run check`
+to surface violations across all four tools — most are auto-fixable via
+`mise run format` or `mise run lint-fix`.
 
 The conventions below are the ones the linter cannot enforce. They are
 project-wide unless noted.
 
 ### Documentation
 
-- Every source file opens with a module-level JSDoc block stating:
-  (a) the file's role in one line, (b) what it owns vs. what it does
-  NOT own. Keep it high-level and change-agnostic — do NOT mention
-  OpenSpec change names, future-change extension points, or
-  implementation details (those belong on the relevant function/type,
-  in the OpenSpec proposal, or in inline comments).
-- Comments explain _why_, not _what_. Common patterns: rationale on
-  decisions that contradict an obvious "fix" (the exit-code-trust
-  block), inline notes naming exit-code-meaning relationships
-  (`// empty stdout = exit 1 OR exit 2`), and any
-  `try/catch` guard whose existence depends on rtk's contract.
-- Lifecycle handlers (`user_bash`, `bashTool.spawnHook`) wrap calls
-  in defense-in-depth handling for the rtk-unavailable / rtk-hangs
-  case. The fall-through-to-original-command behavior IS the guard;
-  do not add `try/catch` on top.
+- Every source file opens with a module-level JSDoc block stating: (a) the
+  file's role in one line, (b) what it owns vs. what it does NOT own. Keep it
+  high-level and change-agnostic — do NOT mention OpenSpec change names,
+  future-change extension points, or implementation details (those belong on the
+  relevant function/type, in the OpenSpec proposal, or in inline comments).
+- Comments explain _why_, not _what_. Common patterns: rationale on decisions
+  that contradict an obvious "fix" (the exit-code-trust block), inline notes
+  naming exit-code-meaning relationships (`// empty stdout = exit 1 OR exit 2`),
+  and any `try/catch` guard whose existence depends on rtk's contract.
+- Lifecycle handlers (`user_bash`, `bashTool.spawnHook`) wrap calls in
+  defense-in-depth handling for the rtk-unavailable / rtk-hangs case. The
+  fall-through-to-original-command behavior IS the guard; do not add `try/catch`
+  on top.
