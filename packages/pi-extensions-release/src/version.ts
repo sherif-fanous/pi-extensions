@@ -35,6 +35,21 @@ export interface VersionedPackage {
   readonly oldVersion: string;
 }
 
+/** A planned release, rendered but not yet written. */
+interface PreparedRelease {
+  readonly apply: () => Promise<VersionedPackage[]>;
+  readonly pending: number;
+}
+
+/**
+ * Check every pending changeset under `cwd`, the workspace root, the way
+ * `mise run version` would read it, without changing any file. Returns how
+ * many changesets are pending; throws on the first invalid one.
+ */
+export async function checkChangesets(cwd: string): Promise<number> {
+  return (await prepareRelease(cwd, "2000-01-01")).pending;
+}
+
 /**
  * Version every package with pending changesets under `cwd`, the workspace
  * root, and add a changelog section dated `date` (`YYYY-MM-DD`) to each.
@@ -43,6 +58,48 @@ export async function versionPackages(
   cwd: string,
   date: string,
 ): Promise<VersionedPackage[]> {
+  const prepared = await prepareRelease(cwd, date);
+
+  if (prepared.pending === 0) {
+    throw new Error(
+      "No changesets to release. Add one with `mise run changeset`.",
+    );
+  }
+
+  return prepared.apply();
+}
+
+/** The workspace packages `packageJson` depends on that `released` bumps. */
+function dependencyUpdates(
+  packageJson: PackageJSON,
+  released: readonly VersionedPackage[],
+): PackageVersion[] {
+  const dependencies = {
+    ...packageJson.peerDependencies,
+    ...packageJson.dependencies,
+  };
+
+  return released
+    .filter((release) => release.name in dependencies)
+    .map((release) => ({ name: release.name, version: release.newVersion }));
+}
+
+/** Today's date in local time, `YYYY-MM-DD`. */
+function localDate(now: Date): string {
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * Read the config, changesets and release plan, and render every changelog
+ * section, so an invalid changeset throws before any file changes.
+ */
+async function prepareRelease(
+  cwd: string,
+  date: string,
+): Promise<PreparedRelease> {
   const packages = await getPackages(cwd);
   const { config, errors } = await readConfig(cwd, packages);
 
@@ -52,10 +109,27 @@ export async function versionPackages(
 
   const changesets = await readChangesets(cwd);
 
-  if (changesets.length === 0) {
-    throw new Error(
-      "No changesets to release. Add one with `mise run changeset`.",
-    );
+  for (const changeset of changesets) {
+    for (const release of changeset.releases) {
+      const workspacePackage = packages.packages.find(
+        (candidate) => candidate.packageJson.name === release.name,
+      );
+
+      if (!workspacePackage) {
+        throw new Error(
+          `Changeset "${changeset.id}": no workspace package is named ${release.name}.`,
+        );
+      }
+
+      if (
+        release.type === "major" &&
+        workspacePackage.packageJson.version.startsWith("0.")
+      ) {
+        throw new Error(
+          `Changeset "${changeset.id}": ${release.name} is below 1.0.0, so a breaking change is a minor bump, not major.`,
+        );
+      }
+    }
   }
 
   const plan = assembleReleasePlan(changesets, packages, config, undefined);
@@ -108,38 +182,23 @@ export async function versionPackages(
     })),
   );
 
-  await applyReleasePlan(plan, packages, { ...config, changelog: false });
+  return {
+    apply: async () => {
+      await applyReleasePlan(plan, packages, { ...config, changelog: false });
 
-  for (const { path, text } of texts) {
-    const options = await resolveConfig(path);
+      for (const { path, text } of texts) {
+        const options = await resolveConfig(path);
 
-    await writeFile(path, await format(text, { ...options, filepath: path }));
-  }
+        await writeFile(
+          path,
+          await format(text, { ...options, filepath: path }),
+        );
+      }
 
-  return released;
-}
-
-/** The workspace packages `packageJson` depends on that `released` bumps. */
-function dependencyUpdates(
-  packageJson: PackageJSON,
-  released: readonly VersionedPackage[],
-): PackageVersion[] {
-  const dependencies = {
-    ...packageJson.peerDependencies,
-    ...packageJson.dependencies,
+      return released;
+    },
+    pending: changesets.length,
   };
-
-  return released
-    .filter((release) => release.name in dependencies)
-    .map((release) => ({ name: release.name, version: release.newVersion }));
-}
-
-/** Today's date in local time, `YYYY-MM-DD`. */
-function localDate(now: Date): string {
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-
-  return `${now.getFullYear()}-${month}-${day}`;
 }
 
 async function readChangelog(path: string): Promise<string> {

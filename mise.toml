@@ -5,8 +5,12 @@ _.path = ["{{config_root}}/node_modules/.bin"]
 [tasks.changeset]
 run = "changeset add"
 
+[tasks.changeset-check]
+# Fails on a pending changeset that `mise run version` would reject.
+run = "node packages/pi-extensions-release/src/check.ts"
+
 [tasks.check]
-depends = ["format-check"]
+depends = ["changeset-check", "format-check"]
 run = 'for d in packages/*/; do echo "== $d"; (cd "$d" && mise run check) || exit 1; done'
 
 [tasks.format]

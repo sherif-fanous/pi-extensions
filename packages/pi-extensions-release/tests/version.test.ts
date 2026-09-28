@@ -9,7 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { versionPackages } from "../src/version.ts";
+import { checkChangesets, versionPackages } from "../src/version.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const CORE = "@sherif-fanous/pi-extensions-core";
@@ -221,6 +221,57 @@ describe("versionPackages", () => {
   it("refuses to run without changesets", async () => {
     await expect(versionPackages(root, "2026-10-01")).rejects.toThrow(
       "No changesets to release.",
+    );
+  });
+});
+
+describe("checkChangesets", () => {
+  it("counts valid changesets without changing any file", async () => {
+    const changeset = `---\n"${EXTENSION}": patch\n---\n\n- Fixed: Fix the footer\n`;
+
+    await writeText(".changeset/theme-sync-fix.md", changeset);
+
+    await expect(checkChangesets(root)).resolves.toBe(1);
+    expect(await readText(".changeset/theme-sync-fix.md")).toBe(changeset);
+    expect(
+      JSON.parse(await readText("packages/extension/package.json")),
+    ).toMatchObject({ version: "0.5.0" });
+  });
+
+  it("accepts no changesets", async () => {
+    await expect(checkChangesets(root)).resolves.toBe(0);
+  });
+
+  it("rejects an entry without a group", async () => {
+    await writeText(
+      ".changeset/theme-sync-fix.md",
+      `---\n"${EXTENSION}": patch\n---\n\n- Fix: Fix the footer\n`,
+    );
+
+    await expect(checkChangesets(root)).rejects.toThrow(
+      'Changeset "theme-sync-fix": start every entry with',
+    );
+  });
+
+  it("rejects an unknown package", async () => {
+    await writeText(
+      ".changeset/typo.md",
+      `---\n"@sherif-fanous/pi-theme-snyc": patch\n---\n\n- Fixed: Fix the footer\n`,
+    );
+
+    await expect(checkChangesets(root)).rejects.toThrow(
+      'Changeset "typo": no workspace package is named @sherif-fanous/pi-theme-snyc.',
+    );
+  });
+
+  it("rejects a major bump below 1.0.0", async () => {
+    await writeText(
+      ".changeset/theme-sync-break.md",
+      `---\n"${EXTENSION}": major\n---\n\n- Changed: **Breaking:** Rename a key\n`,
+    );
+
+    await expect(checkChangesets(root)).rejects.toThrow(
+      "is below 1.0.0, so a breaking change is a minor bump, not major.",
     );
   });
 });

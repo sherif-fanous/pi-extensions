@@ -26,3 +26,7 @@ something.
 ```
 
 Breaking changes bump the minor version while a package is below 1.0.0.
+
+`mise run check` validates every pending changeset the way `mise run version`
+will read it: the group prefixes, the package names, and no `major` bump below
+1.0.0.
