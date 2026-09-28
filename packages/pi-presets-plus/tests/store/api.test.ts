@@ -97,7 +97,7 @@ describe("loadPresetsConfig", () => {
     expect(result.config.warnings).toEqual([]);
     expect(result.hotkeyAnalysis.conflicts).toEqual([]);
     expect(result.hotkeyAnalysis.invalid).toEqual([]);
-    expect(result.policy).toEqual({ rules: [], warnings: [] });
+    expect(result.policy).toEqual({ rules: [] });
   });
 
   it("merges both scopes and surfaces warnings from each", async () => {
@@ -131,7 +131,7 @@ describe("loadPresetsConfig", () => {
       ),
       'Project setting "showInactiveStatus" must be a boolean, not "yes". Using the default value true.',
     ]);
-    expect(result.policy).toEqual({ rules: [], warnings: [] });
+    expect(result.policy).toEqual({ rules: [] });
   });
 
   it("ignores an invalid project setting when the user setting applies", async () => {
@@ -173,7 +173,7 @@ describe("loadPresetsConfig", () => {
     expect(result.config.warnings).toEqual([
       `The project config file ${presetPath("project")} contains policy, but policy is supported only in the user configuration.`,
     ]);
-    expect(result.policy).toEqual({ rules: [], warnings: [] });
+    expect(result.policy).toEqual({ rules: [] });
   });
 
   it("compiles the user policy and keeps its warnings out of the configuration's", async () => {
@@ -189,10 +189,9 @@ describe("loadPresetsConfig", () => {
     const result = await loadPresetsConfig(ctx);
 
     expect(result.policy.rules.map((rule) => rule.match)).toEqual(["work"]);
-    expect(result.policy.warnings).toEqual([
+    expect(result.config.warnings).toEqual([
       `Skipped policy rule 1 in ${path}: match pattern "[" is invalid.`,
     ]);
-    expect(result.config.warnings).toEqual([]);
   });
 
   it("warns once about a malformed user policy section", async () => {
@@ -204,13 +203,10 @@ describe("loadPresetsConfig", () => {
 
     const result = await loadPresetsConfig(ctx);
 
-    expect(result.policy).toEqual({
-      rules: [],
-      warnings: [
-        `The config file ${path} has an invalid "policy" section; expected an object with a "rules" array.`,
-      ],
-    });
-    expect(result.config.warnings).toEqual([]);
+    expect(result.policy).toEqual({ rules: [] });
+    expect(result.config.warnings).toEqual([
+      `The config file ${path} has an invalid "policy" section; expected an object with a "rules" array.`,
+    ]);
   });
 
   it("applies no policy from a user file with an unsupported version", async () => {
@@ -223,7 +219,7 @@ describe("loadPresetsConfig", () => {
 
     const result = await loadPresetsConfig(ctx);
 
-    expect(result.policy).toEqual({ rules: [], warnings: [] });
+    expect(result.policy).toEqual({ rules: [] });
     expect(result.config.warnings).toEqual([
       expect.stringContaining("has version 3, but only version 2 is supported"),
     ]);

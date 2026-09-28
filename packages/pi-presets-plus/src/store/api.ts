@@ -13,7 +13,7 @@ import type {
 import { formatScopeName } from "../ui/widgets.js";
 import { DEFAULT_CONFIG, parseScope, PRESETS_PLUS_CONFIG } from "./config.js";
 import { mergeScopes } from "./merge.js";
-import type { CompiledPolicy } from "./policy.js";
+import type { PolicyRules } from "./policy.js";
 import { computeClampWarning } from "./validate.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { ConfigOutcome } from "@sherif-fanous/pi-extensions-core";
@@ -25,16 +25,13 @@ import type { ConfigOutcome } from "@sherif-fanous/pi-extensions-core";
 export interface PresetsConfig {
   /**
    * What reading both files found, with a value warning for each invalid
-   * setting, preset, and project policy section. Session start,
+   * setting, preset, and policy section. Session start,
    * `/presets reload`, and `/presets status` show these.
    */
   readonly config: ConfigOutcome<PresetScope>;
   readonly hotkeyAnalysis: HotkeyAnalysis;
-  /**
-   * The user policy's rules and its warnings, which the activation gate,
-   * the startup default, and `/presets policy` show.
-   */
-  readonly policy: CompiledPolicy;
+  /** The user policy's rules; their warnings are in `config`. */
+  readonly policy: PolicyRules;
   readonly presets: LoadedPreset[];
   readonly showInactiveStatus: boolean;
 }
@@ -89,6 +86,7 @@ export async function loadPresetsConfig(
   const valueWarnings = [
     ...scopeValueWarnings("user", user, showInactiveStatus),
     ...scopeValueWarnings("project", project, showInactiveStatus),
+    ...user.warnings.policy,
     ...project.warnings.policy,
   ];
   const presets = mergeScopes(
@@ -104,7 +102,7 @@ export async function loadPresetsConfig(
   return {
     config: config.withValueWarnings(valueWarnings),
     hotkeyAnalysis: analyzeHotkeys(presets),
-    policy: { rules: user.policyRules, warnings: user.warnings.policy },
+    policy: { rules: user.policyRules },
     presets,
     showInactiveStatus: showInactiveStatus ?? DEFAULT_CONFIG.showInactiveStatus,
   };

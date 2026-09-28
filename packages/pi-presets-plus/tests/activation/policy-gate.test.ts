@@ -89,17 +89,12 @@ describe("gateActivation", () => {
     },
   );
 
-  it("surfaces the policy's warnings as one notification", async () => {
+  it("leaves the policy's warnings to the configuration report", async () => {
     const { ctx, notify } = context();
     const policy = await policyFromFile([{ match: "[" }, { match: 1 }]);
 
     await gateActivation(allowed, policy, ctx);
 
-    expect(notify).toHaveBeenCalledExactlyOnceWith(
-      expect.stringMatching(
-        /^Presets Plus: 2 warnings\n- Skipped policy rule 1 .+\n- Skipped policy rule 2 /u,
-      ),
-      "warning",
-    );
+    expect(notify).not.toHaveBeenCalled();
   });
 });

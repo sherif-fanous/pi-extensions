@@ -76,7 +76,6 @@ describe("applyPresetFlag", () => {
       ctx,
       pi,
       session,
-      undefined,
     );
   });
 
@@ -148,7 +147,6 @@ describe("applyPresetFlag", () => {
       ctx,
       pi,
       expect.any(ActivePresetSession),
-      undefined,
     );
   });
 
@@ -174,7 +172,6 @@ describe("applyPresetFlag", () => {
       ctx,
       pi,
       session,
-      undefined,
     );
     expect(notify).toHaveBeenCalledTimes(1);
     expect(notify).toHaveBeenCalledWith(

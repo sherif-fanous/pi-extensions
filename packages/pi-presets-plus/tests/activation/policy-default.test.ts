@@ -118,23 +118,6 @@ describe("maybeApplyPolicyDefault", () => {
     },
   );
 
-  it("keeps policy warnings visible before an ineligible return", async () => {
-    const { ctx, notify } = context("print");
-
-    isAutomaticDefaultEligibleMock.mockReturnValue(false);
-    await writePolicy("work-opus", [{ match: "[" }]);
-
-    const { result } = await applyDefault(ctx);
-
-    expect(result).toBe(false);
-    expect(isAutomaticDefaultEligibleMock).toHaveBeenCalledWith(captured, ctx);
-    expect(applyMock).not.toHaveBeenCalled();
-    expect(notify).toHaveBeenCalledExactlyOnceWith(
-      `Presets Plus: 1 warning\n- Skipped policy rule 2 in ${join(dirs.agentDir, "presets-plus", "config.json")}: match pattern "[" is invalid.`,
-      "warning",
-    );
-  });
-
   it("silently skips when startup comparison is ineligible", async () => {
     const { ctx, notify } = context();
 

@@ -49,7 +49,7 @@ export async function runPolicy(
   pi: Pick<ExtensionAPI, "appendEntry">,
 ): Promise<void> {
   const { config, policy, presets } = await loadPresetsConfig(ctx);
-  const warnings = [...policy.warnings, ...config.warnings];
+  const { warnings } = config;
 
   deliverCommandReport(ctx, pi, {
     body: formatPolicy(ctx.cwd, presets, policy.rules, warnings),

@@ -53,14 +53,7 @@ export async function applyPresetFlag(
     return false;
   }
 
-  const result = await requestActivation(
-    preset,
-    policy,
-    ctx,
-    pi,
-    session,
-    warnings,
-  );
+  const result = await requestActivation(preset, policy, ctx, pi, session);
 
   if (!result.ok && result.kind === "cancelled") return false;
 

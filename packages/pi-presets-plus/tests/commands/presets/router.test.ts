@@ -280,7 +280,7 @@ describe("runPresetsCommand", () => {
 
     expect(requestActivationMock).toHaveBeenCalledWith(
       expect.objectContaining(preset),
-      { rules: [], warnings: [] },
+      { rules: [] },
       ctx,
       pi,
       session,
@@ -379,7 +379,6 @@ describe("runPresetsCommand", () => {
       selected,
       {
         rules: [expect.objectContaining({ match: "work" })],
-        warnings: [],
       },
       ctx,
       pi,

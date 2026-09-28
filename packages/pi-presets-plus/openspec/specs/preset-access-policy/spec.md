@@ -23,7 +23,9 @@ matcher, for a bad matcher `pattern`, to be skipped. The package SHALL emit a
 warning naming the offending pattern. Skipping SHALL fail open, so a malformed
 rule or matcher SHALL NOT block activation. Any policy warning SHALL make the
 containing user configuration unsafe for a preset mutation until the warning is
-corrected.
+corrected. Policy warnings SHALL be reported with the other configuration
+warnings, once per session start, `/presets reload`, `/presets status`, and
+`/presets policy`, and SHALL NOT be reported again when a preset is activated.
 
 #### Scenario: Unsupported version
 

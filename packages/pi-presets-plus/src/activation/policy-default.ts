@@ -40,8 +40,6 @@ export async function maybeApplyPolicyDefault(
 ): Promise<boolean> {
   if (precedence.flagApplied || precedence.restored) return false;
 
-  reportWarnings(ctx, policy.warnings, warnings);
-
   if (!isAutomaticDefaultEligible(startup, ctx)) return false;
 
   const resolved = resolvePolicyDefault(ctx.cwd, presets, policy.rules);

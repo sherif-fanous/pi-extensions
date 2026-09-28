@@ -465,6 +465,57 @@ describe("session_start configuration", () => {
     ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("shows user policy warnings once when a restored session skips the default", async () => {
+    await writeUserPresets(
+      [
+        {
+          model: "claude-opus",
+          name: "restored",
+          provider: "anthropic",
+          scope: "user",
+        },
+      ],
+      { policy: { rules: [{ match: "[" }] } },
+    );
+
+    const branch = [
+      {
+        customType: "presets-plus:active",
+        data: { name: "restored", scope: "user" },
+        type: "custom" as const,
+      },
+    ] as ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
+    const { fake } = makePi();
+    const { ctx, notify } = makeContext({}, "tui", branch);
+
+    presetsPlus(fake.pi);
+    await startSession(fake, ctx, "resume");
+
+    const warnings = notify.mock.calls.filter(([, type]) => type === "warning");
+
+    expect(warnings).toEqual([
+      [
+        `Presets Plus: 1 warning\n- Skipped policy rule 1 in ${configPath("user", "")}: match pattern "[" is invalid.`,
+        "warning",
+      ],
+    ]);
+  });
+
+  it("shows user policy warnings on /presets reload", async () => {
+    await writeUserPresets([], { policy: { rules: [{ match: "[" }] } });
+
+    const { fake } = makePi();
+    const { ctx, notify } = makeContext({});
+
+    presetsPlus(fake.pi);
+    await fake.runCommand("presets", "reload", ctx);
+
+    expect(notify).toHaveBeenCalledWith(
+      expect.stringContaining("Skipped policy rule 1 in"),
+      "warning",
+    );
+  });
+
   it("warns about malformed configuration without skipping preset loading", async () => {
     const cwd = join(agentDir, "project");
 

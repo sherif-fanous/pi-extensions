@@ -10,8 +10,7 @@ import { isRecord } from "@sherif-fanous/pi-extensions-core";
  * A compiled policy section: its usable rules, and a warning for each part
  * it skipped.
  */
-export interface CompiledPolicy {
-  readonly rules: readonly CompiledPolicyRule[];
+export interface CompiledPolicy extends PolicyRules {
   readonly warnings: readonly string[];
 }
 
@@ -39,6 +38,11 @@ export interface CompiledPolicyRule {
 export interface MatchedPolicyRule {
   readonly matchLength: number;
   readonly rule: CompiledPolicyRule;
+}
+
+/** The compiled rules of a policy, without the warnings compiling produced. */
+export interface PolicyRules {
+  readonly rules: readonly CompiledPolicyRule[];
 }
 
 /**
