@@ -1,4 +1,7 @@
-/** Renders `/slice` boundary pickers in the style of Pi's `/fork` picker. */
+/**
+ * Renders `/slice` boundary pickers inline in Pi's main screen, like Pi's
+ * `/fork` picker, with the family's title, list model, and key hints.
+ */
 
 import type { SliceCandidate } from "./slice.js";
 import { formatAgo } from "./time.js";
@@ -9,12 +12,18 @@ import {
   type Theme,
 } from "@earendil-works/pi-coding-agent";
 import {
-  Container,
   Spacer,
   Text,
   truncateToWidth,
   type Component,
 } from "@earendil-works/pi-tui";
+import {
+  keyHint,
+  listWindow,
+  matchSelectAction,
+  moveListSelection,
+  wrapKeyHints,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** Result returned when a boundary picker closes. */
 export type PickerResult =
@@ -28,11 +37,18 @@ interface PickerItem {
 
 type PickerMode = "end" | "start";
 
-class MessageList implements Component {
-  private readonly maxVisible = 10;
+/** The most messages a picker shows at once, as in Pi's `/fork` picker. */
+const MAX_VISIBLE_ITEMS = 10;
+
+class BoundaryPicker implements Component {
+  private readonly bottom: readonly Component[];
+  private readonly hints: readonly (string | undefined)[];
+  private readonly top: readonly Component[];
   private selectedIndex: number;
 
   constructor(
+    title: string,
+    description: string,
     private readonly items: readonly PickerItem[],
     private readonly mode: PickerMode,
     private readonly theme: Theme,
@@ -40,49 +56,78 @@ class MessageList implements Component {
     private readonly onDone: (result: PickerResult) => void,
     private readonly startOrdinal?: number,
   ) {
+    const border = new DynamicBorder((text) => theme.fg("border", text));
+
     this.selectedIndex = mode === "end" ? 0 : Math.max(0, items.length - 1);
+    this.top = [
+      new Spacer(1),
+      new Text(theme.fg("accent", theme.bold(title)), 1, 0),
+      new Text(theme.fg("muted", description), 1, 0),
+      new Spacer(1),
+      border,
+      new Spacer(1),
+    ];
+    this.bottom = [new Spacer(1), border];
+    this.hints = [
+      keyHint(keybindings, ["tui.select.up", "tui.select.down"], "Move"),
+      keyHint(
+        keybindings,
+        ["tui.select.pageUp", "tui.select.pageDown"],
+        "Page",
+      ),
+      keyHint(keybindings, "tui.select.confirm", "Select"),
+      keyHint(keybindings, "tui.select.cancel", "Cancel"),
+    ];
   }
 
   handleInput(data: string): void {
-    if (this.keybindings.matches(data, "tui.select.up")) {
-      this.selectedIndex =
-        this.selectedIndex === 0
-          ? this.items.length - 1
-          : this.selectedIndex - 1;
-    } else if (this.keybindings.matches(data, "tui.select.down")) {
-      this.selectedIndex =
-        this.selectedIndex === this.items.length - 1
-          ? 0
-          : this.selectedIndex + 1;
-    } else if (this.keybindings.matches(data, "tui.select.confirm")) {
+    const action = matchSelectAction(this.keybindings, data);
+
+    if (action === undefined) return;
+
+    if (action === "confirm") {
       const selected = this.items[this.selectedIndex];
 
       if (selected) this.onDone(selected.result);
-    } else if (this.keybindings.matches(data, "tui.select.cancel")) {
+    } else if (action === "cancel") {
       this.onDone({ kind: "cancel" });
+    } else {
+      this.selectedIndex = moveListSelection(
+        this.selectedIndex,
+        this.items.length,
+        action,
+        MAX_VISIBLE_ITEMS,
+      );
     }
   }
 
   invalidate(): void {}
 
   render(width: number): string[] {
-    const lines: string[] = [];
-    const startIndex = Math.max(
-      0,
-      Math.min(
-        this.selectedIndex - Math.floor(this.maxVisible / 2),
-        this.items.length - this.maxVisible,
-      ),
+    const top = this.top.flatMap((component) => component.render(width));
+    const hints = wrapKeyHints(this.hints, Math.max(1, width - 2)).map(
+      (line) => ` ${this.theme.fg("dim", line)}`,
     );
-    const endIndex = Math.min(startIndex + this.maxVisible, this.items.length);
+    const bottom = this.bottom.flatMap((component) => component.render(width));
 
-    for (let index = startIndex; index < endIndex; index += 1) {
+    return [...top, ...this.renderList(width), ...hints, ...bottom];
+  }
+
+  private renderList(width: number): string[] {
+    const lines: string[] = [];
+    const window = listWindow(
+      this.selectedIndex,
+      this.items.length,
+      MAX_VISIBLE_ITEMS,
+    );
+
+    for (let index = window.start; index < window.end; index += 1) {
       const item = this.items[index];
 
       if (!item) continue;
 
       const selected = index === this.selectedIndex;
-      const cursor = selected ? this.theme.fg("accent", "› ") : "  ";
+      const cursor = selected ? this.theme.fg("accent", "→ ") : "  ";
       const normalized = item.text.replaceAll("\n", " ").trim();
       const text = truncateToWidth(normalized, Math.max(0, width - 2), "…");
 
@@ -91,15 +136,15 @@ class MessageList implements Component {
       lines.push("");
     }
 
-    if (startIndex > 0 || endIndex < this.items.length) {
+    if (window.position !== undefined) {
       const from =
         this.mode === "end" && this.startOrdinal
           ? ` · from message ${this.startOrdinal}`
           : "";
-
-      const position = `  (${this.selectedIndex + 1}/${this.items.length})${from}`;
+      const position = `  ${window.position}${from}`;
 
       lines.push(this.theme.fg("muted", truncateToWidth(position, width, "…")));
+      lines.push("");
     }
 
     return lines;
@@ -112,44 +157,6 @@ class MessageList implements Component {
       : "  No end boundary selected";
 
     return this.theme.fg("muted", truncateToWidth(metadata, width, "…"));
-  }
-}
-
-class MessageSelector extends Container {
-  private readonly messageList: MessageList;
-
-  constructor(
-    title: string,
-    description: string,
-    items: readonly PickerItem[],
-    mode: PickerMode,
-    theme: Theme,
-    keybindings: KeybindingsManager,
-    onDone: (result: PickerResult) => void,
-    startOrdinal?: number,
-  ) {
-    super();
-    this.addChild(new Spacer(1));
-    this.addChild(new Text(theme.bold(title), 1, 0));
-    this.addChild(new Text(theme.fg("muted", description), 1, 0));
-    this.addChild(new Spacer(1));
-    this.addChild(new DynamicBorder((text) => theme.fg("borderMuted", text)));
-    this.addChild(new Spacer(1));
-    this.messageList = new MessageList(
-      items,
-      mode,
-      theme,
-      keybindings,
-      onDone,
-      startOrdinal,
-    );
-    this.addChild(this.messageList);
-    this.addChild(new Spacer(1));
-    this.addChild(new DynamicBorder((text) => theme.fg("borderMuted", text)));
-  }
-
-  handleInput(data: string): void {
-    this.messageList.handleInput(data);
   }
 }
 
@@ -176,7 +183,7 @@ export async function showEndPicker(
 
   return showPicker(
     ui,
-    "Slice: end before message",
+    "Slice: End Before Message",
     "Select a message to exclude it and everything after it.",
     items,
     "end",
@@ -197,7 +204,7 @@ export async function showStartPicker(
 
   return showPicker(
     ui,
-    "Slice: start at message",
+    "Slice: Start at Message",
     "Select the first message to keep in the new session.",
     items,
     "start",
@@ -214,7 +221,7 @@ async function showPicker(
 ): Promise<PickerResult> {
   return ui.custom<PickerResult>(
     (_tui, theme, keybindings, done) =>
-      new MessageSelector(
+      new BoundaryPicker(
         title,
         description,
         items,

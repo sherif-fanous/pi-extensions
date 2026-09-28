@@ -429,12 +429,17 @@ describe("Session Slice shown text", () => {
 
     expect(shown.texts).toContainEqual({
       surface: "text",
-      text: "Slice: start at message",
+      text: "Slice: Start at Message",
     });
 
     expect(shown.texts).toContainEqual({
       surface: "text",
-      text: "Slice: end before message",
+      text: "Slice: End Before Message",
+    });
+
+    expect(shown.texts).toContainEqual({
+      surface: "text",
+      text: "↑/↓ Move · PgUp/PgDn Page · Enter Select · Esc Cancel",
     });
 
     expect(shown.texts).toContainEqual({

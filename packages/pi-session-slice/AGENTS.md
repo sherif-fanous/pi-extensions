@@ -72,11 +72,12 @@ technical terms belong there. The prose rules above apply to both.
 
 Prose in notifications, dialog bodies, inline editor notices, warnings, and lead
 sentences uses complete sentences with terminal periods. Single-line labels do
-not carry one. Picker titles use sentence case, as in `Slice: start at message`
-and `Slice: end before message`. Picker rows and secondary lines use concise
-text without terminal punctuation, as in `Keep everything to the end` and
-`Message 3 of 12 · 2h ago`. Button and footer action labels use Title Case, as
-in `Select`, `Cancel`, and `Quit`.
+not carry one. Picker titles use Title Case, as in `Slice: Start at Message` and
+`Slice: End Before Message`. Picker rows and secondary lines use concise text
+without terminal punctuation, as in `Keep everything to the end` and
+`Message 3 of 12 · 2h ago`. Footer key hints and the picker layout follow the
+TUI section of the repository's root `AGENTS.md`, as in
+`↑/↓ Move · PgUp/PgDn Page · Enter Select · Esc Cancel`.
 
 `Pi` is the product, `pi` the binary, and Pi command names stay literal:
 `/slice`, `/fork`, `/tree`, `/compact`, `/reload`, `/model`.

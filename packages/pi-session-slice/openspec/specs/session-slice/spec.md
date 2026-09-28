@@ -163,6 +163,49 @@ cut with a single-character ellipsis (`…`).
 - **THEN** each of those lines is cut to the terminal width and ends in `…`,
   and no rendered line is wider than the terminal
 
+### Requirement: Pickers show a title and key hints
+
+Each picker SHALL render inline in Pi's main screen without a frame, with a bold
+accent title in Title Case (`Slice: Start at Message`,
+`Slice: End Before Message`), a muted description, and a dim key-hint line above
+the bottom rule that reads
+`↑/↓ Move · PgUp/PgDn Page · Enter Select · Esc Cancel`, with each key named as
+the user has bound it. The hint line SHALL wrap between hints and never cut a
+hint. The selected row SHALL be marked with an accent `→ `.
+
+#### Scenario: Remapped cancel key
+
+- **WHEN** the user has bound `tui.select.cancel` to Ctrl+Q only
+- **THEN** the hint line reads `Ctrl+Q Cancel`, Ctrl+Q cancels the picker, and
+  Escape does not
+
+### Requirement: Pickers follow the family list model
+
+Navigation, confirm, and cancel SHALL follow Pi's `tui.select.*` keybindings,
+and a remapped key SHALL replace its default. ↑/↓ SHALL move one message and
+wrap around the ends; PgUp/PgDn SHALL move one page of visible messages and stop
+at the first or last message. A picker SHALL show at most ten messages at a time,
+like Pi's `/fork`. When not every message is shown, a muted `(n/m)`
+position line SHALL follow the list.
+
+#### Scenario: Page up
+
+- **WHEN** the start picker shows 10 of 12 messages with the last one selected
+  and the user presses PgUp
+- **THEN** the second message is selected
+
+#### Scenario: Page stops at the ends
+
+- **WHEN** the user presses PgUp with fewer than a page of messages above the
+  selection
+- **THEN** the first message is selected rather than wrapping to the last
+
+#### Scenario: Short terminal
+
+- **WHEN** a picker with more messages than fit is shown on a 24-row terminal
+- **THEN** it renders no more than 19 lines, and the selected message, the
+  position line, and the hint line are all shown
+
 ### Requirement: Cancellation writes nothing
 
 Dismissing either picker SHALL abort the operation. No file SHALL be created and

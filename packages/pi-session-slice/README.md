@@ -44,6 +44,17 @@ Pi opens the new session. If you chose a message to leave out, its text appears
 in the editor so you can edit or send it again. Press `Esc` in either picker to
 cancel without creating a session.
 
+Both pickers use the same keys:
+
+| Key             | Action                            |
+| :-------------- | :-------------------------------- |
+| `↑` / `↓`       | Move the selection                |
+| `PgUp` / `PgDn` | Move one page                     |
+| `Enter`         | Select the message                |
+| `Esc`           | Cancel without creating a session |
+
+If you have remapped Pi's keys, the pickers follow your bindings.
+
 For example, choosing your third message as the start and your fifth as the end
 keeps your third and fourth messages, along with Pi's replies and any tool
 activity between them. Your fifth message goes into the editor; it is not part
