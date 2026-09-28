@@ -2,7 +2,7 @@ import { createFakeCustom, type CustomComponent } from "../src/index.js";
 import type { OverlayHandle } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 
-/** Records keys and finishes with them on Enter, like a small dialog. */
+/** Record keys and finish with them on Enter, like a small dialog. */
 function keyRecorder(done: (result: unknown) => void): CustomComponent & {
   disposedBeforeDone: boolean | undefined;
 } {

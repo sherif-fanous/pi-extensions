@@ -19,6 +19,21 @@ export {
   type FakeCustomOptions,
 } from "./custom.js";
 export {
+  createFakePi,
+  type FakeCommand,
+  type FakeEntry,
+  type FakeEventHandler,
+  type FakeFlag,
+  type FakePi,
+  type FakePiOverrides,
+  type FakeShortcut,
+} from "./extension-api.js";
+export {
+  createFakeContext,
+  type FakeContextOptions,
+  type FakeSessionManager,
+} from "./extension-context.js";
+export {
   findOverflowingLines,
   type OverflowingLine,
   stripAnsi,

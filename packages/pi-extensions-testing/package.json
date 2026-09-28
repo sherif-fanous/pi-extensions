@@ -2,7 +2,7 @@
   "name": "@sherif-fanous/pi-extensions-testing",
   "version": "0.0.0",
   "private": true,
-  "description": "Test doubles for Pi extensions: fake TUI, keybindings, widgets, and themes.",
+  "description": "Test doubles for Pi extensions: fake extension API, contexts, TUI, keybindings, widgets, and themes.",
   "license": "MIT",
   "author": "Sherif Fanous",
   "type": "module",

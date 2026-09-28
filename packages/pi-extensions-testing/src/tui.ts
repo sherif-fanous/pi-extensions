@@ -6,7 +6,10 @@
  * escape-free line content and widths.
  */
 
-import type { Theme } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionUIContext,
+  Theme,
+} from "@earendil-works/pi-coding-agent";
 import {
   KeybindingsManager,
   TUI_KEYBINDINGS,
@@ -38,17 +41,11 @@ export interface FakeTui {
 /**
  * Fake extension-UI widget seam.
  *
- * Mirrors Pi by invoking the factory immediately, which is how the bridge
- * reaches the TUI instance.
+ * Mirrors Pi by invoking a widget factory immediately, which is how the
+ * bridge reaches the TUI instance. Text widgets are ignored.
  */
 export interface FakeWidgets {
-  setWidget: (
-    key: string,
-    content:
-      | ((tui: TUI, theme: Theme) => Component & { dispose?(): void })
-      | undefined,
-    options?: { placement?: "aboveEditor" | "belowEditor" },
-  ) => void;
+  setWidget: ExtensionUIContext["setWidget"];
 }
 
 /**
@@ -130,8 +127,13 @@ export function createFakeTui(columns = 120, rows = 40): FakeTui {
  */
 export function createFakeWidgets(fake: FakeTui): FakeWidgets {
   return {
-    setWidget: (_key, content) => {
-      if (content) content(fake.tui, createPlainTheme());
+    setWidget: (
+      _key: string,
+      content?:
+        | ((tui: TUI, theme: Theme) => Component & { dispose?(): void })
+        | string[],
+    ) => {
+      if (typeof content === "function") content(fake.tui, createPlainTheme());
     },
   };
 }

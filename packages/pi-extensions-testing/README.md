@@ -2,8 +2,9 @@
 
 Test doubles for the Pi extensions in
 [pi-extensions](https://github.com/sherif-fanous/pi-extensions): fakes for Pi's
-TUI, keybindings, widgets, themes, and `ctx.ui.custom`, plus temporary config
-directories and checks for rendered lines and shown text.
+extension API, handler contexts, TUI, keybindings, widgets, themes, and
+`ctx.ui.custom`, plus temporary config directories and checks for rendered lines
+and shown text.
 
 This package is private. It is never published, and the workspace's packages use
 it only as a dev dependency.
@@ -47,6 +48,17 @@ expect(findOverflowingLines(lines, 40)).toEqual([]);
 
 - `createDeferred()` returns a promise that the test settles explicitly.
 - `flushPromises()` waits until pending continuations have run.
+
+### Extension
+
+- `createFakePi(overrides?)` returns a fake `ExtensionAPI` as `pi`, with the
+  commands, shortcuts, flags, event handlers, entry renderers, and appended
+  entries the extension registered. `runCommand(name, args, ctx)` runs a
+  command, and `emit(event, ctx)` calls the event's handlers in registration
+  order.
+- `createFakeContext(options?)` returns a command context for an empty session
+  in TUI mode, whose `ui` shows nothing and answers like a user who cancels. Set
+  any member, or single members of `sessionManager` and `ui`.
 
 ### Config
 

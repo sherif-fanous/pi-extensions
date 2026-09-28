@@ -31,7 +31,7 @@ export interface FakeCustomOptions {
   /** Called with every result the component passes to `done`. */
   readonly onDone?: (result: unknown) => void;
   /**
-   * Runs after the component mounts, renders, and receives `keys`. Use it
+   * Called after the component mounts, renders, and receives `keys`. Use it
    * to drive the component step by step, or to call `done` for a
    * component that never finishes by itself.
    */
