@@ -27,6 +27,7 @@ export {
   type FakePi,
   type FakePiOverrides,
   type FakeShortcut,
+  type FakeTool,
 } from "./fakes/extension-api.js";
 export {
   createFakeContext,

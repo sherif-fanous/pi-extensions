@@ -49,6 +49,7 @@ export interface FakePi {
     ctx: ExtensionCommandContext,
   ) => Promise<void>;
   readonly shortcuts: Map<KeyId, FakeShortcut>;
+  readonly tools: Map<string, FakeTool>;
 }
 
 /** Options passed to `pi.registerCommand`. */
@@ -72,13 +73,17 @@ export type FakePiOverrides = Partial<Omit<ExtensionAPI, RecordingMember>>;
 /** Options passed to `pi.registerShortcut`. */
 export type FakeShortcut = Parameters<ExtensionAPI["registerShortcut"]>[1];
 
+/** A tool passed to `pi.registerTool`. */
+export type FakeTool = Parameters<ExtensionAPI["registerTool"]>[0];
+
 /** Members the fake always implements itself, so it can record them. */
 type RecordingMember =
   | "on"
   | "registerCommand"
   | "registerEntryRenderer"
   | "registerFlag"
-  | "registerShortcut";
+  | "registerShortcut"
+  | "registerTool";
 
 /**
  * Build a fake `ExtensionAPI` that records registrations.
@@ -95,6 +100,7 @@ export function createFakePi(overrides: FakePiOverrides = {}): FakePi {
   const flags = new Map<string, FakeFlag>();
   const handlers = new Map<string, FakeEventHandler[]>();
   const shortcuts = new Map<KeyId, FakeShortcut>();
+  const tools = new Map<string, FakeTool>();
   const { appendEntry, ...replacements } = overrides;
   const pi: ExtensionAPI = {
     appendEntry: (customType, data) => {
@@ -138,7 +144,9 @@ export function createFakePi(overrides: FakePiOverrides = {}): FakePi {
     registerShortcut: (shortcut, options) => {
       shortcuts.set(shortcut, options);
     },
-    registerTool: () => undefined,
+    registerTool: (tool) => {
+      tools.set(tool.name, tool as FakeTool);
+    },
     sendMessage: () => undefined,
     sendUserMessage: () => undefined,
     setActiveTools: () => undefined,
@@ -176,5 +184,6 @@ export function createFakePi(overrides: FakePiOverrides = {}): FakePi {
     pi,
     runCommand: (name, args, ctx) => command(name).handler(args, ctx),
     shortcuts,
+    tools,
   };
 }

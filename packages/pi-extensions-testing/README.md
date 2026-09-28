@@ -52,9 +52,9 @@ expect(findOverflowingLines(lines, 40)).toEqual([]);
 ### Extension
 
 - `createFakePi(overrides?)` returns a fake `ExtensionAPI` as `pi`, with the
-  commands, shortcuts, flags, event handlers, entry renderers, and appended
-  entries the extension registered. `runCommand(name, args, ctx)` runs a
-  command, and `emit(event, ctx)` calls the event's handlers in registration
+  commands, shortcuts, tools, flags, event handlers, entry renderers, and
+  appended entries the extension registered. `runCommand(name, args, ctx)` runs
+  a command, and `emit(event, ctx)` calls the event's handlers in registration
   order.
 - `createFakeContext(options?)` returns a command context for an empty session
   in TUI mode, whose `ui` shows nothing and answers like a user who cancels. Set

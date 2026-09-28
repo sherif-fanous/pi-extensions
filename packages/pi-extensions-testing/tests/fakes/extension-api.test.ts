@@ -1,6 +1,10 @@
-/** Covers how the fake `ExtensionAPI` dispatches events and records appended entries. */
+/**
+ * Covers how the fake `ExtensionAPI` dispatches events and records appended
+ * entries and registered tools.
+ */
 
 import { createFakeContext, createFakePi } from "../../src/index.js";
+import { createLsToolDefinition } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 
 const SESSION_START = { reason: "startup", type: "session_start" } as const;
@@ -64,5 +68,14 @@ describe("createFakePi", () => {
       { customType: "test:entry", data: { body: "text" } },
     ]);
     expect(forwarded).toEqual([["test:entry", { body: "text" }]]);
+  });
+
+  it("records a registered tool under its name", () => {
+    const fake = createFakePi();
+    const tool = createLsToolDefinition("/project");
+
+    fake.pi.registerTool(tool);
+
+    expect(fake.tools.get("ls")).toBe(tool);
   });
 });
