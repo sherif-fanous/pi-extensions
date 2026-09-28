@@ -7,12 +7,15 @@
  */
 
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import type {
-  Component,
+import {
   KeybindingsManager,
-  OverlayHandle,
-  OverlayOptions,
-  TUI,
+  TUI_KEYBINDINGS,
+  type Component,
+  type Keybinding,
+  type KeybindingsConfig,
+  type OverlayHandle,
+  type OverlayOptions,
+  type TUI,
 } from "@earendil-works/pi-tui";
 
 /** Records every overlay created through a fake TUI. */
@@ -48,11 +51,20 @@ export interface FakeWidgets {
   ) => void;
 }
 
-/** Keybindings manager matching the literal key names used in tests. */
+/**
+ * Keybindings manager matching the literal key names used in tests.
+ *
+ * `matches` compares input with `keys`. `getKeys` returns Pi's default
+ * keys whatever `keys` holds, so key hints render as they do for a user
+ * with no remaps; use {@link createPiKeybindings} to test a remap.
+ */
 export function createFakeKeybindings(
   keys: Record<string, string> = DEFAULT_KEYS,
 ): KeybindingsManager {
+  const defaults = createPiKeybindings();
+
   return {
+    getKeys: (keybinding: Keybinding) => defaults.getKeys(keybinding),
     matches: (data: string, keybinding: string) => keys[keybinding] === data,
   } as unknown as KeybindingsManager;
 }
@@ -141,6 +153,17 @@ export function createMarkerTheme(): Theme {
     strikethrough: (text: string) => text,
     underline: (text: string) => text,
   } as unknown as Theme;
+}
+
+/**
+ * Pi's real keybindings manager with its default TUI keys and
+ * `userBindings` applied on top, the way a user's `keybindings.json`
+ * remaps them, so tests send real terminal sequences.
+ */
+export function createPiKeybindings(
+  userBindings: KeybindingsConfig = {},
+): KeybindingsManager {
+  return new KeybindingsManager(TUI_KEYBINDINGS, userBindings);
 }
 
 /** A theme that applies no styling, so lines stay exactly measurable. */

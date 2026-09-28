@@ -33,3 +33,19 @@
 - `isInteractiveTui`, which checks that Pi runs its interactive terminal UI.
 - `requireInteractiveTui`, which lets a command that opens an overlay run only
   in the interactive terminal UI and shows one warning in other modes.
+- `overlayOptions` and `overlayMaxHeight`, which give every overlay one of two
+  sizes, main or nested, and the height it lays itself out to.
+- `renderFrame`, `frameTop`, `frameLine`, `frameSegment`, `frameBodyWidth`,
+  `frameBodyRows`, and `padToWidth`, which draw the family's bordered frame with
+  the title in the top border and a dim footer, fitted to any width.
+- `keyHint`, `keyText`, `formatKeyId`, and `wrapKeyHints`, which write footer
+  key hints with the keys the user actually has bound and wrap them between
+  hints instead of cutting one.
+- `matchSelectAction`, which reads list keys from Pi's `tui.select.*`
+  keybindings, so remaps replace the default keys.
+- `matchesHelpKey`, which recognizes F1 for a form's help, including the Kitty
+  keyboard protocol encodings that `matchesKey` misses.
+- `moveListSelection`, `listWindow`, and `listPosition`, which give every list
+  the same movement, scrolling, and `(n/m)` position.
+- `scrollLines`, which scrolls a text body with `↑` and `↓` edge markers.
+- `emptyStateLines`, which draws an empty or no-match state as muted text.

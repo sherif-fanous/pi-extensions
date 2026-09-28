@@ -13,6 +13,11 @@ export {
   type FakeCustomOptions,
 } from "./custom.js";
 export {
+  findOverflowingLines,
+  type OverflowingLine,
+  stripAnsi,
+} from "./lines.js";
+export {
   createShownTextRecorder,
   findShownTextViolations,
   type RecordableCommand,
@@ -28,6 +33,7 @@ export {
   createFakeTui,
   createFakeWidgets,
   createMarkerTheme,
+  createPiKeybindings,
   createPlainTheme,
   type FakeOverlay,
   type FakeTui,

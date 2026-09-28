@@ -358,6 +358,196 @@ if (!requireInteractiveTui(ctx, "Session Slice", "/slice")) return;
 // - /slice needs Pi's interactive terminal UI. Run it from the TUI.
 ```
 
+## TUI API
+
+The primitives behind the family's overlays. Every width is in visual columns,
+so styling and wide characters never push a border out of line, and every line
+they return fits the width it was given. The rules they implement are in the
+repository's `AGENTS.md` "TUI" section.
+
+### `overlayOptions(size: OverlaySize): OverlayOptions`
+
+Returns the `overlayOptions` for `ctx.ui.custom`. Both sizes are centered with a
+margin of 1 and at most 80% of the terminal height. `"main"` (a picker, browser,
+editor, or config form) is 80% wide and at least 60 columns; `"nested"` (a
+confirmation, info text, or sub-selector opened from a main surface) is 50% wide
+and at least 48 columns. Spread the result to add options such as `visible`.
+
+### `overlayMaxHeight(terminalRows: number): number`
+
+Returns the rows Pi gives an overlay of either size: 80% of the terminal height
+rounded down, no more than the rows inside the margins, and at least 1. Lay the
+surface out to this height and scroll anything taller, because Pi keeps only the
+top rows of a taller render.
+
+### `renderFrame(options: FrameOptions): string[]`
+
+Draws a whole frame from `{ title, titleRight?, body, footer, theme, width }`:
+
+```text
+┌─ Presets Plus ────── (3/12) ─┐
+│ First row                    │
+│ Second row                   │
+├──────────────────────────────┤
+│ ↑/↓ Move · Enter Select      │
+│ Esc Close                    │
+└──────────────────────────────┘
+```
+
+The title is plain text, drawn bold in the accent color. `titleRight` keeps its
+styling and is dropped when the border cannot hold it with the whole title.
+`body` rows are already styled and are padded by one space on each side.
+`footer` holds plain lines drawn dim: the lines `wrapKeyHints` returns, or one
+busy line such as `Saving…`. An empty footer draws no rule. Borders take the
+theme's `border` color. The result has `body.length + footer.length + 3` lines,
+each exactly `width` columns wide.
+
+### `frameBodyWidth(width: number): number`
+
+### `frameBodyRows(height: number, footerLineCount: number): number`
+
+Return the columns a body row has inside a frame `width` wide, and the body rows
+that fit in a frame `height` rows tall with `footerLineCount` footer lines. Wrap
+the footer first, since its line count decides the body rows.
+
+```ts
+import {
+  frameBodyRows,
+  frameBodyWidth,
+  keyHint,
+  listWindow,
+  overlayMaxHeight,
+  renderFrame,
+  wrapKeyHints,
+} from "@sherif-fanous/pi-extensions-core";
+
+render(width: number): string[] {
+  const footer = wrapKeyHints(
+    [
+      keyHint(this.keybindings, ["tui.select.up", "tui.select.down"], "Move"),
+      keyHint(this.keybindings, "tui.select.confirm", "Select"),
+      keyHint(this.keybindings, "tui.select.cancel", "Close"),
+    ],
+    frameBodyWidth(width),
+  );
+  const rows = frameBodyRows(overlayMaxHeight(this.tui.terminal.rows), footer.length);
+  const window = listWindow(this.selected, this.items.length, rows);
+
+  return renderFrame({
+    body: this.items.slice(window.start, window.end).map(this.renderRow),
+    footer,
+    theme: this.theme,
+    title: "Presets Plus",
+    titleRight: window.position && this.theme.fg("muted", window.position),
+    width,
+  });
+}
+```
+
+### `frameTop(title: string, width: number, theme: FrameTheme, titleRight?: string): string`
+
+### `frameLine(content: string, width: number, theme: Pick<Theme, "fg">): string`
+
+### `frameSegment(left: string, right: string, width: number, theme: Pick<Theme, "fg">): string`
+
+The pieces `renderFrame` is made of, for layouts it does not cover, such as
+split panes or toast cards. `frameTop` draws the titled top border. `frameLine`
+fits `content` between two borders with no padding of its own. `frameSegment`
+draws a horizontal border such as `├────┤`. Each returns exactly `width` columns
+and degrades to fewer border characters at widths below 3.
+
+### `padToWidth(text: string, width: number, fill?: string, ellipsis?: string): string`
+
+Truncates `text` to `width` columns with `ellipsis` (default `…`), then pads it
+with `fill` (default a space). A width of zero or less returns an empty string.
+
+### `keyHint(keybindings, keybinding: Keybinding | readonly Keybinding[], action: string): string | undefined`
+
+Returns one footer hint: the first key bound to each keybinding, joined with
+`/`, then the Title Case action, such as `↑/↓ Move` or `Esc Close`. A remap
+replaces Pi's default keys, so the hint names the key the user actually has.
+Unbound keybindings are left out, and the hint is `undefined` when none is
+bound. Write keys with no keybinding id literally: `F1 Help`, `/ Filter`,
+`n New`.
+
+### `keyText(keybindings, keybinding: Keybinding): string | undefined`
+
+Returns the first key bound to `keybinding`, spelled by `formatKeyId`, or
+`undefined` when none is bound.
+
+### `formatKeyId(key: KeyId): string`
+
+Spells a Pi key id the way hints show it: `↑ ↓ ← →`, `Esc`, `Enter`, `Tab`,
+`Space`, `PgUp`, `PgDn`, `F1`, and chords such as `Ctrl+S` or `Shift+Tab`. A
+bare printable key stays as typed (`n`, `/`).
+
+### `wrapKeyHints(hints: readonly (string | undefined)[], width: number): string[]`
+
+Joins hints with a spaced middle dot (`↑/↓ Move · Esc Close`) on as many lines
+of `width` columns as they need, breaking only between two hints, so no hint is
+cut. Skips `undefined` and empty hints. Only a single hint wider than a whole
+line is truncated with `…`.
+
+### `matchSelectAction(keybindings, data: string): SelectAction | undefined`
+
+Returns the list action `data` triggers under the user's Pi keybindings: `"up"`,
+`"down"`, `"pageUp"`, `"pageDown"`, `"confirm"`, or `"cancel"`
+(`tui.select.<action>`), checked in that order, or `undefined`. Only the bound
+keys match, so a remap replaces the defaults. Cancel is Esc and Ctrl+C by
+default.
+
+```ts
+import {
+  matchSelectAction,
+  moveListSelection,
+} from "@sherif-fanous/pi-extensions-core";
+
+handleInput(data: string): void {
+  const action = matchSelectAction(this.keybindings, data);
+
+  if (action === "cancel") this.done(undefined);
+  else if (action === "confirm") this.done(this.items[this.selected]);
+  else if (action) {
+    this.selected = moveListSelection(this.selected, this.items.length, action, this.pageSize);
+  }
+}
+```
+
+### `matchesHelpKey(data: string): boolean`
+
+Returns whether `data` is an F1 press, the key every form uses for `F1 Help`.
+Unlike `matchesKey(data, Key.f1)`, it also matches the Kitty keyboard protocol
+encodings that terminals such as Ghostty send.
+
+### `moveListSelection(selected: number, count: number, move: ListMove, pageSize: number): number`
+
+Returns the index a move selects. `"up"` and `"down"` move one item and wrap
+around the ends; `"pageUp"` and `"pageDown"` move `pageSize` items (at least
+one) and stop at the first or last item. An empty list returns 0.
+
+### `listWindow(selected: number, count: number, rows: number): ListWindow`
+
+Returns `{ start, end, position }`: the visible items from `start` up to the
+exclusive `end`, keeping the selection centered where the ends allow, and
+`position` as `(n/m)` when the list has more items than rows, else `undefined`.
+
+### `listPosition(selected: number, count: number): string`
+
+Returns the 1-based position `(3/12)`, for lists that window themselves.
+
+### `scrollLines(lines: readonly string[], rows: number, offset: number, width: number, theme: Pick<Theme, "fg">): ScrolledLines`
+
+Returns `{ lines, offset }`: `rows` lines from `offset`, with the offset clamped
+into range and every row fitted to `width`. When lines are hidden above or
+below, the first or last row ends in a dim `↑` or `↓` (`↕` on a lone row). Store
+the returned offset for the next render.
+
+### `emptyStateLines(message: string, width: number, theme: Pick<Theme, "fg">): string[]`
+
+Returns an empty or no-match state as muted rows wrapped to `width`. Write the
+message as a sentence that says what is empty, then the next step when there is
+one: `No presets yet. Press n to create one.`
+
 ## License
 
 MIT

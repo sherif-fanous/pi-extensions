@@ -24,9 +24,44 @@ export {
   subcommandCompletions,
   type SubcommandCompletion,
 } from "./extension.js";
+export {
+  frameBodyRows,
+  frameBodyWidth,
+  frameLine,
+  type FrameOptions,
+  frameSegment,
+  type FrameTheme,
+  frameTop,
+  padToWidth,
+  renderFrame,
+} from "./frame.js";
 export { isNotFoundError, isRecord } from "./guards.js";
 export { isInteractiveTui, requireInteractiveTui } from "./interactive.js";
 export { parseJsonObject, type ParseJsonObjectResult } from "./json.js";
+export {
+  formatKeyId,
+  keyHint,
+  keyText,
+  matchesHelpKey,
+  matchSelectAction,
+  type SelectAction,
+  wrapKeyHints,
+} from "./key-hints.js";
+export {
+  emptyStateLines,
+  type ListMove,
+  listPosition,
+  listWindow,
+  type ListWindow,
+  moveListSelection,
+  type ScrolledLines,
+  scrollLines,
+} from "./list.js";
+export {
+  overlayMaxHeight,
+  overlayOptions,
+  type OverlaySize,
+} from "./overlay.js";
 export { extensionConfigPath, projectConfigPath } from "./paths.js";
 export {
   alignLabelRows,
