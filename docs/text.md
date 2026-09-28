@@ -20,11 +20,11 @@ it can't check.
   the code, so technical terms belong there.
 - Names: the display names are `RTK`, `Theme Sync`, `Presets Plus`,
   `Notification Center`, and `Session Slice`. Each package exports one
-  `EXTENSION_NAME` constant from `src/extension-name.ts` (`index.ts` in
-  `pi-rtk`), used by every `guardCommand`, `guardEvent`, `notifyWarnings`,
-  `notifyUsageWarning`, and `requireInteractiveTui` call, dialog title, and
-  report heading. `Pi` is the product and `pi` the binary; lowercase `rtk` means
-  only the rtk executable. Command names stay literal (`/presets clear`).
+  `EXTENSION_NAME` constant from `src/extension-name.ts`, used by every
+  `guardCommand`, `guardEvent`, `notifyWarnings`, `notifyUsageWarning`, and
+  `requireInteractiveTui` call, dialog title, and report heading. `Pi` is the
+  product and `pi` the binary; lowercase `rtk` means only the rtk executable.
+  Command names stay literal (`/presets clear`).
 - Labels and titles: dialog titles, report headings, and button and footer
   action labels are Title Case (`Move Preset?`, `Presets Plus Policy`, `Save`).
   Key/value labels are sentence case with a colon (`Applied theme:`); form rows

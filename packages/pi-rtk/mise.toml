@@ -6,10 +6,10 @@ _.path = ["{{config_root}}/node_modules/.bin"]
 depends = ["format-check", "type-check", "lint", "test"]
 
 [tasks.format]
-run = "prettier --write package.json *.ts tests/. tsconfig.json *.md openspec/specs"
+run = "prettier --write package.json src/. tests/. tsconfig.json vitest.config.ts *.md openspec/specs"
 
 [tasks.format-check]
-run = "prettier --check package.json *.ts tests/. tsconfig.json *.md openspec/specs"
+run = "prettier --check package.json src/. tests/. tsconfig.json vitest.config.ts *.md openspec/specs"
 
 [tasks.install-deps]
 run = "pnpm add --save-prod"

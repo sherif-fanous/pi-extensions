@@ -1,33 +1,39 @@
 /**
  * Covers RTK's footer badge (toggle state and rtk binary availability), the
- * `/rtk` command's replies, and the text RTK shows against the family
- * standard.
+ * warning when rtk can't run, the rewriting of `!` commands, the `/rtk`
+ * command's replies, and the text RTK shows against the family standard.
  */
 
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
   ExtensionContext,
-  ExtensionHandler,
   ExtensionUIContext,
-  RegisteredCommand,
-  SessionStartEvent,
   UserBashEvent,
   UserBashEventResult,
 } from "@earendil-works/pi-coding-agent";
 import {
+  createFakeContext,
+  createFakePi,
   createMarkerTheme,
   createPlainTheme,
   createShownTextRecorder,
   findShownTextViolations,
+  type FakeCommand,
+  type FakePi,
 } from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ spawnSync: vi.fn() }));
+const mocks = vi.hoisted(() => ({ exec: vi.fn(), spawnSync: vi.fn() }));
 
 vi.mock("node:child_process", async (importOriginal) => ({
   ...(await importOriginal<typeof import("node:child_process")>()),
   spawnSync: mocks.spawnSync,
+}));
+
+vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@earendil-works/pi-coding-agent")>()),
+  createLocalBashOperations: () => ({ exec: mocks.exec }),
 }));
 
 interface FakeContext {
@@ -37,13 +43,16 @@ interface FakeContext {
 }
 
 interface LoadedRtk {
-  readonly command: CommandHandler;
-  readonly commandOptions: RegisteredCommandOptions;
-  readonly sessionStart: SessionStartHandler;
-  readonly userBash: UserBashHandler;
+  readonly command: FakeCommand["handler"];
+  readonly commandOptions: FakeCommand;
+  /** Call RTK's handlers for a session start or a `!` command. */
+  readonly emit: FakePi["emit"];
+  /**
+   * Call the default export again on the same module, as Pi does on `/new`,
+   * `/resume`, and `/fork`.
+   */
+  readonly switchSession: () => LoadedRtk;
 }
-
-type CommandHandler = RegisteredCommand["handler"];
 
 /** Surfaces a test may replace on the fake context. */
 type FakeUi = Pick<
@@ -51,62 +60,39 @@ type FakeUi = Pick<
   "notify" | "select" | "setStatus" | "theme"
 >;
 
-type RegisteredCommandOptions = Parameters<ExtensionAPI["registerCommand"]>[1];
-type SessionStartHandler = ExtensionHandler<SessionStartEvent>;
-type UserBashHandler = ExtensionHandler<UserBashEvent, UserBashEventResult>;
-
 const RTK_MISSING = {
   error: Object.assign(new Error("spawnSync rtk ENOENT"), { code: "ENOENT" }),
   stdout: "",
 };
 const RTK_WORKS = { error: undefined, stdout: "rtk 0.30.0\n" };
 
-/** Load a fresh copy of the extension, since its toggle is module state. */
+/**
+ * Load a fresh copy of the extension, as a Pi restart or `/reload` does,
+ * since its toggle is module state.
+ */
 async function loadRtk(
-  appendEntry: ExtensionAPI["appendEntry"] = () => undefined,
+  appendEntry?: ExtensionAPI["appendEntry"],
 ): Promise<LoadedRtk> {
   vi.resetModules();
 
-  const { default: rtk } = await import("../index.js");
-  let commandOptions: RegisteredCommandOptions | undefined;
-  let sessionStart: SessionStartHandler | undefined;
-  let userBash: undefined | UserBashHandler;
+  const { default: rtk } = await import("../src/index.js");
 
-  function on(
-    ...[event, handler]:
-      ["session_start", SessionStartHandler] | ["user_bash", UserBashHandler]
-  ): () => void {
-    if (event === "session_start") sessionStart = handler;
-    else userBash = handler;
+  function register(): LoadedRtk {
+    const fake = createFakePi({ appendEntry });
 
-    return () => undefined;
+    rtk(fake.pi);
+
+    const commandOptions = fake.command("rtk");
+
+    return {
+      command: commandOptions.handler,
+      commandOptions,
+      emit: fake.emit,
+      switchSession: register,
+    };
   }
 
-  const pi: Pick<
-    ExtensionAPI,
-    "appendEntry" | "registerCommand" | "registerEntryRenderer" | "registerTool"
-  > & { on: typeof on } = {
-    appendEntry,
-    on,
-    registerCommand: (_name, options) => {
-      commandOptions = options;
-    },
-    registerEntryRenderer: () => undefined,
-    registerTool: () => undefined,
-  };
-
-  rtk(pi as ExtensionAPI);
-
-  if (!commandOptions || !sessionStart || !userBash) {
-    throw new Error("RTK did not register its command and handlers.");
-  }
-
-  return {
-    command: commandOptions.handler,
-    commandOptions,
-    sessionStart,
-    userBash,
-  };
+  return register();
 }
 
 function makeContext(
@@ -115,20 +101,18 @@ function makeContext(
 ): FakeContext {
   const notify = vi.fn();
   const setStatus = vi.fn();
-  const ui: FakeUi = {
-    notify,
-    select: () => Promise.resolve(undefined),
-    setStatus,
-    theme: createMarkerTheme(),
-    ...overrides,
-  };
-  const ctx: Pick<ExtensionContext, "hasUI" | "mode"> & { ui: FakeUi } = {
-    hasUI: mode === "tui" || mode === "rpc",
+  const ctx = createFakeContext({
     mode,
-    ui,
-  };
+    ui: {
+      notify,
+      select: () => Promise.resolve(undefined),
+      setStatus,
+      theme: createMarkerTheme(),
+      ...overrides,
+    },
+  });
 
-  return { ctx: ctx as ExtensionCommandContext, notify, setStatus };
+  return { ctx, notify, setStatus };
 }
 
 function userBashEvent(command: string): UserBashEvent {
@@ -141,16 +125,17 @@ function userBashEvent(command: string): UserBashEvent {
 }
 
 beforeEach(() => {
+  mocks.exec.mockReset();
   mocks.spawnSync.mockReset();
   mocks.spawnSync.mockReturnValue(RTK_WORKS);
 });
 
 describe("footer badge", () => {
   it("shows a dim on badge when rewriting is enabled and rtk runs", async () => {
-    const { sessionStart } = await loadRtk();
+    const { emit } = await loadRtk();
     const { ctx, setStatus } = makeContext();
 
-    await sessionStart({ reason: "startup", type: "session_start" }, ctx);
+    await emit({ reason: "startup", type: "session_start" }, ctx);
 
     expect(setStatus).toHaveBeenLastCalledWith("rtk", "<dim>RTK: on</dim>");
   });
@@ -158,10 +143,10 @@ describe("footer badge", () => {
   it("shows a warning badge when rtk is missing at session start", async () => {
     mocks.spawnSync.mockReturnValue(RTK_MISSING);
 
-    const { sessionStart } = await loadRtk();
+    const { emit } = await loadRtk();
     const { ctx, setStatus } = makeContext();
 
-    await sessionStart({ reason: "startup", type: "session_start" }, ctx);
+    await emit({ reason: "startup", type: "session_start" }, ctx);
 
     expect(setStatus).toHaveBeenLastCalledWith(
       "rtk",
@@ -172,10 +157,10 @@ describe("footer badge", () => {
   it("shows a dim off badge after /rtk disable, even when rtk is missing", async () => {
     mocks.spawnSync.mockReturnValue(RTK_MISSING);
 
-    const { command, sessionStart } = await loadRtk();
+    const { command, emit } = await loadRtk();
     const { ctx, setStatus } = makeContext();
 
-    await sessionStart({ reason: "startup", type: "session_start" }, ctx);
+    await emit({ reason: "startup", type: "session_start" }, ctx);
     await command("disable", ctx);
 
     expect(setStatus).toHaveBeenLastCalledWith("rtk", "<dim>RTK: off</dim>");
@@ -189,28 +174,32 @@ describe("footer badge", () => {
   });
 
   it("keeps rewriting off across a session switch", async () => {
-    const { command, sessionStart, userBash } = await loadRtk();
-    const { ctx, setStatus } = makeContext();
+    const first = await loadRtk();
+    const { ctx } = makeContext();
 
-    await sessionStart({ reason: "startup", type: "session_start" }, ctx);
-    await command("disable", ctx);
-    await sessionStart({ reason: "new", type: "session_start" }, ctx);
+    await first.emit({ reason: "startup", type: "session_start" }, ctx);
+    await first.command("disable", ctx);
+
+    const second = first.switchSession();
+    const { ctx: newCtx, setStatus } = makeContext();
+
+    await second.emit({ reason: "new", type: "session_start" }, newCtx);
 
     expect(setStatus).toHaveBeenLastCalledWith("rtk", "<dim>RTK: off</dim>");
 
     mocks.spawnSync.mockClear();
-    await userBash(userBashEvent("git status"), ctx);
+    await second.emit(userBashEvent("git status"), newCtx);
 
     expect(mocks.spawnSync).not.toHaveBeenCalled();
   });
 
   it("follows rtk availability detected by later rewrites", async () => {
-    const { sessionStart, userBash } = await loadRtk();
+    const { emit } = await loadRtk();
     const { ctx, setStatus } = makeContext();
 
-    await sessionStart({ reason: "startup", type: "session_start" }, ctx);
+    await emit({ reason: "startup", type: "session_start" }, ctx);
     mocks.spawnSync.mockReturnValue(RTK_MISSING);
-    await userBash(userBashEvent("git status"), ctx);
+    await emit(userBashEvent("git status"), ctx);
 
     expect(setStatus).toHaveBeenLastCalledWith(
       "rtk",
@@ -221,9 +210,92 @@ describe("footer badge", () => {
       error: undefined,
       stdout: "rtk git status\n",
     });
-    await userBash(userBashEvent("git status"), ctx);
+    await emit(userBashEvent("git status"), ctx);
 
     expect(setStatus).toHaveBeenLastCalledWith("rtk", "<dim>RTK: on</dim>");
+  });
+});
+
+describe("rtk unavailable warning", () => {
+  it("warns in the new session after a session switch, not the old one", async () => {
+    const first = await loadRtk();
+    const old = makeContext();
+
+    await first.emit({ reason: "startup", type: "session_start" }, old.ctx);
+
+    const second = first.switchSession();
+    const current = makeContext();
+
+    mocks.spawnSync.mockReturnValue(RTK_MISSING);
+    await second.emit({ reason: "new", type: "session_start" }, current.ctx);
+
+    expect(old.notify).not.toHaveBeenCalled();
+    expect(current.notify).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining("The rtk binary was not found on PATH."),
+      "warning",
+    );
+  });
+});
+
+describe("! commands", () => {
+  it("runs rtk's rewrite of the command", async () => {
+    const { emit } = await loadRtk();
+    const { ctx } = makeContext();
+
+    mocks.spawnSync.mockReturnValue({
+      error: undefined,
+      stdout: "rtk git status\n",
+    });
+
+    const [result] = await emit(userBashEvent("git status"), ctx);
+    const onData = (): void => undefined;
+
+    await (result as UserBashEventResult).operations?.exec(
+      "git status",
+      "/project",
+      { onData },
+    );
+
+    expect(mocks.exec).toHaveBeenCalledExactlyOnceWith(
+      "rtk git status",
+      "/project",
+      { onData },
+    );
+  });
+
+  it.each([
+    ["rtk has no rewrite for it", { error: undefined, stdout: "" }],
+    [
+      "rtk times out",
+      {
+        error: Object.assign(new Error("spawnSync rtk ETIMEDOUT"), {
+          code: "ETIMEDOUT",
+        }),
+        stdout: "",
+      },
+    ],
+  ])("leaves the command to Pi when %s", async (_case, rewrite) => {
+    const { emit } = await loadRtk();
+    const { ctx, notify } = makeContext();
+
+    await emit({ reason: "startup", type: "session_start" }, ctx);
+    mocks.spawnSync.mockReturnValue(rewrite);
+
+    expect(await emit(userBashEvent("git status"), ctx)).toEqual([undefined]);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("leaves !! commands alone, so their output stays out of the model's context", async () => {
+    const { emit } = await loadRtk();
+    const { ctx } = makeContext();
+
+    const results = await emit(
+      { ...userBashEvent("git status"), excludeFromContext: true },
+      ctx,
+    );
+
+    expect(results).toEqual([undefined]);
+    expect(mocks.spawnSync).not.toHaveBeenCalled();
   });
 });
 
@@ -232,10 +304,10 @@ describe("/rtk command", () => {
     const select = vi.fn((_title: string, options: string[]) =>
       Promise.resolve(options[1]),
     );
-    const { command, sessionStart } = await loadRtk();
+    const { command, emit } = await loadRtk();
     const { ctx, notify, setStatus } = makeContext("tui", { select });
 
-    await sessionStart({ reason: "startup", type: "session_start" }, ctx);
+    await emit({ reason: "startup", type: "session_start" }, ctx);
     await command("", ctx);
 
     expect(select).toHaveBeenCalledWith("RTK: on", [
@@ -297,9 +369,7 @@ describe("shown text", () => {
     const shown = createShownTextRecorder({
       choose: (_title, options) => options.at(-1),
     });
-    const { command, commandOptions, sessionStart, userBash } = await loadRtk(
-      shown.appendEntry,
-    );
+    const { command, commandOptions, emit } = await loadRtk(shown.appendEntry);
     const ui = {
       notify: shown.notify,
       select: shown.select,
@@ -310,8 +380,8 @@ describe("shown text", () => {
     const { ctx: rpcCtx } = makeContext("rpc", ui);
 
     await shown.recordCommand(commandOptions);
-    await sessionStart({ reason: "startup", type: "session_start" }, tuiCtx);
-    await userBash(userBashEvent("git status"), tuiCtx);
+    await emit({ reason: "startup", type: "session_start" }, tuiCtx);
+    await emit(userBashEvent("git status"), tuiCtx);
 
     for (const args of ["", "enable", "disable", "status", "nope"]) {
       await command(args, tuiCtx);

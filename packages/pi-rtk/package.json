@@ -20,7 +20,7 @@
   "author": "Sherif Fanous",
   "type": "module",
   "files": [
-    "index.ts",
+    "src",
     "CHANGELOG.md",
     "LICENSE",
     "README.md"
@@ -46,7 +46,7 @@
   },
   "pi": {
     "extensions": [
-      "./index.ts"
+      "./src/index.ts"
     ]
   }
 }

@@ -78,7 +78,7 @@ The standard for every configuration file. Core implements it (its README's
   per migration saying what moves, when, and what to do when it fails. An
   extension without a configuration file has one line under the heading instead,
   saying so and what it keeps instead
-  (`RTK has no configuration file. /rtk enable and /rtk disable last until Pi restarts.`).
+  (`RTK has no configuration file. /rtk enable and /rtk disable last until Pi restarts or you run /reload.`).
 - Code: `src/config.ts`, split into `src/config/load.ts`, `migrate.ts`, and
   `save.ts` once it outgrows one file (Presets Plus keeps `src/store/`, which
   also holds preset CRUD). It exports `CONFIG_VERSION`, a named

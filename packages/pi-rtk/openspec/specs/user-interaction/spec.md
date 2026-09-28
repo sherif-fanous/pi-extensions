@@ -83,8 +83,8 @@ operation.
 
 The extension MUST expose an in-memory, session-scoped toggle that controls
 whether `pi-rtk` performs rewrites. The toggle's default state MUST be
-`enabled`. The toggle MUST reset to `enabled` on every Pi process start. The
-toggle MUST NOT be persisted to disk.
+`enabled`. The toggle MUST reset to `enabled` on every Pi process start and on
+`/reload`. The toggle MUST NOT be persisted to disk.
 
 #### Scenario: /rtk disable turns the toggle off
 
@@ -113,6 +113,12 @@ toggle MUST NOT be persisted to disk.
 - **WHEN** Pi exits and is launched again
 - **THEN** the rewriting toggle MUST start in the `enabled` state
 - **AND** no toggle state MUST be read from disk
+
+#### Scenario: Toggle resets on reload
+
+- **GIVEN** the user has invoked `/rtk disable`
+- **WHEN** the user runs `/reload`
+- **THEN** the rewriting toggle MUST be `enabled`
 
 ### Requirement: Persistent footer state indicator
 

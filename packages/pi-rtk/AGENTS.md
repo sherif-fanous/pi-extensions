@@ -11,7 +11,9 @@ apply only to this package.
   resolves to no rewrite, and the original command runs. Keep that fallback;
   never fail a shell command because its rewrite failed.
 - The rewriting toggle belongs to the Pi process, not the session: it survives
-  `/new`, `/resume`, and `/fork`, resets when Pi restarts, and is never written
-  to disk.
+  `/new`, `/resume`, and `/fork`, resets when Pi restarts or the user runs
+  `/reload`, and is never written to disk. Pi keeps the module loaded across a
+  session switch but calls the default export again, so the toggle is module
+  state in `src/runtime.ts`, not part of the runtime each call creates.
 - Comment where the code relies on rtk's contract, such as
   `// empty stdout = exit 1 or 2`.

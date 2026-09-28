@@ -18,9 +18,8 @@ Every extension's `package.json` SHALL declare `name` as
 `@sherif-fanous/pi-<slug>`, `license: "MIT"`, `type: "module"`, and
 `author: "Sherif Fanous"`. Its `keywords` SHALL contain `pi`, `pi-coding-agent`,
 and `pi-package`, followed by keywords for the extension's domain. Its `pi`
-manifest SHALL have one key, `extensions`, listing the entry point:
-`./src/index.ts`, or `./index.ts` for `pi-rtk`. It SHALL NOT declare `scripts`
-or `engines`.
+manifest SHALL have one key, `extensions`, listing the entry point
+`./src/index.ts`. It SHALL NOT declare `scripts` or `engines`.
 
 #### Scenario: Pi finds the entry point
 

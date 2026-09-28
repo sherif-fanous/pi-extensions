@@ -53,12 +53,12 @@ your `!<cmd>` commands. Use `/rtk` to turn rewriting off and on again.
 
 ### Commands
 
-| Command        | What it does                                                                                                                         |
-| :------------- | :----------------------------------------------------------------------------------------------------------------------------------- |
-| `/rtk`         | Opens a menu, titled with the current state, with the same actions. Outside Pi's interactive terminal UI it shows the status report. |
-| `/rtk enable`  | Turns command rewriting on for the running Pi process, across `/new`, `/resume`, and `/fork`, until Pi restarts.                     |
-| `/rtk disable` | Turns command rewriting off for the running Pi process, across `/new`, `/resume`, and `/fork`, until Pi restarts.                    |
-| `/rtk status`  | Shows whether rewriting is on, the detected rtk binary's version and path, and a bypass tip.                                         |
+| Command        | What it does                                                                                                                           |
+| :------------- | :------------------------------------------------------------------------------------------------------------------------------------- |
+| `/rtk`         | Opens a menu, titled with the current state, with the same actions. Outside Pi's interactive terminal UI it shows the status report.   |
+| `/rtk enable`  | Turns command rewriting on for the running Pi process, across `/new`, `/resume`, and `/fork`, until Pi restarts or you run `/reload`.  |
+| `/rtk disable` | Turns command rewriting off for the running Pi process, across `/new`, `/resume`, and `/fork`, until Pi restarts or you run `/reload`. |
+| `/rtk status`  | Shows whether rewriting is on, the detected rtk binary's version and path, and a bypass tip.                                           |
 
 ### The `/rtk` menu
 
@@ -90,7 +90,7 @@ per-command form:
 ## Configuration
 
 RTK has no configuration file. `/rtk enable` and `/rtk disable` last until Pi
-restarts, and every new Pi process starts with rewriting on.
+restarts or you run `/reload`, and rewriting is on again after either.
 
 ## How it works
 
