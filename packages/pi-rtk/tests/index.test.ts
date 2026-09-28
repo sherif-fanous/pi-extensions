@@ -1,4 +1,8 @@
-/** Covers the `pi-rtk` footer badge: toggle state and rtk binary availability. */
+/**
+ * Covers RTK's footer badge (toggle state and rtk binary availability), the
+ * `/rtk` command's replies, and the text RTK shows against the family
+ * standard.
+ */
 
 import type {
   ExtensionAPI,
@@ -11,7 +15,12 @@ import type {
   UserBashEvent,
   UserBashEventResult,
 } from "@earendil-works/pi-coding-agent";
-import { createMarkerTheme } from "@sherif-fanous/pi-extensions-testing";
+import {
+  createMarkerTheme,
+  createPlainTheme,
+  createShownTextRecorder,
+  findShownTextViolations,
+} from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ spawnSync: vi.fn() }));
@@ -23,16 +32,26 @@ vi.mock("node:child_process", async (importOriginal) => ({
 
 interface FakeContext {
   readonly ctx: ExtensionCommandContext;
+  readonly notify: ReturnType<typeof vi.fn>;
   readonly setStatus: ReturnType<typeof vi.fn>;
 }
 
 interface LoadedRtk {
   readonly command: CommandHandler;
+  readonly commandOptions: RegisteredCommandOptions;
   readonly sessionStart: SessionStartHandler;
   readonly userBash: UserBashHandler;
 }
 
 type CommandHandler = RegisteredCommand["handler"];
+
+/** Surfaces a test may replace on the fake context. */
+type FakeUi = Pick<
+  ExtensionUIContext,
+  "notify" | "select" | "setStatus" | "theme"
+>;
+
+type RegisteredCommandOptions = Parameters<ExtensionAPI["registerCommand"]>[1];
 type SessionStartHandler = ExtensionHandler<SessionStartEvent>;
 type UserBashHandler = ExtensionHandler<UserBashEvent, UserBashEventResult>;
 
@@ -43,11 +62,13 @@ const RTK_MISSING = {
 const RTK_WORKS = { error: undefined, stdout: "rtk 0.30.0\n" };
 
 /** Load a fresh copy of the extension, since its toggle is module state. */
-async function loadRtk(): Promise<LoadedRtk> {
+async function loadRtk(
+  appendEntry: ExtensionAPI["appendEntry"] = () => undefined,
+): Promise<LoadedRtk> {
   vi.resetModules();
 
   const { default: rtk } = await import("../index.js");
-  let command: CommandHandler | undefined;
+  let commandOptions: RegisteredCommandOptions | undefined;
   let sessionStart: SessionStartHandler | undefined;
   let userBash: undefined | UserBashHandler;
 
@@ -63,11 +84,12 @@ async function loadRtk(): Promise<LoadedRtk> {
 
   const pi: Pick<
     ExtensionAPI,
-    "registerCommand" | "registerEntryRenderer" | "registerTool"
+    "appendEntry" | "registerCommand" | "registerEntryRenderer" | "registerTool"
   > & { on: typeof on } = {
+    appendEntry,
     on,
     registerCommand: (_name, options) => {
-      command = options.handler;
+      commandOptions = options;
     },
     registerEntryRenderer: () => undefined,
     registerTool: () => undefined,
@@ -75,26 +97,34 @@ async function loadRtk(): Promise<LoadedRtk> {
 
   rtk(pi as ExtensionAPI);
 
-  if (!command || !sessionStart || !userBash) {
-    throw new Error("pi-rtk did not register its command and handlers.");
+  if (!commandOptions || !sessionStart || !userBash) {
+    throw new Error("RTK did not register its command and handlers.");
   }
 
-  return { command, sessionStart, userBash };
+  return {
+    command: commandOptions.handler,
+    commandOptions,
+    sessionStart,
+    userBash,
+  };
 }
 
-function makeContext(): FakeContext {
+function makeContext(
+  mode: ExtensionContext["mode"] = "tui",
+  overrides: Partial<FakeUi> = {},
+): FakeContext {
+  const notify = vi.fn();
   const setStatus = vi.fn();
-  const ui: Pick<ExtensionUIContext, "notify" | "setStatus" | "theme"> = {
-    notify: vi.fn(),
+  const ui: FakeUi = {
+    notify,
+    select: () => Promise.resolve(undefined),
     setStatus,
     theme: createMarkerTheme(),
+    ...overrides,
   };
-  const ctx: Pick<ExtensionContext, "mode"> & { ui: typeof ui } = {
-    mode: "tui",
-    ui,
-  };
+  const ctx: Pick<ExtensionContext, "mode"> & { ui: FakeUi } = { mode, ui };
 
-  return { ctx: ctx as ExtensionCommandContext, setStatus };
+  return { ctx: ctx as ExtensionCommandContext, notify, setStatus };
 }
 
 function userBashEvent(command: string): UserBashEvent {
@@ -118,7 +148,7 @@ describe("footer badge", () => {
 
     await sessionStart({ reason: "startup", type: "session_start" }, ctx);
 
-    expect(setStatus).toHaveBeenLastCalledWith("pi-rtk", "<dim>RTK: on</dim>");
+    expect(setStatus).toHaveBeenLastCalledWith("rtk", "<dim>RTK: on</dim>");
   });
 
   it("shows a warning badge when rtk is missing at session start", async () => {
@@ -130,7 +160,7 @@ describe("footer badge", () => {
     await sessionStart({ reason: "startup", type: "session_start" }, ctx);
 
     expect(setStatus).toHaveBeenLastCalledWith(
-      "pi-rtk",
+      "rtk",
       "<warning>RTK: unavailable</warning>",
     );
   });
@@ -144,12 +174,12 @@ describe("footer badge", () => {
     await sessionStart({ reason: "startup", type: "session_start" }, ctx);
     await command("disable", ctx);
 
-    expect(setStatus).toHaveBeenLastCalledWith("pi-rtk", "<dim>RTK: off</dim>");
+    expect(setStatus).toHaveBeenLastCalledWith("rtk", "<dim>RTK: off</dim>");
 
     await command("enable", ctx);
 
     expect(setStatus).toHaveBeenLastCalledWith(
-      "pi-rtk",
+      "rtk",
       "<warning>RTK: unavailable</warning>",
     );
   });
@@ -163,7 +193,7 @@ describe("footer badge", () => {
     await userBash(userBashEvent("git status"), ctx);
 
     expect(setStatus).toHaveBeenLastCalledWith(
-      "pi-rtk",
+      "rtk",
       "<warning>RTK: unavailable</warning>",
     );
 
@@ -173,6 +203,90 @@ describe("footer badge", () => {
     });
     await userBash(userBashEvent("git status"), ctx);
 
-    expect(setStatus).toHaveBeenLastCalledWith("pi-rtk", "<dim>RTK: on</dim>");
+    expect(setStatus).toHaveBeenLastCalledWith("rtk", "<dim>RTK: on</dim>");
+  });
+});
+
+describe("/rtk command", () => {
+  it("runs the subcommand whose description the user picks from bare /rtk", async () => {
+    const select = vi.fn((_title: string, options: string[]) =>
+      Promise.resolve(options[1]),
+    );
+    const { command, sessionStart } = await loadRtk();
+    const { ctx, notify, setStatus } = makeContext("tui", { select });
+
+    await sessionStart({ reason: "startup", type: "session_start" }, ctx);
+    await command("", ctx);
+
+    expect(select).toHaveBeenCalledWith("RTK: on", [
+      "Rewrite shell commands with RTK",
+      "Stop rewriting shell commands",
+      "Show RTK status",
+    ]);
+    expect(notify).toHaveBeenCalledWith("Command rewriting disabled.", "info");
+    expect(setStatus).toHaveBeenLastCalledWith("rtk", "<dim>RTK: off</dim>");
+  });
+
+  it("warns about an unknown subcommand and lists every form", async () => {
+    const { command } = await loadRtk();
+    const { ctx, notify } = makeContext();
+
+    await command("status foo", ctx);
+
+    expect(notify).toHaveBeenCalledExactlyOnceWith(
+      'RTK: 1 warning\n- Unknown subcommand "status foo". Try /rtk, /rtk enable, /rtk disable, or /rtk status.',
+      "warning",
+    );
+  });
+});
+
+describe("shown text", () => {
+  it("follows the family text standard on every main path", async () => {
+    mocks.spawnSync.mockImplementation((command: string, args: string[]) =>
+      command === "sh"
+        ? { error: undefined, stdout: "/usr/local/bin/rtk\n" }
+        : args[0] === "--version"
+          ? RTK_WORKS
+          : RTK_MISSING,
+    );
+
+    const shown = createShownTextRecorder({
+      choose: (_title, options) => options.at(-1),
+    });
+    const { command, commandOptions, sessionStart, userBash } = await loadRtk(
+      shown.appendEntry,
+    );
+    const ui = {
+      notify: shown.notify,
+      select: shown.select,
+      setStatus: shown.setStatus,
+      theme: createPlainTheme(),
+    };
+    const { ctx: tuiCtx } = makeContext("tui", ui);
+    const { ctx: rpcCtx } = makeContext("rpc", ui);
+
+    await shown.recordCommand(commandOptions);
+    await sessionStart({ reason: "startup", type: "session_start" }, tuiCtx);
+    await userBash(userBashEvent("git status"), tuiCtx);
+
+    for (const args of ["", "enable", "disable", "status", "nope"]) {
+      await command(args, tuiCtx);
+    }
+
+    await command("status", rpcCtx);
+
+    expect(
+      findShownTextViolations(shown, { displayName: "RTK", slug: "rtk" }),
+    ).toEqual([]);
+
+    expect(shown.texts.map(({ surface }) => surface)).toEqual(
+      expect.arrayContaining([
+        "description",
+        "notification",
+        "report",
+        "select",
+        "status",
+      ]),
+    );
   });
 });

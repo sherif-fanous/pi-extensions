@@ -27,13 +27,30 @@ import {
   createCommandReport,
   guardCommand,
   guardEvent,
+  notifyUsageWarning,
   notifyWarnings,
   subcommandCompletions,
+  type SubcommandCompletion,
 } from "@sherif-fanous/pi-extensions-core";
+
+/** The name RTK shows the user in every message, title, and report. */
+export const EXTENSION_NAME = "RTK";
 
 const REWRITE_TIMEOUT_MS = 5000;
 const STATUS_REPORT = createCommandReport("rtk:status-report");
-const VALID_RTK_SUBCOMMANDS = ["enable", "disable", "status"] as const;
+/** Footer status key: the bare slug, so Pi orders the family's entries by slug. */
+const STATUS_KEY = "rtk";
+// The bare `/rtk` menu offers the same descriptions as the completions, and
+// maps the chosen one back to its subcommand.
+const RTK_SUBCOMMANDS = [
+  { description: "Rewrite shell commands with RTK", name: "enable" },
+  { description: "Stop rewriting shell commands", name: "disable" },
+  { description: "Show RTK status", name: "status" },
+] as const satisfies readonly SubcommandCompletion[];
+const RTK_USAGE_FORMS: readonly [string, ...string[]] = [
+  "/rtk",
+  ...RTK_SUBCOMMANDS.map(({ name }) => `/rtk ${name}`),
+];
 
 // Session state is intentionally in-memory only: it resets to enabled on every
 // Pi process start and is never persisted to disk.
@@ -48,7 +65,7 @@ interface RtkUiContext {
   readonly ui: Pick<ExtensionUIContext, "notify" | "setStatus" | "theme">;
 }
 
-type RtkSubcommand = (typeof VALID_RTK_SUBCOMMANDS)[number];
+type RtkSubcommand = (typeof RTK_SUBCOMMANDS)[number]["name"];
 type RtkUnavailableReason = "missing" | "unexecutable";
 
 type SpawnErrorClassification = RtkUnavailableReason | "other";
@@ -71,7 +88,7 @@ function alertRtkUnavailable(reason: RtkUnavailableReason): void {
   };
 
   rtkUnavailableNotified = true;
-  notifyWarnings(cachedNotifyContext, "RTK", [messages[reason]]);
+  notifyWarnings(cachedNotifyContext, EXTENSION_NAME, [messages[reason]]);
 }
 
 function cacheNotifyContext(ctx: RtkUiContext): void {
@@ -98,13 +115,18 @@ function handleRtkSubcommand(
     return;
   }
 
-  setSessionEnabled(subcommand === "enable");
+  const enabled = subcommand === "enable";
+
+  setSessionEnabled(enabled);
   updateFooterStatus(ctx);
-  ctx.ui.notify(`pi-rtk ${subcommand}d for this session`, "info");
+  ctx.ui.notify(
+    `Command rewriting ${enabled ? "enabled" : "disabled"}.`,
+    "info",
+  );
 }
 
 function isRtkSubcommand(value: string): value is RtkSubcommand {
-  return (VALID_RTK_SUBCOMMANDS as readonly string[]).includes(value);
+  return RTK_SUBCOMMANDS.some(({ name }) => name === value);
 }
 
 function isSessionEnabled(): boolean {
@@ -117,12 +139,9 @@ function markRtkUnavailable(reason: RtkUnavailableReason): void {
 }
 
 function renderStatusText(ctx: RtkUiContext): string {
-  const { theme } = ctx.ui;
+  const color = isSessionEnabled() && !rtkAvailable ? "warning" : "dim";
 
-  if (!isSessionEnabled()) return theme.fg("dim", "RTK: off");
-  if (!rtkAvailable) return theme.fg("warning", "RTK: unavailable");
-
-  return theme.fg("dim", "RTK: on");
+  return ctx.ui.theme.fg(color, rtkStateText());
 }
 
 function rtkRewriteCommand(command: string): string | undefined {
@@ -155,6 +174,14 @@ function rtkRewriteCommand(command: string): string | undefined {
   }
 }
 
+/** The footer badge text, which also titles the bare `/rtk` menu. */
+function rtkStateText(): string {
+  if (!isSessionEnabled()) return `${EXTENSION_NAME}: off`;
+  if (!rtkAvailable) return `${EXTENSION_NAME}: unavailable`;
+
+  return `${EXTENSION_NAME}: on`;
+}
+
 function rtkStatusReport(): string {
   const version = spawnSync("rtk", ["--version"], {
     encoding: "utf-8",
@@ -183,11 +210,11 @@ function rtkStatusReport(): string {
   }
 
   return [
-    "RTK Status",
+    `${EXTENSION_NAME} Status`,
     ...alignLabelRows([
-      ["Session toggle:", isSessionEnabled() ? "enabled" : "disabled"],
+      ["Session toggle:", isSessionEnabled() ? "on" : "off"],
       ["Binary:", binary],
-      ["Tip:", "bypass rtk for one command with !RTK_DISABLED=1 <cmd>."],
+      ["Tip:", "Bypass rtk for one command with !RTK_DISABLED=1 <cmd>."],
     ]),
   ].join("\n");
 }
@@ -210,15 +237,17 @@ async function showRtkOverlay(
   ctx: ExtensionContext,
   pi: ExtensionAPI,
 ): Promise<void> {
-  const selected = await ctx.ui.select("pi-rtk", [
-    "enable",
-    "disable",
-    "status",
-  ]);
+  const selected = await ctx.ui.select(
+    rtkStateText(),
+    RTK_SUBCOMMANDS.map(({ description }) => description),
+  );
+  const subcommand = RTK_SUBCOMMANDS.find(
+    ({ description }) => description === selected,
+  );
 
-  if (selected === undefined || !isRtkSubcommand(selected)) return;
+  if (subcommand === undefined) return;
 
-  handleRtkSubcommand(selected, ctx, pi);
+  handleRtkSubcommand(subcommand.name, ctx, pi);
 }
 
 function showRtkStatus(ctx: ExtensionContext, pi: ExtensionAPI): void {
@@ -226,7 +255,7 @@ function showRtkStatus(ctx: ExtensionContext, pi: ExtensionAPI): void {
 }
 
 function updateFooterStatus(ctx: RtkUiContext): void {
-  ctx.ui.setStatus("pi-rtk", renderStatusText(ctx));
+  ctx.ui.setStatus(STATUS_KEY, renderStatusText(ctx));
 }
 
 export default function (pi: ExtensionAPI) {
@@ -244,11 +273,9 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool(bashTool);
   STATUS_REPORT.register(pi);
   pi.registerCommand("rtk", {
-    description: "Control pi-rtk shell command rewriting",
-    getArgumentCompletions: subcommandCompletions(
-      VALID_RTK_SUBCOMMANDS.map((name) => ({ name })),
-    ),
-    handler: guardCommand("RTK", async (args, ctx) => {
+    description: "Turn RTK command rewriting on or off, or show its status",
+    getArgumentCompletions: subcommandCompletions(RTK_SUBCOMMANDS),
+    handler: guardCommand(EXTENSION_NAME, async (args, ctx) => {
       const subcommand = args.trim();
 
       if (subcommand.length === 0) {
@@ -258,10 +285,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       if (!isRtkSubcommand(subcommand)) {
-        ctx.ui.notify(
-          "Unknown /rtk subcommand. Valid forms: /rtk enable, /rtk disable, /rtk status.",
-          "error",
-        );
+        notifyUsageWarning(ctx, EXTENSION_NAME, subcommand, RTK_USAGE_FORMS);
 
         return;
       }
@@ -272,7 +296,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.on(
     "session_start",
-    guardEvent("RTK", "session_start", (_event, ctx) => {
+    guardEvent(EXTENSION_NAME, "session_start", (_event, ctx) => {
       cacheNotifyContext(ctx);
 
       const result = spawnSync("rtk", ["--version"], {
@@ -294,7 +318,7 @@ export default function (pi: ExtensionAPI) {
   // A failure here resolves to no result, so Pi runs the command itself.
   pi.on(
     "user_bash",
-    guardEvent("RTK", "user_bash", (event, ctx) => {
+    guardEvent(EXTENSION_NAME, "user_bash", (event, ctx) => {
       cacheNotifyContext(ctx);
 
       if (event.excludeFromContext) {

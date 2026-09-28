@@ -110,9 +110,9 @@ toggle MUST NOT be persisted to disk.
 ### Requirement: Persistent Footer State Indicator
 
 The extension MUST register a single footer status entry via
-`ctx.ui.setStatus("pi-rtk", ...)` and MUST keep that entry present for the
-lifetime of the extension. The entry MUST reflect both the session toggle and
-whether the `rtk` binary runs:
+`ctx.ui.setStatus("rtk", ...)` and MUST keep that entry present for the lifetime
+of the extension. The entry MUST reflect both the session toggle and whether the
+`rtk` binary runs:
 
 - `RTK: on` in the theme's `dim` color when the toggle is `enabled` and the last
   spawn of `rtk` succeeded (or none has failed yet).
@@ -130,7 +130,7 @@ change the entry.
 
 - **GIVEN** `rtk` runs
 - **WHEN** Pi fires `session_start`
-- **THEN** the footer MUST display the `pi-rtk` status entry as dim `RTK: on`
+- **THEN** the footer MUST display the `rtk` status entry as dim `RTK: on`
 
 #### Scenario: indicator shows a missing binary at session start
 
@@ -157,14 +157,20 @@ change the entry.
 
 The extension MUST treat the bare `/rtk` invocation (no arguments) as a request
 for a settings overlay. The overlay MUST allow the user to select among the same
-actions exposed by the subcommands.
+actions exposed by the subcommands. Its title MUST be the footer entry's text
+(`RTK: on`, `RTK: off`, or `RTK: unavailable`), and each item MUST be the
+subcommand's completion description:
+
+- `Rewrite shell commands with RTK` for `enable`
+- `Stop rewriting shell commands` for `disable`
+- `Show RTK status` for `status`
 
 #### Scenario: bare /rtk opens overlay
 
 - **WHEN** the user invokes `/rtk` with no arguments
-- **THEN** the extension MUST display an interactive selection overlay listing
-  at least `enable`, `disable`, and `status`
-- **AND** selecting an item MUST execute the corresponding action
+- **THEN** the extension MUST display an interactive selection overlay titled
+  with the current footer text and listing the three descriptions above
+- **AND** selecting an item MUST execute the corresponding subcommand
 - **AND** dismissing the overlay MUST NOT change any state
 
 ### Requirement: /rtk Status Report
@@ -179,10 +185,10 @@ The report MUST be a command report whose first line is the heading
 `RTK Status`, followed by three rows whose values are aligned to the longest
 label:
 
-- `Session toggle:` with `enabled` or `disabled`
+- `Session toggle:` with `on` or `off`
 - `Binary:` with the detected `rtk` version and path, or
   `rtk not detected on PATH`
-- `Tip:` with `bypass rtk for one command with !RTK_DISABLED=1 <cmd>.`
+- `Tip:` with `Bypass rtk for one command with !RTK_DISABLED=1 <cmd>.`
 
 In TUI mode the report MUST appear as a transcript entry that does not enter LLM
 context and that still renders after the session is reloaded. In every other
@@ -195,7 +201,7 @@ muted; the toggle value MUST NOT carry its own color.
 - **WHEN** the user invokes `/rtk status`
 - **THEN** the report MUST start with the `RTK Status` heading
 - **AND** the `Session toggle:` row MUST identify the current session toggle
-  state (`enabled` or `disabled`)
+  state (`on` or `off`)
 - **AND** the `Binary:` row MUST identify the detected `rtk` binary version and
   path, or MUST clearly indicate when `rtk` is not on PATH
 - **AND** the `Tip:` row MUST mention the per-command `!RTK_DISABLED=1 <cmd>`

@@ -115,9 +115,9 @@ User !!<cmd>
 - `/rtk enable` turns command rewriting on for the current Pi session.
 - `/rtk disable` turns command rewriting off for the current Pi session.
 - `/rtk status` shows the current toggle state, detected `rtk` binary details, and a bypass tip.
-- `/rtk` opens an overlay where you can choose the same actions interactively.
+- `/rtk` opens a menu, titled with the current state, where you can choose the same actions interactively.
 
-The footer includes a persistent `pi-rtk` status indicator: dim `RTK: on` when rewriting is enabled and the `rtk` binary runs, dim `RTK: off` when rewriting is disabled, and `RTK: unavailable` in warning color when rewriting is enabled but the `rtk` binary is missing from `PATH` or not executable.
+The footer includes a persistent RTK status indicator: dim `RTK: on` when rewriting is enabled and the `rtk` binary runs, dim `RTK: off` when rewriting is disabled, and `RTK: unavailable` in warning color when rewriting is enabled but the `rtk` binary is missing from `PATH` or not executable.
 
 The toggle is in-memory only. It resets to enabled every time Pi restarts and is not written to disk. For a single-command bypass while leaving the session toggle enabled, use rtk's per-command form:
 
