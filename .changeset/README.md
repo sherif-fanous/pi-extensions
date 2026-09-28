@@ -1,8 +1,11 @@
 # Changesets
 
 Each file here records a change that the next release of one or more packages
-ships. `mise run changeset` adds one. `mise run version` turns them into version
-bumps and Common Changelog sections, then deletes them. A bare
+ships. `mise run changeset` adds one, asking for the packages, bumps, and
+summary; pass them as flags to skip the questions:
+`mise run changeset --patch=<pkg> --minor=<pkg> --message=$'- Fixed: …'`. Use
+`=`, because the message starts with `-`. `mise run version` turns them into
+version bumps and Common Changelog sections, then deletes them. A bare
 `changeset version` refuses to run, because it would write Changesets' own
 changelog headings.
 
