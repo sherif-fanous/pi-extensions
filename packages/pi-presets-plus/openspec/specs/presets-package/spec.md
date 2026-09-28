@@ -69,9 +69,8 @@ follow this voice convention:
    `Status: Restored your previous settings.`. Otherwise sentences begin
    uppercase.
 
-The convention SHALL follow the "Text and naming" section of the repository's
-root `AGENTS.md`, the family text standard. Reviewers SHALL enforce the
-convention on new contributions.
+The convention SHALL follow the repository's `docs/text.md`, the family text
+standard. Reviewers SHALL enforce the convention on new contributions.
 
 Repeated label fragments and dialog titles that appear across multiple surfaces
 SHALL be defined in one shared module so a future tweak edits one location. The
@@ -182,11 +181,10 @@ requirement is that no two surfaces hold their own copy of the same string.
   the body of the `ctx.ui.notify` call surfaced by the hotkey, flag,
   session-restore, and router callers
 
-#### Scenario: AGENTS.md captures the convention
+#### Scenario: The text guide captures the convention
 
-- **WHEN** a contributor reads the repository's root `AGENTS.md`
-- **THEN** its "Text and naming" section SHALL state the label, prose, and title
-  rules above
+- **WHEN** a contributor reads the repository's `docs/text.md`
+- **THEN** it SHALL state the label, prose, and title rules above
 
 #### Scenario: Repeated labels share one source of truth
 

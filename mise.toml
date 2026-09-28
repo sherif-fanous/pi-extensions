@@ -14,10 +14,10 @@ depends = ["changeset-check", "format-check"]
 run = 'for d in packages/*/; do echo "== $d"; (cd "$d" && mise run check) || exit 1; done'
 
 [tasks.format]
-run = "prettier --no-error-on-unmatched-pattern --write .changeset .prettierrc.json AGENTS.md README.md biome.json eslint.config.mjs openspec/config.yaml openspec/specs package.json pnpm-workspace.yaml tsconfig.base.json vitest.config.base.ts"
+run = "prettier --write .changeset .prettierrc.json AGENTS.md README.md docs biome.json eslint.config.mjs openspec/config.yaml openspec/specs package.json pnpm-workspace.yaml tsconfig.base.json vitest.config.base.ts"
 
 [tasks.format-check]
-run = "prettier --no-error-on-unmatched-pattern --check .changeset .prettierrc.json AGENTS.md README.md biome.json eslint.config.mjs openspec/config.yaml openspec/specs package.json pnpm-workspace.yaml tsconfig.base.json vitest.config.base.ts"
+run = "prettier --check .changeset .prettierrc.json AGENTS.md README.md docs biome.json eslint.config.mjs openspec/config.yaml openspec/specs package.json pnpm-workspace.yaml tsconfig.base.json vitest.config.base.ts"
 
 [tasks.publish]
 depends = ["check"]

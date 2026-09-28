@@ -76,8 +76,8 @@ expect(findOverflowingLines(lines, 40)).toEqual([]);
 - `createShownTextRecorder(options?)` records the text a command shows through
   the fakes.
 - `findShownTextViolations(shown, { displayName, slug })` checks recorded text
-  against the family text standard in the repository's `AGENTS.md`. Expect it to
-  return `[]`.
+  against the family text standard in the repository's `docs/text.md`. Expect it
+  to return `[]`.
 
 ## License
 

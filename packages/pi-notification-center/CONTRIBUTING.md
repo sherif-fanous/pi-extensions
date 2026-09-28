@@ -36,7 +36,7 @@ Behavior changes are planned as
    `openspec validate "<name>"` passes.
 5. Commit messages follow
    [Conventional Commits](https://www.conventionalcommits.org/).
-6. The change follows the repository's root `AGENTS.md`, including the
-   conventions the linters do not enforce.
+6. The change follows the repository's root `AGENTS.md` and the guides in
+   `docs/`, including the conventions the linters do not enforce.
 7. A change users can see has a changeset from `mise run changeset`, run at the
    repository root.

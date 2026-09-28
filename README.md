@@ -41,13 +41,13 @@ pnpm install
 | `mise run changeset`  | root            | Records a user-visible change for the next release              |
 
 Run `pi -e packages/<p>` to try a package from the checkout.
-[AGENTS.md](AGENTS.md) is the family style guide for code, text, configuration,
-and TUI.
+[AGENTS.md](AGENTS.md) and the guides in [docs/](docs) are the family style
+guide for code, text, configuration, and TUI.
 
 ## Releasing
 
 Changesets versions and publishes the packages. The steps are in the
-[Releasing](AGENTS.md#releasing) section of `AGENTS.md`.
+[docs/releasing.md](docs/releasing.md).
 
 ## License
 

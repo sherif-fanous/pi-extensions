@@ -397,7 +397,7 @@ if (!requireInteractiveTui(ctx, "Session Slice", "/slice")) return;
 ## Config API
 
 The helpers behind every extension's `config.json`. The rules they implement are
-in the repository's `AGENTS.md` "Config" section.
+in the repository's `docs/config.md`.
 
 ### `type ConfigScope = "project" | "user"`
 
@@ -575,7 +575,7 @@ Configuration at <path> has version 3, but only version 2 is supported. Ignored 
 The primitives behind the family's overlays. Every width is in visual columns,
 so styling and wide characters never push a border out of line, and every line
 they return fits the width it was given. The rules they implement are in the
-repository's `AGENTS.md` "TUI" section.
+repository's `docs/tui.md`.
 
 ### `overlayOptions(size: OverlaySize): OverlayOptions`
 
