@@ -16,7 +16,7 @@ interface TestContext {
   readonly reload?: ReturnType<typeof vi.fn>;
 }
 
-/** Builds an extension context whose overlay answers the prompt as the user. */
+/** Build an extension context whose overlay answers the prompt as the user. */
 function makeCtx(options: {
   readonly answer?: "yes" | "no";
   readonly reload?: ReturnType<typeof vi.fn>;

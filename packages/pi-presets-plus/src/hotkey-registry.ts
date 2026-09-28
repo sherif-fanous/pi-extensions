@@ -320,7 +320,7 @@ export function analyzeHotkeys(presets: LoadedPreset[]): HotkeyAnalysis {
   return { conflicts, invalid, parsed: parsedHotkeys };
 }
 
-/** Returns `"<name>" (<scope>)`, including the quotes around the name. */
+/** Return `"<name>" (<scope>)`, including the quotes around the name. */
 export function formatPresetIdentity(identity: PresetIdentity): string {
   return `"${identity.name}" (${identity.scope})`;
 }

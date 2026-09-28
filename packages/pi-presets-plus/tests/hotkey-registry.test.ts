@@ -11,11 +11,11 @@ import {
   HotkeyRegistry,
 } from "../src/hotkey-registry.js";
 import type { LoadedPreset } from "../src/types.js";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
-import type { KeyId } from "@earendil-works/pi-tui";
+import {
+  createFakeContext,
+  createFakePi,
+  type FakeShortcut,
+} from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requestActivationMock = vi.hoisted(() => vi.fn());
@@ -24,18 +24,14 @@ vi.mock("../src/activation/request.js", () => ({
   requestActivation: requestActivationMock,
 }));
 
-interface RegisteredShortcut {
-  readonly description?: string;
-  readonly handler: (ctx: ExtensionContext) => unknown;
-}
-
 function bind(
   registry: HotkeyRegistry,
   presets: LoadedPreset[],
   loadCurrentPresets = () => Promise.resolve(presets),
 ) {
-  const { ctx, notify } = fakeCtx();
-  const { pi, registerShortcut, shortcuts } = fakePi();
+  const notify = vi.fn();
+  const ctx = createFakeContext({ cwd: "/tmp/project", ui: { notify } });
+  const { pi, shortcuts } = createFakePi();
   const session = new ActivePresetSession();
 
   registry.bindForSession(
@@ -47,35 +43,7 @@ function bind(
     session,
   );
 
-  return { ctx, notify, pi, registerShortcut, session, shortcuts };
-}
-
-function fakeCtx() {
-  const notify = vi.fn();
-
-  return {
-    ctx: {
-      cwd: "/tmp/project",
-      modelRegistry: {},
-      ui: { notify },
-    } as unknown as Pick<ExtensionContext, "ui">,
-    notify,
-  };
-}
-
-function fakePi() {
-  const shortcuts = new Map<string, RegisteredShortcut>();
-  const registerShortcut = vi.fn(
-    (key: KeyId, options: RegisteredShortcut): void => {
-      shortcuts.set(key, options);
-    },
-  );
-
-  return {
-    pi: { registerShortcut } as unknown as ExtensionAPI,
-    registerShortcut,
-    shortcuts,
-  };
+  return { ctx, notify, pi, session, shortcuts };
 }
 
 function preset(
@@ -92,6 +60,13 @@ function preset(
     provider: "anthropic",
     scope,
   };
+}
+
+/** Each registered key with its description, in registration order. */
+function shortcutDescriptions(
+  shortcuts: Map<string, FakeShortcut>,
+): [string, string | undefined][] {
+  return [...shortcuts].map(([key, { description }]) => [key, description]);
 }
 
 beforeEach(() => {
@@ -206,18 +181,12 @@ describe("HotkeyRegistry.bindForSession", () => {
       preset("ship", "alt+s"),
     ];
 
-    const { notify, registerShortcut } = bind(registry, presets);
+    const { notify, shortcuts } = bind(registry, presets);
 
-    expect(registerShortcut).toHaveBeenCalledTimes(2);
-    expect(registerShortcut).toHaveBeenCalledWith(
-      "ctrl+shift+1",
-      expect.objectContaining({ description: 'Activate preset "plan"' }),
-    );
-
-    expect(registerShortcut).toHaveBeenCalledWith(
-      "alt+s",
-      expect.objectContaining({ description: 'Activate preset "ship"' }),
-    );
+    expect(shortcutDescriptions(shortcuts)).toEqual([
+      ["ctrl+shift+1", 'Activate preset "plan"'],
+      ["alt+s", 'Activate preset "ship"'],
+    ]);
 
     expect(notify).toHaveBeenCalledWith(
       'Presets Plus: 1 warning\n- Preset "review" hotkey "ctrl+shift+1" conflicts with preset "plan" (user). The first registered wins.',
@@ -233,9 +202,9 @@ describe("HotkeyRegistry.bindForSession", () => {
     const registry = new HotkeyRegistry();
     const presets = [preset("plan", "ctrl+ctrl+p")];
 
-    const { notify, registerShortcut } = bind(registry, presets);
+    const { notify, shortcuts } = bind(registry, presets);
 
-    expect(registerShortcut).not.toHaveBeenCalled();
+    expect(shortcuts.size).toBe(0);
     expect(notify).toHaveBeenCalledWith(
       'Presets Plus: 1 warning\n- Preset "plan" has invalid hotkey "ctrl+ctrl+p" (duplicate modifier "ctrl"). Ignored it, so it is not registered or checked for conflicts until it is fixed.',
       "warning",
@@ -276,13 +245,11 @@ describe("HotkeyRegistry.bindForSession", () => {
       preset("plan", "ctrl+shift+2", "project"),
     ];
 
-    const { registerShortcut } = bind(registry, presets);
+    const { shortcuts } = bind(registry, presets);
 
-    expect(registerShortcut).toHaveBeenCalledTimes(1);
-    expect(registerShortcut).toHaveBeenCalledWith(
-      "ctrl+shift+2",
-      expect.objectContaining({ description: 'Activate preset "plan"' }),
-    );
+    expect(shortcutDescriptions(shortcuts)).toEqual([
+      ["ctrl+shift+2", 'Activate preset "plan"'],
+    ]);
   });
 
   it("loads current preset data when a hotkey is pressed", async () => {
@@ -297,7 +264,7 @@ describe("HotkeyRegistry.bindForSession", () => {
       loadCurrentPresets,
     );
 
-    await shortcuts.get("ctrl+shift+1")?.handler(ctx as ExtensionContext);
+    await shortcuts.get("ctrl+shift+1")?.handler(ctx);
 
     expect(loadCurrentPresets).toHaveBeenCalledWith(ctx);
     expect(requestActivationMock).toHaveBeenCalledWith(
@@ -316,7 +283,7 @@ describe("HotkeyRegistry.bindForSession", () => {
       Promise.resolve([current]),
     );
 
-    await shortcuts.get("ctrl+shift+1")?.handler(ctx as ExtensionContext);
+    await shortcuts.get("ctrl+shift+1")?.handler(ctx);
 
     expect(notify).toHaveBeenCalledExactlyOnceWith(
       'Presets Plus applied preset "plan".',
@@ -340,7 +307,7 @@ describe("HotkeyRegistry.bindForSession", () => {
       () => Promise.resolve([current]),
     );
 
-    await shortcuts.get("ctrl+shift+1")?.handler(ctx as ExtensionContext);
+    await shortcuts.get("ctrl+shift+1")?.handler(ctx);
 
     expect(requestActivationMock).toHaveBeenCalledWith(
       current,
@@ -371,7 +338,7 @@ describe("HotkeyRegistry.bindForSession", () => {
       () => Promise.resolve([current]),
     );
 
-    await shortcuts.get("ctrl+shift+1")?.handler(ctx as ExtensionContext);
+    await shortcuts.get("ctrl+shift+1")?.handler(ctx);
 
     expect(requestActivationMock).toHaveBeenCalledWith(
       current,
@@ -396,7 +363,7 @@ describe("HotkeyRegistry.bindForSession", () => {
       Promise.resolve([current]),
     );
 
-    await shortcuts.get("ctrl+shift+1")?.handler(ctx as ExtensionContext);
+    await shortcuts.get("ctrl+shift+1")?.handler(ctx);
 
     expect(notify).toHaveBeenCalledWith(
       'Presets Plus hotkey for preset "plan" failed: boom.',
@@ -412,7 +379,7 @@ describe("HotkeyRegistry.bindForSession", () => {
       Promise.resolve([]),
     );
 
-    await shortcuts.get("ctrl+shift+1")?.handler(ctx as ExtensionContext);
+    await shortcuts.get("ctrl+shift+1")?.handler(ctx);
 
     expect(requestActivationMock).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledWith(

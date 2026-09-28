@@ -62,7 +62,7 @@ function footerRows(lines: readonly string[]): string[] {
 }
 
 /**
- * Opens the picker over twelve presets, renders it at `width`, and sends
+ * Open the picker over twelve presets, render it at `width`, and send
  * `keys`. With `closeAfterKeys`, the test closes the overlay itself.
  */
 function open(

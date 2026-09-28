@@ -4,10 +4,10 @@
  */
 import { ActivePresetSession } from "../../src/activation/session.js";
 import type { LoadedPreset } from "../../src/types.js";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+import {
+  createFakeContext,
+  createFakePi,
+} from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { applyMock, gateActivationMock } = vi.hoisted(() => ({
@@ -28,8 +28,8 @@ const preset: LoadedPreset = {
   provider: "anthropic",
   scope: "user",
 };
-const ctx = {} as ExtensionContext;
-const pi = {} as ExtensionAPI;
+const ctx = createFakeContext();
+const { pi } = createFakePi();
 
 beforeEach(() => {
   applyMock.mockReset();

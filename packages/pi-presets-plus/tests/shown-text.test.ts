@@ -8,26 +8,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import presetsPlus from "../src/index.js";
+import type { ThinkingLevel } from "../src/types.js";
 import { makeStubModelRegistry } from "./helpers/model-registry.js";
 import type {
-  ExtensionAPI,
   ExtensionCommandContext,
   ExtensionContext,
-  RegisteredCommand,
+  ToolInfo,
 } from "@earendil-works/pi-coding-agent";
 import {
-  createPlainTheme,
+  createFakeContext,
+  createFakeCustom,
+  createFakePi,
   createShownTextRecorder,
   findShownTextViolations,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-type CommandOptions = Omit<RegisteredCommand, "name" | "sourceInfo">;
-type SessionStartHandler = (
-  event: { type: "session_start" },
-  ctx: ExtensionContext,
-) => Promise<void>;
-type ShortcutHandler = (ctx: ExtensionContext) => Promise<void> | void;
 
 let agentDir: string;
 let previousAgentDir: string | undefined;
@@ -70,104 +65,50 @@ afterEach(async () => {
 describe("shown text", () => {
   it("follows the text and naming standard on the main paths", async () => {
     const shown = createShownTextRecorder();
-    const commands = new Map<string, CommandOptions>();
-    const shortcuts: ShortcutHandler[] = [];
-    let sessionStart: SessionStartHandler | undefined;
-    let thinkingLevel: ReturnType<ExtensionAPI["getThinkingLevel"]> = "medium";
+    let thinkingLevel: ThinkingLevel = "medium";
     let activeTools = ["read", "bash"];
-    const pi: Pick<
-      ExtensionAPI,
-      | "appendEntry"
-      | "getActiveTools"
-      | "getAllTools"
-      | "getFlag"
-      | "getThinkingLevel"
-      | "on"
-      | "registerCommand"
-      | "registerEntryRenderer"
-      | "registerFlag"
-      | "registerShortcut"
-      | "setActiveTools"
-      | "setModel"
-      | "setThinkingLevel"
-    > = {
+    const fake = createFakePi({
       appendEntry: shown.appendEntry,
       getActiveTools: () => activeTools,
-      getAllTools: () =>
-        [{ name: "bash" }, { name: "read" }] as ReturnType<
-          ExtensionAPI["getAllTools"]
-        >,
+      getAllTools: () => ["bash", "read"].map((name) => ({ name }) as ToolInfo),
       getFlag: (name) => (name === "preset" ? "plan" : undefined),
       getThinkingLevel: () => thinkingLevel,
-      on: (event: string, handler: unknown) => {
-        if (event === "session_start") {
-          sessionStart = handler as SessionStartHandler;
-        }
-
-        return () => undefined;
-      },
-      registerCommand: (name, options) => {
-        commands.set(name, options);
-      },
-      registerEntryRenderer: () => undefined,
-      registerFlag: (_name, options) => {
-        if (options.description !== undefined) {
-          shown.record("description", options.description);
-        }
-      },
-      registerShortcut: (_key, { description, handler }) => {
-        if (description !== undefined) shown.record("description", description);
-
-        shortcuts.push(handler);
-      },
       setActiveTools: (tools) => {
         activeTools = tools;
       },
-      setModel: () => Promise.resolve(true),
       setThinkingLevel: (level) => {
         thinkingLevel = level;
       },
-    };
-    const context = (
-      mode: ExtensionContext["mode"],
-    ): ExtensionCommandContext => {
-      const ctx: Pick<
-        ExtensionCommandContext,
-        "cwd" | "isProjectTrusted" | "mode" | "model" | "modelRegistry"
-      > & {
-        sessionManager: Pick<ExtensionContext["sessionManager"], "getBranch">;
-        ui: Pick<
-          ExtensionContext["ui"],
-          "notify" | "select" | "setStatus" | "setWidget" | "theme"
-        >;
-      } = {
+    });
+    const rendered: string[] = [];
+    const context = (mode: ExtensionContext["mode"]): ExtensionCommandContext =>
+      createFakeContext({
         cwd: join(agentDir, "project"),
-        isProjectTrusted: () => true,
         mode,
-        model: undefined,
         modelRegistry: makeStubModelRegistry({
           models: { anthropic: { claude: { hasKey: true, reasoning: true } } },
         }),
-        sessionManager: { getBranch: () => [] },
         ui: {
+          custom: createFakeCustom({ keys: ["\u001B"], rendered }),
           notify: shown.notify,
           select: shown.select,
           setStatus: shown.setStatus,
           setWidget: shown.setWidget,
-          theme: createPlainTheme(),
         },
-      };
-
-      return ctx as ExtensionCommandContext;
-    };
+      });
     const tui = context("tui");
 
-    presetsPlus(pi as ExtensionAPI);
+    presetsPlus(fake.pi);
 
-    const presets = commands.get("presets");
+    const presets = fake.command("presets");
 
-    await shown.recordCommand(presets ?? {});
-    await sessionStart?.({ type: "session_start" }, tui);
+    await shown.recordCommand(presets);
+
+    for (const { description } of fake.flags.values()) {
+      if (description !== undefined) shown.record("description", description);
+    }
+
+    await fake.emit({ reason: "startup", type: "session_start" }, tui);
 
     for (const args of [
       "status",
@@ -181,12 +122,18 @@ describe("shown text", () => {
       "clear",
       "notes",
     ]) {
-      await presets?.handler(args, tui);
+      await presets.handler(args, tui);
     }
 
-    await presets?.handler("", context("print"));
+    await presets.handler("", context("print"));
 
-    for (const shortcut of shortcuts) await shortcut(tui);
+    for (const { description, handler } of fake.shortcuts.values()) {
+      if (description !== undefined) shown.record("description", description);
+
+      await handler(tui);
+    }
+
+    for (const line of rendered) shown.record("text", line);
 
     expect(
       findShownTextViolations(shown, {

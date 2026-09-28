@@ -36,7 +36,7 @@ vi.mock("../../src/ui/confirm.js", () => ({
 
 const { openPicker } = await import("../../src/ui/picker.js");
 
-/** Builds an extension context whose overlay mounts the picker and hits `x`. */
+/** Build an extension context whose overlay mounts the picker and hits `x`. */
 function makeCtx() {
   const reload = vi.fn();
   const notify = vi.fn();
@@ -58,7 +58,7 @@ function makeCtx() {
   };
 }
 
-/** Builds a saved preset, with or without a hotkey. */
+/** Build a saved preset, with or without a hotkey. */
 function preset(hotkey?: string): LoadedPreset {
   return {
     hotkey,
@@ -70,7 +70,7 @@ function preset(hotkey?: string): LoadedPreset {
 }
 
 /**
- * Binds a hotkey registry to the preset, opens the picker, and deletes the
+ * Bind a hotkey registry to the preset, open the picker, and delete the
  * selection with the given answer to the reload prompt.
  */
 async function runDelete(

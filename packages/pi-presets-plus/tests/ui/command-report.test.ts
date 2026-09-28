@@ -8,8 +8,7 @@ import {
   registerCommandReportRenderer,
   renderCommandReport,
 } from "../../src/ui/command-report.js";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
+import { createFakeContext } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it, vi } from "vitest";
 
 describe("command reports", () => {
@@ -18,7 +17,7 @@ describe("command reports", () => {
     const notify = vi.fn();
 
     deliverCommandReport(
-      { mode: "tui", ui: { notify } } as unknown as ExtensionContext,
+      createFakeContext({ ui: { notify } }),
       { appendEntry },
       { body: "Presets Plus Status", severity: "info" },
     );
@@ -35,10 +34,7 @@ describe("command reports", () => {
     const notify = vi.fn();
 
     deliverCommandReport(
-      {
-        mode: "rpc",
-        ui: { notify, theme: createPlainTheme() },
-      } as unknown as ExtensionContext,
+      createFakeContext({ mode: "rpc", ui: { notify } }),
       { appendEntry },
       { body: "Presets Plus Policy", severity: "warning" },
     );

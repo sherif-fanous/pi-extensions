@@ -7,6 +7,7 @@ import { openConfirm } from "../../src/ui/confirm.js";
 import type { KeybindingsManager } from "@earendil-works/pi-tui";
 import { overlayOptions } from "@sherif-fanous/pi-extensions-core";
 import {
+  createFakeContext,
   createFakeCustom,
   createFakeTui,
   createPiKeybindings,
@@ -20,7 +21,7 @@ interface ConfirmHarness {
   readonly rendered: string[];
 }
 
-/** Opens a confirmation overlay, records its lines, and feeds it `keys`. */
+/** Open a confirmation overlay, record its lines, and feed it `keys`. */
 function makeConfirmHarness(
   keys: readonly string[] = ["n"],
   options: {
@@ -30,7 +31,7 @@ function makeConfirmHarness(
   } = {},
 ): ConfirmHarness {
   const rendered: string[] = [];
-  const ctx = {
+  const ctx = createFakeContext({
     ui: {
       custom: createFakeCustom({
         keybindings: options.keybindings ?? createPiKeybindings(),
@@ -40,7 +41,7 @@ function makeConfirmHarness(
         width: options.width ?? 48,
       }),
     },
-  } as unknown as Parameters<typeof openConfirm>[0];
+  });
 
   return { ctx, rendered };
 }

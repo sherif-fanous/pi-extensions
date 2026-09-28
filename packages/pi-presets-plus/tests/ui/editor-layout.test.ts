@@ -77,7 +77,7 @@ function footerRows(lines: readonly string[]): string[] {
 }
 
 /**
- * Opens the editor on `seed` in a terminal `rows` tall and sends `keys`.
+ * Open the editor on `seed` in a terminal `rows` tall and send `keys`.
  * The editor stays open unless a key closes it.
  */
 async function open(

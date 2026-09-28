@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 
 const theme = createPlainTheme();
 
-/** Builds active preset state, clean or dirty. */
+/** Build active preset state, clean or dirty. */
 function active(dirty: boolean): ActivePresetState {
   return {
     declared: { model: "claude", provider: "anthropic" },

@@ -5,11 +5,11 @@
 import { ActivePresetSession } from "../../src/activation/session.js";
 import type { StartupSelection } from "../../src/activation/startup-selection.js";
 import type { LoadedPreset } from "../../src/types.js";
-import type { Api, Model } from "@earendil-works/pi-ai";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import {
+  createFakeContext,
+  createFakePi,
+} from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { applyMock, isAutomaticDefaultEligibleMock, loadPolicyMock } =
@@ -38,11 +38,6 @@ const selected: LoadedPreset = {
   provider: "anthropic",
   scope: "user",
 };
-const configuredModel = {
-  id: "gpt",
-  provider: "openai",
-  reasoning: true,
-} as Model<Api>;
 const captured: StartupSelection = {
   model: { id: "gpt", provider: "openai" },
   thinkingLevel: "medium",
@@ -53,7 +48,7 @@ async function applyDefault(
   precedence = { flagApplied: false, restored: false },
   startup = captured,
 ) {
-  const pi = {} as ExtensionAPI;
+  const { pi } = createFakePi();
   const session = new ActivePresetSession();
   const result = await maybeApplyPolicyDefault(
     [selected],
@@ -71,13 +66,7 @@ function context(mode: ExtensionContext["mode"] = "tui") {
   const notify = vi.fn();
 
   return {
-    ctx: {
-      cwd: "/work/project",
-      isProjectTrusted: () => true,
-      mode,
-      modelRegistry: { find: vi.fn(() => configuredModel) },
-      ui: { notify },
-    } as unknown as ExtensionContext,
+    ctx: createFakeContext({ cwd: "/work/project", mode, ui: { notify } }),
     notify,
   };
 }

@@ -22,7 +22,7 @@ export interface RegistryStub {
 }
 
 /**
- * Builds a registry whose `find` and `hasConfiguredAuth` answer from the
+ * Build a registry whose `find` and `hasConfiguredAuth` answer from the
  * given map.
  */
 export function makeStubModelRegistry(stub: RegistryStub): ModelRegistry {

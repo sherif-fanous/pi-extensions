@@ -4,14 +4,12 @@
  */
 import type { ActivePresetSession } from "../../activation/session.js";
 import { EXTENSION_NAME } from "../../extension-name.js";
-import type { HotkeyRegistry } from "../../hotkey-registry.js";
 import { findPreset } from "../../preset-identity.js";
 import { loadAll } from "../../store/api.js";
 import type { ActivePresetState, LoadedPreset } from "../../types.js";
 import { openInfoDialog } from "../../ui/info-dialog.js";
 import { PROMPT_DIALOG_TITLE } from "../../ui/labels.js";
 import type {
-  ExtensionAPI,
   ExtensionCommandContext,
   Theme,
 } from "@earendil-works/pi-coding-agent";
@@ -111,13 +109,8 @@ export function formatShowPromptBody(
 export async function runShowPrompt(
   ctx: ExtensionCommandContext,
   args: readonly string[],
-  pi: ExtensionAPI,
   session: ActivePresetSession,
-  hotkeys: HotkeyRegistry,
 ): Promise<void> {
-  void pi;
-  void hotkeys;
-
   const name = args.length > 0 ? args.join(" ") : undefined;
   const { presets } = await loadAll(ctx);
   const result = findPresetForShowPrompt(name, session.current(), presets);

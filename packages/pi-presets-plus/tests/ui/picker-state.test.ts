@@ -28,7 +28,7 @@ function makePreset(
   };
 }
 
-/** Lists presets as `scope:name` so assertions can tell scopes apart. */
+/** List presets as `scope:name` so assertions can tell scopes apart. */
 function scopedNames(presets: readonly LoadedPreset[]): string[] {
   return presets.map((preset) => `${preset.scope}:${preset.name}`);
 }

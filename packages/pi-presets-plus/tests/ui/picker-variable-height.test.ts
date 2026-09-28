@@ -50,7 +50,7 @@ interface PresetFixtureOptions {
   readonly shadowed?: true;
 }
 
-/** Builds a preset whose name carries the index and whose scope alternates. */
+/** Build a preset whose name carries the index and whose scope alternates. */
 function makeLoadedPreset(
   index: number,
   options: PresetFixtureOptions = {},
@@ -78,7 +78,7 @@ function makeLoadedPreset(
   };
 }
 
-/** Builds the preset at an index, spreading badges and prompts down it. */
+/** Build the preset at an index, spreading badges and prompts down it. */
 function makePreset(index: number): LoadedPreset {
   return makeLoadedPreset(index, {
     ...(index % 3 === 0 ? { instructions: `Prompt for preset ${index}` } : {}),
@@ -94,14 +94,14 @@ function makePresets(count: number): LoadedPreset[] {
   return Array.from({ length: count }, (_unused, index) => makePreset(index));
 }
 
-/** Opens the picker over the given presets in a tall terminal. */
+/** Open the picker over the given presets in a tall terminal. */
 async function mountPicker(
   presets: readonly LoadedPreset[],
 ): Promise<Component> {
   return (await mount({ presets, terminalRows: 86 })).component;
 }
 
-/** Names the preset at an index with a zero-padded suffix. */
+/** Name the preset at an index with a zero-padded suffix. */
 function presetName(index: number): string {
   return `preset-${index.toString().padStart(2, "0")}`;
 }

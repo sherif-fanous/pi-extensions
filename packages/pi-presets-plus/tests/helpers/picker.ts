@@ -35,7 +35,7 @@ export interface MountPickerOptions {
   readonly theme?: Theme;
 }
 
-/** Builds a minimal loaded preset with a fixed provider and model. */
+/** Build a minimal loaded preset with a fixed provider and model. */
 export function makeLoadedPreset(
   name: string,
   scope: LoadedPreset["scope"] = "user",
@@ -49,7 +49,7 @@ export function makeLoadedPreset(
 }
 
 /**
- * Returns a function that opens the picker over fake presets and returns
+ * Return a function that opens the picker over fake presets and returns
  * the mounted component.
  *
  * Pass the test file's mocked `loadAll`. The picker module is imported on
@@ -112,7 +112,7 @@ export function pickerMounter(
   };
 }
 
-/** Renders a component and strips its ANSI sequences, one entry per line. */
+/** Render a component and strip its ANSI sequences, one entry per line. */
 export function renderLines(component: Component, width = 100): string[] {
   return component.render(width).map(stripAnsi);
 }

@@ -10,12 +10,15 @@ import { join } from "node:path";
 import { ActivePresetSession } from "../../../src/activation/session.js";
 import {
   getArgumentCompletions,
-  handlePresetsCommand,
+  runPresetsCommand,
 } from "../../../src/commands/presets/router.js";
 import { HotkeyRegistry } from "../../../src/hotkey-registry.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
-import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
+import {
+  createFakeContext,
+  createFakePi,
+} from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { openPickerMock, requestActivationMock } = vi.hoisted(() => ({
@@ -32,7 +35,7 @@ let agentDir: string;
 let prevAgentDirEnv: string | undefined;
 
 /**
- * Builds a fake `ExtensionCommandContext` whose `ui.notify` is a spy and
+ * Build a fake `ExtensionCommandContext` whose `ui.notify` is a spy and
  * whose `ui.theme` leaves text unstyled for substring assertions. The
  * `cwd` points at a path that does not exist and `beforeEach` repoints
  * `PI_CODING_AGENT_DIR` at a fresh tmp dir, so `loadAll` sees an empty
@@ -45,28 +48,16 @@ function makeStubCtx(mode: "tui" | "rpc" | "json" | "print" = "tui") {
   return {
     notify,
     setStatus,
-    ctx: {
+    ctx: createFakeContext({
       cwd: "/tmp/pi-presets-router-does-not-exist",
-      isProjectTrusted: () => true,
       mode,
-      ui: {
-        notify,
-        setStatus,
-        theme: createPlainTheme(),
-      },
-      modelRegistry: {
-        find: () => undefined,
-        hasConfiguredAuth: () => false,
-      },
-    } as unknown as Parameters<typeof handlePresetsCommand>[1],
+      ui: { notify, setStatus },
+    }),
   };
 }
 
-/** Builds the part of `ExtensionAPI` the router reaches: the picker's tools. */
 function makeStubPi(): ExtensionAPI {
-  const pi: Pick<ExtensionAPI, "getActiveTools"> = { getActiveTools: () => [] };
-
-  return pi as ExtensionAPI;
+  return createFakePi().pi;
 }
 
 beforeEach(async () => {
@@ -209,19 +200,17 @@ describe("getArgumentCompletions", () => {
   });
 });
 
-describe("handlePresetsCommand", () => {
+describe("runPresetsCommand", () => {
   it.each(["rpc", "json", "print"] as const)(
     "warns instead of opening the bare picker in %s mode",
     async (mode) => {
       const { ctx, notify } = makeStubCtx(mode);
 
-      await handlePresetsCommand(
-        "",
-        ctx,
-        makeStubPi(),
-        new ActivePresetSession(),
-        new HotkeyRegistry(),
-      );
+      await runPresetsCommand("", ctx, {
+        hotkeys: new HotkeyRegistry(),
+        pi: makeStubPi(),
+        session: new ActivePresetSession(),
+      });
 
       expect(notify).toHaveBeenCalledExactlyOnceWith(
         "Presets Plus: 1 warning\n- /presets needs Pi's interactive terminal UI. Run it from the TUI.",
@@ -241,13 +230,11 @@ describe("handlePresetsCommand", () => {
     async (args, argument) => {
       const { ctx, notify } = makeStubCtx();
 
-      await handlePresetsCommand(
-        args,
-        ctx,
-        makeStubPi(),
-        new ActivePresetSession(),
-        new HotkeyRegistry(),
-      );
+      await runPresetsCommand(args, ctx, {
+        hotkeys: new HotkeyRegistry(),
+        pi: makeStubPi(),
+        session: new ActivePresetSession(),
+      });
 
       expect(notify).toHaveBeenCalledExactlyOnceWith(
         `Presets Plus: 1 warning\n- Unknown subcommand "${argument}". Try /presets, /presets reload, /presets clear, /presets status, /presets policy, or /presets show-prompt.`,
@@ -263,13 +250,11 @@ describe("handlePresetsCommand", () => {
     async (args) => {
       const { ctx, notify } = makeStubCtx();
 
-      await handlePresetsCommand(
-        args,
-        ctx,
-        makeStubPi(),
-        new ActivePresetSession(),
-        new HotkeyRegistry(),
-      );
+      await runPresetsCommand(args, ctx, {
+        hotkeys: new HotkeyRegistry(),
+        pi: makeStubPi(),
+        session: new ActivePresetSession(),
+      });
       expect(notify).toHaveBeenCalledTimes(1);
       expect(notify.mock.calls[0]?.[0]).toContain("Unknown subcommand");
       expect(notify.mock.calls[0]?.[1]).toBe("warning");
@@ -292,7 +277,11 @@ describe("handlePresetsCommand", () => {
       JSON.stringify({ presets: [preset], version: 2 }),
     );
 
-    await handlePresetsCommand("plan", ctx, pi, session, new HotkeyRegistry());
+    await runPresetsCommand("plan", ctx, {
+      hotkeys: new HotkeyRegistry(),
+      pi,
+      session,
+    });
 
     expect(requestActivationMock).toHaveBeenCalledWith(
       expect.objectContaining(preset),
@@ -316,13 +305,11 @@ describe("handlePresetsCommand", () => {
       JSON.stringify({ presets: [preset, { name: "broken" }], version: 2 }),
     );
 
-    await handlePresetsCommand(
-      "plan",
-      ctx,
-      makeStubPi(),
-      new ActivePresetSession(),
-      new HotkeyRegistry(),
-    );
+    await runPresetsCommand("plan", ctx, {
+      hotkeys: new HotkeyRegistry(),
+      pi: makeStubPi(),
+      session: new ActivePresetSession(),
+    });
 
     expect(requestActivationMock).toHaveBeenCalledOnce();
     expect(notify).not.toHaveBeenCalledWith(expect.anything(), "warning");
@@ -337,13 +324,11 @@ describe("handlePresetsCommand", () => {
       JSON.stringify({ presets: [{ name: "plan" }], version: 2 }),
     );
 
-    await handlePresetsCommand(
-      "plan",
-      ctx,
-      makeStubPi(),
-      new ActivePresetSession(),
-      new HotkeyRegistry(),
-    );
+    await runPresetsCommand("plan", ctx, {
+      hotkeys: new HotkeyRegistry(),
+      pi: makeStubPi(),
+      session: new ActivePresetSession(),
+    });
 
     expect(requestActivationMock).not.toHaveBeenCalled();
     expect(notify.mock.calls.map(([message]) => message)).toEqual([
@@ -366,13 +351,11 @@ describe("handlePresetsCommand", () => {
       scope: "user" as const,
     };
 
-    await handlePresetsCommand(
-      "",
-      ctx,
+    await runPresetsCommand("", ctx, {
+      hotkeys: new HotkeyRegistry(),
       pi,
-      new ActivePresetSession(),
-      new HotkeyRegistry(),
-    );
+      session: new ActivePresetSession(),
+    });
 
     const options = openPickerMock.mock.calls[0]?.[1] as {
       onActivate: (preset: typeof selected) => Promise<unknown>;
@@ -401,20 +384,19 @@ describe("handlePresetsCommand", () => {
   it("dispatches `show-prompt` to runShowPrompt", async () => {
     const { ctx, notify } = makeStubCtx();
 
-    await handlePresetsCommand(
-      "show-prompt",
-      ctx,
-      makeStubPi(),
-      new ActivePresetSession(),
-      new HotkeyRegistry(),
-    );
+    await runPresetsCommand("show-prompt", ctx, {
+      hotkeys: new HotkeyRegistry(),
+      pi: makeStubPi(),
+      session: new ActivePresetSession(),
+    });
     expect(notify).toHaveBeenCalledTimes(1);
     expect(notify.mock.calls[0]?.[0]).toBe("No preset is active.");
     expect(notify.mock.calls[0]?.[1]).toBe("info");
   });
 
   it("shows the prompt of a named preset whose name has spaces", async () => {
-    const { ctx, notify } = makeStubCtx();
+    // Outside the TUI the prompt arrives as a notification, not a dialog.
+    const { ctx, notify } = makeStubCtx("rpc");
 
     await mkdir(join(agentDir, "presets-plus"), { recursive: true });
     await writeFile(
@@ -432,13 +414,11 @@ describe("handlePresetsCommand", () => {
       }),
     );
 
-    await handlePresetsCommand(
-      "show-prompt Deep Work",
-      ctx,
-      makeStubPi(),
-      new ActivePresetSession(),
-      new HotkeyRegistry(),
-    );
+    await runPresetsCommand("show-prompt Deep Work", ctx, {
+      hotkeys: new HotkeyRegistry(),
+      pi: makeStubPi(),
+      session: new ActivePresetSession(),
+    });
 
     expect(notify).toHaveBeenCalledExactlyOnceWith(
       "Focus on one task.",
@@ -462,13 +442,11 @@ describe("handlePresetsCommand", () => {
 
       Object.assign(ctx.ui, { custom });
 
-      await handlePresetsCommand(
-        args,
-        ctx,
-        makeStubPi(),
-        new ActivePresetSession(),
-        new HotkeyRegistry(),
-      );
+      await runPresetsCommand(args, ctx, {
+        hotkeys: new HotkeyRegistry(),
+        pi: makeStubPi(),
+        session: new ActivePresetSession(),
+      });
 
       expect(notify).toHaveBeenCalledExactlyOnceWith(message, severity);
       expect(custom).not.toHaveBeenCalled();
@@ -478,13 +456,11 @@ describe("handlePresetsCommand", () => {
   it("dispatches `reload` to runReload (empty-state path)", async () => {
     const { ctx, notify } = makeStubCtx();
 
-    await handlePresetsCommand(
-      "reload",
-      ctx,
-      makeStubPi(),
-      new ActivePresetSession(),
-      new HotkeyRegistry(),
-    );
+    await runPresetsCommand("reload", ctx, {
+      hotkeys: new HotkeyRegistry(),
+      pi: makeStubPi(),
+      session: new ActivePresetSession(),
+    });
     expect(notify).toHaveBeenCalledTimes(1);
     expect(notify.mock.calls[0]?.[0]).toContain("Reloaded 0 presets");
     expect(notify.mock.calls[0]?.[1]).toBe("info");
@@ -501,12 +477,14 @@ describe("handlePresetsCommand", () => {
     await mkdir(join(cwd, ".pi", "presets-plus"), { recursive: true });
     await writeFile(projectPath, JSON.stringify({ version: 2 }));
 
-    await handlePresetsCommand(
+    await runPresetsCommand(
       "reload",
       { ...ctx, cwd, isProjectTrusted: () => false },
-      makeStubPi(),
-      new ActivePresetSession(),
-      new HotkeyRegistry(),
+      {
+        hotkeys: new HotkeyRegistry(),
+        pi: makeStubPi(),
+        session: new ActivePresetSession(),
+      },
     );
 
     expect(notify.mock.calls).toEqual([
@@ -534,13 +512,11 @@ describe("handlePresetsCommand", () => {
       JSON.stringify({ version: 2, showInactiveStatus: true }),
     );
 
-    await handlePresetsCommand(
-      "reload",
-      ctx,
-      makeStubPi(),
+    await runPresetsCommand("reload", ctx, {
+      hotkeys: new HotkeyRegistry(),
+      pi: makeStubPi(),
       session,
-      new HotkeyRegistry(),
-    );
+    });
 
     expect(setStatus).toHaveBeenLastCalledWith(
       "presets-plus",
@@ -569,13 +545,11 @@ describe("handlePresetsCommand", () => {
       }),
     );
 
-    await handlePresetsCommand(
-      "reload",
-      ctx,
-      makeStubPi(),
-      new ActivePresetSession(),
-      new HotkeyRegistry(),
-    );
+    await runPresetsCommand("reload", ctx, {
+      hotkeys: new HotkeyRegistry(),
+      pi: makeStubPi(),
+      session: new ActivePresetSession(),
+    });
 
     expect(notify).toHaveBeenCalledExactlyOnceWith(
       'Reloaded 2 presets. Hotkey changes for "plan" take effect after /reload.',

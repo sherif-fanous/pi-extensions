@@ -17,7 +17,10 @@ import type {
   CompiledPolicyRule,
 } from "../../../src/store/policy.js";
 import type { LoadedPreset } from "../../../src/types.js";
-import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import {
+  createFakeContext,
+  createMarkerTheme,
+} from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const workName: CompiledPolicyMatcher = {
@@ -212,22 +215,11 @@ describe("runPolicy", () => {
     await writeFile(path, original);
 
     await runPolicy(
-      {
+      createFakeContext({
         cwd: "/work/project",
-        isProjectTrusted: () => true,
         mode: "print",
-        modelRegistry: {
-          find: () => undefined,
-          hasConfiguredAuth: () => false,
-        },
-        ui: {
-          notify,
-          theme: {
-            bold: (text: string) => `<bold>${text}</bold>`,
-            fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
-          },
-        },
-      } as unknown as ExtensionCommandContext,
+        ui: { notify, theme: createMarkerTheme() },
+      }),
       { appendEntry: vi.fn() },
     );
 
@@ -239,7 +231,7 @@ describe("runPolicy", () => {
     );
 
     expect(notify.mock.calls[0]?.[0]).toContain(
-      "<accent><bold>Presets Plus Policy</bold></accent>",
+      "<accent><b>Presets Plus Policy</b></accent>",
     );
 
     expect(notify.mock.calls[0]?.[0]).toContain(

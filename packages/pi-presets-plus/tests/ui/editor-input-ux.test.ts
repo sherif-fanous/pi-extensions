@@ -14,6 +14,7 @@ import {
 } from "@earendil-works/pi-tui";
 import {
   createFakeCustom,
+  createMarkerTheme,
   createPiKeybindings,
   createPlainTheme,
 } from "@sherif-fanous/pi-extensions-testing";
@@ -62,14 +63,11 @@ interface EditorHarness extends Component {
 const f1Input = "\u001bOP";
 
 /** Theme that wraps colored text in tags so tests can assert severity. */
-const colorTagTheme = {
-  bold: (text: string) => text,
-  fg: (name: string, text: string) => `<${name}>${text}</${name}>`,
-} as Theme;
+const colorTagTheme = createMarkerTheme();
 
 const model = { id: "claude-opus-4.5", provider: "anthropic" };
 
-/** Asserts that the message strip between Hotkey and Actions omits text. */
+/** Assert that the message strip between Hotkey and Actions omits text. */
 function expectBottomMessagesNotToContain(
   editor: EditorHarness,
   text: string,
@@ -85,7 +83,7 @@ function expectBottomMessagesNotToContain(
   );
 }
 
-/** Asserts that the error renders on a line below its field label. */
+/** Assert that the error renders on a line below its field label. */
 function expectErrorAfterLabel(
   editor: EditorHarness,
   label: string,
@@ -108,7 +106,7 @@ function lineContaining(editor: EditorHarness, text: string): string {
   return line;
 }
 
-/** Builds an extension context whose overlay hands back the mounted editor. */
+/** Build an extension context whose overlay hands back the mounted editor. */
 function makeCtx(
   capture: (editor: EditorHarness) => void,
   overlayHandle: OverlayHandle,
@@ -131,12 +129,12 @@ function makeCtx(
   };
 }
 
-/** Tabs forward through the given number of rows. */
+/** Tab forward through the given number of rows. */
 function moveFocus(editor: EditorHarness, count: number): void {
   for (let index = 0; index < count; index++) editor.handleInput("\t");
 }
 
-/** Opens the editor in new, edit, or duplicate mode and returns its parts. */
+/** Open the editor in new, edit, or duplicate mode and return its parts. */
 async function openHarness(
   options: {
     readonly duplicateSeed?: LoadedPreset;
@@ -199,7 +197,7 @@ async function openHarness(
   return { editor, overlayHandle, result };
 }
 
-/** Builds a saved preset that tests override field by field. */
+/** Build a saved preset that tests override field by field. */
 function preset(overrides: Partial<LoadedPreset> = {}): LoadedPreset {
   return {
     hotkey: "ctrl+1",

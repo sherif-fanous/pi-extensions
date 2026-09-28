@@ -8,6 +8,7 @@ import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { KeybindingsManager } from "@earendil-works/pi-tui";
 import { overlayOptions } from "@sherif-fanous/pi-extensions-core";
 import {
+  createFakeContext,
   createFakeCustom,
   createFakeTui,
   createMarkerTheme,
@@ -23,7 +24,7 @@ interface InfoDialogHarness {
   readonly rendered: string[];
 }
 
-/** Opens an info dialog, records its lines, and feeds it one keypress. */
+/** Open an info dialog, record its lines, and feed it one keypress. */
 function makeInfoDialogHarness(
   input = "\r",
   width = 48,
@@ -31,7 +32,7 @@ function makeInfoDialogHarness(
   theme: Theme = createPlainTheme(),
 ): InfoDialogHarness {
   const rendered: string[] = [];
-  const ctx = {
+  const ctx = createFakeContext({
     ui: {
       custom: createFakeCustom({
         keybindings,
@@ -41,7 +42,7 @@ function makeInfoDialogHarness(
         width,
       }),
     },
-  } as unknown as Parameters<typeof openInfoDialog>[0];
+  });
 
   return { ctx, rendered };
 }
@@ -50,7 +51,7 @@ function makeInfoDialogHarness(
 const LONG_BODY = Array.from({ length: 40 }, (_, index) => `line ${index}`);
 
 /**
- * Opens an info dialog on a short terminal, feeds it `keys`, and returns
+ * Open an info dialog on a short terminal, feed it `keys`, and return
  * the lines it renders afterwards, before closing it.
  */
 async function renderAfterKeys(
@@ -59,7 +60,7 @@ async function renderAfterKeys(
   keybindings: KeybindingsManager = createPiKeybindings(),
 ): Promise<string[]> {
   let lines: string[] = [];
-  const ctx = {
+  const ctx = createFakeContext({
     ui: {
       custom: createFakeCustom({
         keybindings,
@@ -75,7 +76,7 @@ async function renderAfterKeys(
         width: 48,
       }),
     },
-  } as unknown as Parameters<typeof openInfoDialog>[0];
+  });
 
   await openInfoDialog(ctx, { body: LONG_BODY.join("\n"), title: "Title" });
 

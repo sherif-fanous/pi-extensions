@@ -10,7 +10,7 @@ import {
 } from "../../src/ui/clear-summary.js";
 import { describe, expect, it } from "vitest";
 
-/** Builds a clear part, defaulting the fields a test does not care about. */
+/** Build a clear part, defaulting the fields a test does not care about. */
 const part = (
   action: ClearPart["action"],
   field: ClearPart["field"] = "model",

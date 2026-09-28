@@ -87,7 +87,7 @@ interface RunPickerOptions {
 }
 
 /**
- * Builds an extension context whose overlay mounts the picker, feeds it the
+ * Build an extension context whose overlay mounts the picker, feeds it the
  * given input, and exposes the spies each test asserts on.
  */
 function makeCtx(
@@ -139,7 +139,7 @@ function makeCtx(
   } as unknown as PickerHarness & Parameters<typeof openPicker>[0];
 }
 
-/** Opens the picker over fake presets and drains its pending timers. */
+/** Open the picker over fake presets and drain its pending timers. */
 async function runPicker(
   input: string,
   options: RunPickerOptions = {},

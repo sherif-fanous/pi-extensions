@@ -44,7 +44,7 @@ interface EditorHarness extends Component {
   state: EditorFormState;
 }
 
-/** Builds an extension context whose overlay mutates and saves the editor. */
+/** Build an extension context whose overlay mutates and saves the editor. */
 function makeCtx(mutate: (editor: EditorHarness) => void) {
   const reload = vi.fn();
   const notify = vi.fn();
@@ -71,7 +71,7 @@ function makeCtx(mutate: (editor: EditorHarness) => void) {
   };
 }
 
-/** Builds a saved preset that tests override field by field. */
+/** Build a saved preset that tests override field by field. */
 function preset(overrides: Partial<LoadedPreset> = {}): LoadedPreset {
   return {
     model: "claude-opus-4.5",
@@ -83,8 +83,8 @@ function preset(overrides: Partial<LoadedPreset> = {}): LoadedPreset {
 }
 
 /**
- * Binds a hotkey registry to the baseline presets, opens the editor, and
- * saves the requested edit.
+ * Bind a hotkey registry to the baseline presets, open the editor, and
+ * save the requested edit.
  */
 async function runSave(options: {
   readonly initial?: LoadedPreset;

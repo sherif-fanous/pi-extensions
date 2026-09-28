@@ -7,6 +7,7 @@ import {
   createFakeTui,
   createPiKeybindings,
   createPlainTheme,
+  flushPromises,
 } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it, vi } from "vitest";
 
@@ -149,7 +150,7 @@ describe("editor model selector", () => {
       await vi.waitFor(() =>
         expect(text(test.editor)).toContain("Name is required."),
       );
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await flushPromises();
       focus(test.editor, row);
 
       const before = text(test.editor);
@@ -203,7 +204,7 @@ describe("editor model selector", () => {
       await vi.waitFor(() =>
         expect(text(test.editor)).toContain("Model is required."),
       );
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await flushPromises();
       focus(test.editor, row);
       send(test.editor, "\r");
       send(componentAt(test.mounted, 1), "\r");

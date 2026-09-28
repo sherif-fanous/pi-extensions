@@ -5,10 +5,10 @@
  */
 import { ActivePresetSession } from "../src/activation/session.js";
 import type { LoadedPreset } from "../src/types.js";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+import {
+  createFakeContext,
+  createFakePi,
+} from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requestActivationMock = vi.hoisted(() => vi.fn());
@@ -22,16 +22,11 @@ const { applyPresetFlag } = await import("../src/flag.js");
 function fakeCtx() {
   const notify = vi.fn();
 
-  return {
-    ctx: { ui: { notify } } as unknown as ExtensionContext,
-    notify,
-  };
+  return { ctx: createFakeContext({ ui: { notify } }), notify };
 }
 
 function fakePi(value: string | undefined) {
-  return {
-    getFlag: vi.fn(() => value),
-  } as unknown as ExtensionAPI;
+  return createFakePi({ getFlag: () => value }).pi;
 }
 
 function preset(

@@ -10,8 +10,9 @@ import {
 import { ActivePresetSession } from "../../src/activation/session.js";
 import type { LoadedPreset, ThinkingLevel } from "../../src/types.js";
 import { makeStubModelRegistry } from "../helpers/model-registry.js";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
+import { createFakeContext } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it } from "vitest";
 
 describe("handleModelSelectDrift", () => {
@@ -182,19 +183,15 @@ function makeHarness(options: HarnessOptions = {}): {
   const ctxModel = options.ctxModel ?? { id: "claude", provider: "anthropic" };
 
   return {
-    ctx: {
-      model: { ...ctxModel, reasoning: true },
+    ctx: createFakeContext({
+      model: { ...ctxModel, reasoning: true } as Model<Api>,
       modelRegistry: makeStubModelRegistry({
         models: {
           anthropic: { claude: { hasKey: true, reasoning: true } },
           openai: { gpt: { hasKey: true, reasoning: true } },
         },
       }),
-      ui: {
-        setStatus: () => undefined,
-        theme: createPlainTheme(),
-      },
-    } as unknown as Pick<ExtensionContext, "model" | "modelRegistry" | "ui">,
+    }),
     pi: {
       getActiveTools: () => options.piTools ?? [],
       getThinkingLevel: () => options.piThinking ?? "high",

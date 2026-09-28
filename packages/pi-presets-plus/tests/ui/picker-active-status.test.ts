@@ -54,7 +54,7 @@ const ansiTheme = {
   fg: (_name: string, value: string) => `\u001B[38;5;42m${value}\u001B[39m`,
 } as Theme;
 
-/** Builds the state of an active preset, clean or dirty. */
+/** Build the state of an active preset, clean or dirty. */
 function activeState(
   preset: LoadedPreset,
   options: { readonly dirty?: true } = {},
@@ -68,18 +68,18 @@ function activeState(
   };
 }
 
-/** Mounts the picker with the ANSI theme. */
+/** Mount the picker with the ANSI theme. */
 async function mountAnsiPicker(options: MountOptions = {}): Promise<Component> {
   return mountPickerWithTheme(ansiTheme, options);
 }
 
-/** Mounts the picker with the plain theme. */
+/** Mount the picker with the plain theme. */
 async function mountPicker(options: MountOptions = {}): Promise<Component> {
   return mountPickerWithTheme(createPlainTheme(), options);
 }
 
 /**
- * Opens the picker over fake presets and returns the mounted component,
+ * Open the picker over fake presets and return the mounted component,
  * restoring the session to the requested active preset first.
  */
 async function mountPickerWithTheme(

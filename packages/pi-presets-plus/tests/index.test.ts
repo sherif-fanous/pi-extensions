@@ -11,11 +11,17 @@ import {
   getProjectPresetsPath,
   getUserPresetsPath,
 } from "../src/store/paths.js";
+import type { ThinkingLevel } from "../src/types.js";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import type {
-  ExtensionAPI,
   ExtensionContext,
+  SessionStartEvent,
 } from "@earendil-works/pi-coding-agent";
-import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
+import {
+  createFakeContext,
+  createFakePi,
+  type FakePi,
+} from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { loadAllMock, maybeApplyPolicyDefaultMock } = vi.hoisted(() => ({
@@ -41,9 +47,6 @@ const { maybeApplyPolicyDefault: realMaybeApplyPolicyDefault } =
     "../src/activation/policy-default.js",
   );
 
-type CommandHandler = (args: string, ctx: ExtensionContext) => Promise<void>;
-type Handler = (event: unknown, ctx: ExtensionContext) => Promise<unknown>;
-
 let agentDir: string;
 let previousAgentDir: string | undefined;
 
@@ -54,71 +57,44 @@ function makeContext(
   trusted = true,
 ) {
   const notify = vi.fn();
-  const ctx = {
+  const ctx = createFakeContext({
     cwd: join(agentDir, "project"),
     isProjectTrusted: () => trusted,
     mode,
-    model: { id: "gpt-5", provider: "openai" },
-    modelRegistry: { find: vi.fn() },
+    model: { id: "gpt-5", provider: "openai" } as Model<Api>,
     sessionManager: { getBranch: () => branch },
     ui: {
       notify,
-      setStatus: (key: string, value: string | undefined) => {
+      setStatus: (key, value) => {
         status[key] = value;
       },
-      theme: createPlainTheme(),
     },
-  } as unknown as ExtensionContext;
+  });
 
   return { ctx, notify };
 }
 
-function makePi(): {
-  commands: Map<string, CommandHandler>;
-  handlers: Map<string, Handler>;
-  pi: ExtensionAPI;
-  spies: {
-    appendEntry: ReturnType<typeof vi.fn>;
-    getThinkingLevel: ReturnType<typeof vi.fn>;
-    registerShortcut: ReturnType<typeof vi.fn>;
-    setActiveTools: ReturnType<typeof vi.fn>;
-    setModel: ReturnType<typeof vi.fn>;
-    setThinkingLevel: ReturnType<typeof vi.fn>;
-  };
-} {
-  const commands = new Map<string, CommandHandler>();
-  const handlers = new Map<string, Handler>();
+function makePi() {
   const spies = {
-    appendEntry: vi.fn(),
-    getThinkingLevel: vi.fn(() => "medium"),
-    registerShortcut: vi.fn(),
+    getThinkingLevel: vi.fn((): ThinkingLevel => "medium"),
     setActiveTools: vi.fn(),
     setModel: vi.fn(),
     setThinkingLevel: vi.fn(),
   };
-  const pi = {
-    appendEntry: spies.appendEntry,
-    getActiveTools: vi.fn(() => ["read", "bash"]),
-    getAllTools: vi.fn(() => []),
-    getFlag: vi.fn(() => undefined),
-    getThinkingLevel: spies.getThinkingLevel,
-    on: vi.fn((event: string, handler: Handler) => {
-      handlers.set(event, handler);
-    }),
-    registerCommand: vi.fn(
-      (name: string, options: { handler: CommandHandler }) => {
-        commands.set(name, options.handler);
-      },
-    ),
-    registerEntryRenderer: vi.fn(),
-    registerFlag: vi.fn(),
-    registerShortcut: spies.registerShortcut,
-    setActiveTools: spies.setActiveTools,
-    setModel: spies.setModel,
-    setThinkingLevel: spies.setThinkingLevel,
-  } as unknown as ExtensionAPI;
+  const fake = createFakePi({
+    ...spies,
+    getActiveTools: () => ["read", "bash"],
+  });
 
-  return { commands, handlers, pi, spies };
+  return { fake, spies };
+}
+
+async function startSession(
+  fake: FakePi,
+  ctx: ExtensionContext,
+  reason: SessionStartEvent["reason"] = "startup",
+): Promise<void> {
+  await fake.emit({ reason, type: "session_start" }, ctx);
 }
 
 async function writeConfig(contents: string): Promise<void> {
@@ -170,11 +146,11 @@ describe("/presets command", () => {
   it("reports a failing subcommand as an error notification", async () => {
     loadAllMock.mockRejectedValue(new Error("disk on fire"));
 
-    const { commands, pi } = makePi();
+    const { fake } = makePi();
     const { ctx, notify } = makeContext({});
 
-    presetsPlus(pi);
-    await commands.get("presets")?.("reload", ctx);
+    presetsPlus(fake.pi);
+    await fake.runCommand("presets", "reload", ctx);
 
     expect(notify).toHaveBeenCalledWith(
       "Presets Plus command failed: disk on fire.",
@@ -190,18 +166,22 @@ describe("session_start configuration", () => {
       JSON.stringify({ version: 2, showInactiveStatus: false }),
     );
 
-    const { handlers, pi } = makePi();
+    const { fake } = makePi();
     const status: Record<string, string | undefined> = {};
     const { ctx } = makeContext(status);
 
-    presetsPlus(pi);
-    await handlers.get("session_start")?.({ type: "session_start" }, ctx);
+    presetsPlus(fake.pi);
+    await startSession(fake, ctx);
 
     expect(status["presets-plus"]).toBeUndefined();
 
     await writeConfig(JSON.stringify({ version: 2, showInactiveStatus: true }));
-    presetsPlus(pi);
-    await handlers.get("session_start")?.({ type: "session_start" }, ctx);
+
+    // Pi loads the extension again, with a new API, on reload.
+    const reloaded = makePi().fake;
+
+    presetsPlus(reloaded.pi);
+    await startSession(reloaded, ctx, "reload");
 
     expect(status["presets-plus"]).toBe("Preset: none");
   });
@@ -209,12 +189,12 @@ describe("session_start configuration", () => {
   it("reports one successful migration notification", async () => {
     await writeLegacyPresets(JSON.stringify({ version: 1, presets: [] }));
 
-    const { handlers, pi } = makePi();
+    const { fake } = makePi();
     const status: Record<string, string | undefined> = {};
     const { ctx, notify } = makeContext(status);
 
-    presetsPlus(pi);
-    await handlers.get("session_start")?.({ type: "session_start" }, ctx);
+    presetsPlus(fake.pi);
+    await startSession(fake, ctx);
 
     expect(notify).toHaveBeenCalledWith(
       `Presets Plus migrated its configuration to ${join(agentDir, "presets-plus", "config.json")}.`,
@@ -225,12 +205,12 @@ describe("session_start configuration", () => {
   it("warns when a scope migration fails", async () => {
     await writeLegacyPresets("{");
 
-    const { handlers, pi } = makePi();
+    const { fake } = makePi();
     const status: Record<string, string | undefined> = {};
     const { ctx, notify } = makeContext(status);
 
-    presetsPlus(pi);
-    await handlers.get("session_start")?.({ type: "session_start" }, ctx);
+    presetsPlus(fake.pi);
+    await startSession(fake, ctx);
 
     expect(notify).toHaveBeenCalledWith(
       expect.stringContaining("README"),
@@ -244,12 +224,12 @@ describe("session_start configuration", () => {
     await writeLegacyPresets(JSON.stringify({ version: 1, presets: [] }));
     await writeProjectLegacyPresets("{", cwd);
 
-    const { handlers, pi } = makePi();
+    const { fake } = makePi();
     const status: Record<string, string | undefined> = {};
     const { ctx, notify } = makeContext(status);
 
-    presetsPlus(pi);
-    await handlers.get("session_start")?.({ type: "session_start" }, ctx);
+    presetsPlus(fake.pi);
+    await startSession(fake, ctx);
 
     expect(notify).toHaveBeenCalledWith(
       `Presets Plus migrated its configuration to ${join(agentDir, "presets-plus", "config.json")}.`,
@@ -265,7 +245,7 @@ describe("session_start configuration", () => {
   it.each(["startup", "reload", "new", "resume", "fork"] as const)(
     "captures startup values before %s preset processing",
     async (reason) => {
-      const { handlers, pi, spies } = makePi();
+      const { fake, spies } = makePi();
       const status: Record<string, string | undefined> = {};
       const { ctx } = makeContext(status);
 
@@ -284,11 +264,8 @@ describe("session_start configuration", () => {
       });
       maybeApplyPolicyDefaultMock.mockResolvedValue(false);
 
-      presetsPlus(pi);
-      await handlers.get("session_start")?.(
-        { reason, type: "session_start" },
-        ctx,
-      );
+      presetsPlus(fake.pi);
+      await startSession(fake, ctx, reason);
 
       expect(maybeApplyPolicyDefaultMock).toHaveBeenCalledWith(
         expect.anything(),
@@ -327,16 +304,13 @@ describe("session_start configuration", () => {
         type: "custom" as const,
       },
     ] as ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
-    const { handlers, pi, spies } = makePi();
+    const { fake, spies } = makePi();
     const status: Record<string, string | undefined> = {};
     const { ctx } = makeContext(status, "tui", branch);
 
     maybeApplyPolicyDefaultMock.mockResolvedValue(false);
-    presetsPlus(pi);
-    await handlers.get("session_start")?.(
-      { reason: "resume", type: "session_start" },
-      ctx,
-    );
+    presetsPlus(fake.pi);
+    await startSession(fake, ctx, "resume");
 
     expect(maybeApplyPolicyDefaultMock).toHaveBeenCalledWith(
       expect.anything(),
@@ -394,25 +368,40 @@ describe("session_start configuration", () => {
       warnings: [],
     });
 
-    const { handlers, pi, spies } = makePi();
+    const { fake, spies } = makePi();
     const status: Record<string, string | undefined> = {};
     const { ctx, notify } = makeContext(status, "print");
 
-    presetsPlus(pi);
-    await handlers.get("session_start")?.({ type: "session_start" }, ctx);
+    presetsPlus(fake.pi);
+    await startSession(fake, ctx);
 
-    const beforeTurn = await handlers.get("before_agent_start")?.(
-      { systemPrompt: "Baseline prompt." },
+    const beforeTurn = await fake.emit(
+      {
+        prompt: "",
+        systemPrompt: "Baseline prompt.",
+        systemPromptOptions: {
+          appendSystemPrompt: "",
+          contextFiles: [],
+          cwd: ctx.cwd,
+          promptGuidelines: [],
+          sections: {},
+          selectedTools: [],
+          skills: [],
+          toolGuidelines: {},
+          toolSnippets: {},
+        },
+        type: "before_agent_start",
+      },
       ctx,
     );
 
     expect(spies.setModel).not.toHaveBeenCalled();
     expect(spies.setThinkingLevel).not.toHaveBeenCalled();
     expect(spies.setActiveTools).not.toHaveBeenCalled();
-    expect(spies.appendEntry).not.toHaveBeenCalled();
-    expect(spies.registerShortcut).toHaveBeenCalled();
+    expect(fake.appendedEntries).toEqual([]);
+    expect(fake.shortcuts.size).toBeGreaterThan(0);
     expect(status["presets-plus"]).toBe("Preset: none");
-    expect(beforeTurn).toBeUndefined();
+    expect(beforeTurn).toEqual([undefined]);
     expect(notify).not.toHaveBeenCalledWith(
       expect.stringContaining("directory-default"),
       expect.anything(),
@@ -428,11 +417,11 @@ describe("session_start configuration", () => {
       cwd,
     );
 
-    const { handlers, pi } = makePi();
+    const { fake } = makePi();
     const { ctx, notify } = makeContext({});
 
-    presetsPlus(pi);
-    await handlers.get("session_start")?.({ type: "session_start" }, ctx);
+    presetsPlus(fake.pi);
+    await startSession(fake, ctx);
 
     expect(notify).toHaveBeenCalledWith(
       `Presets Plus migrated its configuration to ${getConfigPath("user", cwd, agentDir)} and ${getConfigPath("project", cwd, agentDir)}.`,
@@ -457,12 +446,12 @@ describe("session_start configuration", () => {
       }),
     );
 
-    const { handlers, pi, spies } = makePi();
+    const { fake } = makePi();
     const status: Record<string, string | undefined> = {};
     const { ctx, notify } = makeContext(status, "tui", [], false);
 
-    presetsPlus(pi);
-    await handlers.get("session_start")?.({ type: "session_start" }, ctx);
+    presetsPlus(fake.pi);
+    await startSession(fake, ctx);
 
     expect(notify.mock.calls).toEqual([
       [
@@ -471,17 +460,17 @@ describe("session_start configuration", () => {
       ],
     ]);
     expect(status["presets-plus"]).toBe("Preset: none");
-    expect(spies.registerShortcut).not.toHaveBeenCalled();
+    expect(fake.shortcuts.size).toBe(0);
   });
 
   it("stays silent in an untrusted project without a project configuration", async () => {
     loadAllMock.mockImplementation(realLoadAll);
 
-    const { handlers, pi } = makePi();
+    const { fake } = makePi();
     const { ctx, notify } = makeContext({}, "tui", [], false);
 
-    presetsPlus(pi);
-    await handlers.get("session_start")?.({ type: "session_start" }, ctx);
+    presetsPlus(fake.pi);
+    await startSession(fake, ctx);
 
     expect(notify).not.toHaveBeenCalled();
   });
@@ -494,11 +483,11 @@ describe("session_start configuration", () => {
 
     await writeProjectLegacyPresets(legacy, cwd);
 
-    const { handlers, pi } = makePi();
+    const { fake } = makePi();
     const { ctx, notify } = makeContext({}, "tui", [], false);
 
-    presetsPlus(pi);
-    await handlers.get("session_start")?.({ type: "session_start" }, ctx);
+    presetsPlus(fake.pi);
+    await startSession(fake, ctx);
 
     expect(notify.mock.calls).toEqual([
       [
@@ -515,12 +504,12 @@ describe("session_start configuration", () => {
   it("warns about malformed configuration without skipping preset loading", async () => {
     await writeConfig("{");
 
-    const { handlers, pi } = makePi();
+    const { fake } = makePi();
     const status: Record<string, string | undefined> = {};
     const { ctx, notify } = makeContext(status);
 
-    presetsPlus(pi);
-    await handlers.get("session_start")?.({ type: "session_start" }, ctx);
+    presetsPlus(fake.pi);
+    await startSession(fake, ctx);
 
     expect(loadAllMock).toHaveBeenCalledOnce();
     expect(notify).toHaveBeenCalledWith(

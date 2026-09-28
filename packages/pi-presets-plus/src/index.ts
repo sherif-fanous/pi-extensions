@@ -13,8 +13,8 @@ import { ActivePresetSession } from "./activation/session.js";
 import { captureStartupSelection } from "./activation/startup-selection.js";
 import {
   getArgumentCompletions,
-  handlePresetsCommand,
-} from "./commands/presets/index.js";
+  runPresetsCommand,
+} from "./commands/presets/router.js";
 import { EXTENSION_NAME } from "./extension-name.js";
 import { applyPresetFlag, registerPresetFlag } from "./flag.js";
 import {
@@ -34,7 +34,7 @@ import {
 } from "@sherif-fanous/pi-extensions-core";
 
 /** Register every pi-presets-plus command, flag, and event handler. */
-export default function presetsPlus(pi: ExtensionAPI) {
+export default function presetsPlus(pi: ExtensionAPI): void {
   const session = new ActivePresetSession();
   const hotkeys = new HotkeyRegistry();
   const presetNamesLoader: { fn: () => Promise<readonly string[]> } = {
@@ -49,7 +49,7 @@ export default function presetsPlus(pi: ExtensionAPI) {
     getArgumentCompletions: (prefix) =>
       getArgumentCompletions(prefix, () => presetNamesLoader.fn()),
     handler: guardCommand(EXTENSION_NAME, (args, ctx) =>
-      handlePresetsCommand(args, ctx, pi, session, hotkeys),
+      runPresetsCommand(args, ctx, { hotkeys, pi, session }),
     ),
   });
 

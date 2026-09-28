@@ -13,8 +13,12 @@ import type { Api, Model, ThinkingLevelMap } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
+  ToolInfo,
 } from "@earendil-works/pi-coding-agent";
-import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
+import {
+  createFakeContext,
+  createFakePi,
+} from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it } from "vitest";
 
 interface FakeHarness {
@@ -709,8 +713,10 @@ function makeHarness(
   const setModelCalls: string[] = [];
   const setToolsCalls: string[][] = [];
   const status: Record<string, string | undefined> = {};
-  const ctx = {
+  const ctx = createFakeContext({
     cwd: process.cwd(),
+    // Outside the TUI, so command reports arrive as notifications.
+    mode: "print",
     model: model("anthropic", "old", true),
     modelRegistry: makeStubModelRegistry({
       models: {
@@ -729,31 +735,31 @@ function makeHarness(
       },
     }),
     ui: {
-      notify(message: string, severity?: string) {
+      notify(message, severity) {
         notifications.push(message);
         notificationCalls.push([message, severity]);
       },
-      setStatus(key: string, value: string | undefined) {
+      setStatus(key, value) {
         status[key] = value;
       },
-      theme: createPlainTheme(),
     },
-  } as ExtensionCommandContext;
+  });
   const session = new ActivePresetSession();
-  const pi = {
-    appendEntry() {},
+  const { pi } = createFakePi({
     getActiveTools: () => tools,
     getAllTools: () =>
-      (options.allTools ?? ["bash", "read"]).map((name) => ({ name })),
+      (options.allTools ?? ["bash", "read"]).map(
+        (name) => ({ name }) as ToolInfo,
+      ),
     getThinkingLevel: () => thinkingLevel,
-    sendMessage(message: unknown) {
+    sendMessage(message) {
       messages.push(message);
     },
-    setActiveTools(nextTools: string[]) {
+    setActiveTools(nextTools) {
       tools = nextTools;
       setToolsCalls.push(nextTools);
     },
-    setModel(nextModel: Model<Api>) {
+    setModel(nextModel) {
       setModelCalls.push(`${nextModel.provider}/${nextModel.id}`);
 
       if (nextModel.id === options.failModel) return Promise.resolve(false);
@@ -767,10 +773,10 @@ function makeHarness(
 
       return Promise.resolve(true);
     },
-    setThinkingLevel(nextLevel: ThinkingLevel) {
+    setThinkingLevel(nextLevel) {
       thinkingLevel = nextLevel;
     },
-  } as unknown as ExtensionAPI;
+  });
 
   return {
     ctx,

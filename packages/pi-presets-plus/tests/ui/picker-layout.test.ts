@@ -10,7 +10,7 @@ import {
 } from "../../src/ui/picker-layout.js";
 import { describe, expect, it, vi } from "vitest";
 
-/** Reads card heights by index, treating anything past the end as zero. */
+/** Read card heights by index, treating anything past the end as zero. */
 function heights(values: readonly number[]): (index: number) => number {
   return (index) => values[index] ?? 0;
 }

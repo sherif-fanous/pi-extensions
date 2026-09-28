@@ -35,7 +35,7 @@ vi.mock("../../src/store/api.js", async (importOriginal) => {
 
 const mountPicker = pickerMounter(loadAll);
 
-/** Builds numbered presets whose names are easy to find in rendered output. */
+/** Build numbered presets whose names are easy to find in rendered output. */
 function numberedPresets(count: number): LoadedPreset[] {
   return Array.from({ length: count }, (_, index) =>
     makeLoadedPreset(`preset-${String(index).padStart(2, "0")}`),

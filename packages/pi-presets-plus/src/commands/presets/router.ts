@@ -27,6 +27,13 @@ import {
   subcommandCompletions,
 } from "@sherif-fanous/pi-extensions-core";
 
+/** What `/presets` and its subcommands need besides arguments and context. */
+export interface PresetsCommandDeps {
+  readonly hotkeys: HotkeyRegistry;
+  readonly pi: ExtensionAPI;
+  readonly session: ActivePresetSession;
+}
+
 /**
  * One `/presets` subcommand: the token, the description its completion
  * shows, whether a preset name may follow it, and its runner.
@@ -39,9 +46,7 @@ interface Subcommand {
   run(
     ctx: ExtensionCommandContext,
     args: readonly string[],
-    pi: ExtensionAPI,
-    session: ActivePresetSession,
-    hotkeys: HotkeyRegistry,
+    deps: PresetsCommandDeps,
   ): Promise<void>;
 }
 
@@ -50,28 +55,28 @@ const SUBCOMMANDS: readonly Subcommand[] = [
   {
     name: "reload",
     description: "Reload presets from disk",
-    run: runReloadWrapper,
+    run: (ctx, _args, { hotkeys, session }) => runReload(ctx, session, hotkeys),
   },
   {
     name: "clear",
     description: "Clear the active preset",
-    run: runClearWrapper,
+    run: (ctx, _args, { pi, session }) => clear(ctx, pi, session),
   },
   {
     name: "status",
     description: "Show the active preset's status",
-    run: runStatusWrapper,
+    run: (ctx, _args, { pi, session }) => runStatus(ctx, pi, session),
   },
   {
     name: "policy",
     description: "Show the preset policy for this directory",
-    run: runPolicyWrapper,
+    run: (ctx, _args, { pi }) => runPolicy(ctx, pi),
   },
   {
     name: "show-prompt",
     acceptsName: true,
     description: "Show a preset's prompt, the active one by default",
-    run: runShowPrompt,
+    run: (ctx, args, { session }) => runShowPrompt(ctx, args, session),
   },
 ] as const;
 
@@ -115,17 +120,15 @@ export async function getArgumentCompletions(
  * before the unknown-subcommand warning. A subcommand matches the whole
  * argument, except that `show-prompt` may be followed by a preset name.
  */
-export async function handlePresetsCommand(
+export async function runPresetsCommand(
   args: string,
   ctx: ExtensionCommandContext,
-  pi: ExtensionAPI,
-  session: ActivePresetSession,
-  hotkeys: HotkeyRegistry,
+  deps: PresetsCommandDeps,
 ): Promise<void> {
   const trimmedArgs = args.trim();
 
   if (trimmedArgs.length === 0) {
-    await runPicker(ctx, pi, session, hotkeys);
+    await runPicker(ctx, deps);
 
     return;
   }
@@ -146,12 +149,12 @@ export async function handlePresetsCommand(
   );
 
   if (target) {
-    await target.run(ctx, rest, pi, session, hotkeys);
+    await target.run(ctx, rest, deps);
 
     return;
   }
 
-  if (await activateNamedPreset(trimmedArgs, ctx, pi, session)) return;
+  if (await activateNamedPreset(trimmedArgs, ctx, deps)) return;
 
   notifyUsageWarning(ctx, EXTENSION_NAME, trimmedArgs, USAGE_FORMS);
 }
@@ -160,8 +163,7 @@ export async function handlePresetsCommand(
 async function activateNamedPreset(
   name: string,
   ctx: ExtensionCommandContext,
-  pi: ExtensionAPI,
-  session: ActivePresetSession,
+  { pi, session }: PresetsCommandDeps,
 ): Promise<boolean> {
   const { presets, warnings } = await loadAll(ctx);
   const preset = presets.find(
@@ -185,20 +187,9 @@ async function activateNamedPreset(
   return true;
 }
 
-async function runClearWrapper(
-  ctx: ExtensionCommandContext,
-  _args: readonly string[],
-  pi: ExtensionAPI,
-  session: ActivePresetSession,
-): Promise<void> {
-  await clear(ctx, pi, session);
-}
-
 async function runPicker(
   ctx: ExtensionCommandContext,
-  pi: ExtensionAPI,
-  session: ActivePresetSession,
-  hotkeys: HotkeyRegistry,
+  { hotkeys, pi, session }: PresetsCommandDeps,
 ): Promise<void> {
   // Outside the TUI, ui.custom resolves undefined and no picker can open.
   // The preset editor opens only from the picker, so this gates it too.
@@ -217,31 +208,4 @@ async function runPicker(
     pi,
     session,
   });
-}
-
-async function runPolicyWrapper(
-  ctx: ExtensionCommandContext,
-  _args: readonly string[],
-  pi: ExtensionAPI,
-): Promise<void> {
-  await runPolicy(ctx, pi);
-}
-
-async function runReloadWrapper(
-  ctx: ExtensionCommandContext,
-  _args: readonly string[],
-  _pi: ExtensionAPI,
-  session: ActivePresetSession,
-  hotkeys: HotkeyRegistry,
-): Promise<void> {
-  await runReload(ctx, session, hotkeys);
-}
-
-async function runStatusWrapper(
-  ctx: ExtensionCommandContext,
-  _args: readonly string[],
-  pi: ExtensionAPI,
-  session: ActivePresetSession,
-): Promise<void> {
-  await runStatus(ctx, pi, session);
 }

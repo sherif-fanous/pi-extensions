@@ -4,7 +4,7 @@
  * reporting loader warnings as a single notification.
  */
 import type { LoadedPreset } from "../../src/types.js";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { createFakeContext } from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const loadPolicyMock = vi.hoisted(() => vi.fn());
@@ -32,11 +32,7 @@ function context() {
   const notify = vi.fn();
 
   return {
-    ctx: {
-      cwd: "/work/project",
-      mode: "tui",
-      ui: { notify },
-    } as unknown as Pick<ExtensionContext, "cwd" | "mode" | "ui">,
+    ctx: createFakeContext({ cwd: "/work/project", ui: { notify } }),
     notify,
   };
 }

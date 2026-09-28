@@ -14,7 +14,10 @@ import {
   presetCard,
 } from "../../src/ui/widgets.js";
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
+import {
+  createMarkerTheme,
+  createPlainTheme,
+} from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it } from "vitest";
 
 /** Preset the card tests start from before overriding single fields. */
@@ -87,10 +90,7 @@ describe("preset widget formatting", () => {
   });
 
   it("keeps Scope and Model values unmuted while labels stay muted", () => {
-    const colorTheme: Pick<Theme, "fg" | "bold"> = {
-      bold: (text) => text,
-      fg: (color, text) => `<${color}>${text}</${color}>`,
-    };
+    const colorTheme = createMarkerTheme();
 
     const lines = presetCard(basePreset, colorTheme, {
       active: false,
@@ -108,10 +108,7 @@ describe("preset widget formatting", () => {
   });
 
   it("colors max with thinkingMax when the theme knows it", () => {
-    const colorTheme: Pick<Theme, "fg" | "bold"> = {
-      bold: (text) => text,
-      fg: (color, text) => `<${color}>${text}</${color}>`,
-    };
+    const colorTheme = createMarkerTheme();
 
     const lines = presetCard(
       { ...basePreset, thinkingLevel: "max" },
