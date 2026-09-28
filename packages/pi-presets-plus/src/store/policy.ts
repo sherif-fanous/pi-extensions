@@ -5,7 +5,7 @@
  */
 import type { LoadedPreset } from "../types.js";
 import { loadScope } from "./config.js";
-import { getGlobalConfigPath } from "./paths.js";
+import { getConfigPath } from "./paths.js";
 import { isRecord } from "@sherif-fanous/pi-extensions-core";
 
 /** One allow, prohibit, or default pattern with its regex compiled. */
@@ -85,13 +85,14 @@ export function isPermitted(
   );
 }
 
-/** Read and compile the global policy fresh on every call. */
+/** Read and compile the user policy fresh on every call. */
 export async function loadPolicy(
   agentDir?: string,
   cwd: string = process.cwd(),
 ): Promise<PolicyLoadResult> {
-  const loaded = await loadScope("user", cwd, agentDir);
-  const path = getGlobalConfigPath(agentDir);
+  // The user scope never consults project trust.
+  const loaded = await loadScope("user", { agentDir, cwd, trusted: false });
+  const path = getConfigPath("user", cwd, agentDir);
   const documentPolicy = loaded.document.policy;
 
   if (documentPolicy === undefined) {

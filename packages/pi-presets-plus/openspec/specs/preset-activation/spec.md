@@ -454,32 +454,34 @@ extensions in the chain.
 ### Requirement: Persist active preset name in the session
 
 When a preset is applied or cleared, the package SHALL append a custom session
-entry of type `presets-plus:active` recording the new active preset name (or
-`null` on clear) and the active scope, so that session restore can recover the
-active state. The package SHALL NOT persist the overlay baseline, `lastApplied`,
-`owned`, or `applyCount`: those are in-memory only.
+entry of type `presets-plus:active` recording the payload version `1`, the new
+active preset name (or `null` on clear), and the active scope, so that session
+restore can recover the active state. The entry type and the payload version are
+named constants. The package SHALL NOT persist the overlay baseline,
+`lastApplied`, `owned`, or `applyCount`: those are in-memory only.
 
 #### Scenario: Apply persists name and scope
 
 - **WHEN** preset `plan` (project scope) is applied
 - **THEN** a `presets-plus:active` custom entry SHALL be appended with
-  `{ name: "plan", scope: "project" }`
+  `{ version: 1, name: "plan", scope: "project" }`
 
 #### Scenario: Clear persists a null name
 
 - **WHEN** the active preset is cleared (any branch, including soft clear)
 - **THEN** a `presets-plus:active` custom entry SHALL be appended with
-  `{ name: null }`
+  `{ version: 1, name: null }`
 
 ### Requirement: Session restore re-attaches active preset without re-applying or fabricating a baseline
 
 On `session_start`, the package SHALL inspect the current branch for the most
-recent `presets-plus:active` entry. If a non-null name is present and the named
-preset still loads successfully and is available, the package SHALL set the
-in-memory active preset state to a `priorUnknown` shape
-(`restore.kind === "unknown"`) and SHALL NOT invoke `pi.setModel`,
-`pi.setThinkingLevel`, or `pi.setActiveTools`, and SHALL NOT fabricate an
-overlay baseline.
+recent `presets-plus:active` entry. A payload without `version` SHALL read as
+version 1; a payload with any other version SHALL be treated as no active
+preset. If a non-null name is present and the named preset still loads
+successfully and is available, the package SHALL set the in-memory active preset
+state to a `priorUnknown` shape (`restore.kind === "unknown"`) and SHALL NOT
+invoke `pi.setModel`, `pi.setThinkingLevel`, or `pi.setActiveTools`, and SHALL
+NOT fabricate an overlay baseline.
 
 #### Scenario: Session resumes with previously active preset
 
@@ -503,6 +505,13 @@ overlay baseline.
 
 - **WHEN** the most recent `presets-plus:active` entry has `name: null`
 - **THEN** no active preset SHALL be set on restore
+
+#### Scenario: Session entry from another payload version
+
+- **WHEN** the most recent `presets-plus:active` entry has a `version` other
+  than `1`
+- **THEN** no active preset SHALL be set on restore and no warning SHALL be
+  added
 
 #### Scenario: Re-apply after restore starts a new baseline
 
@@ -741,12 +750,16 @@ introduced in change 2:
   adding it to LLM context. The report SHALL apply its theme when rendered and
   SHALL NOT persist ANSI styling. In RPC mode, it SHALL use the RPC-compatible
   notification path. JSON and print modes are out of scope. Row labels SHALL be
-  aligned to the longest label in the report. Warnings found while loading
-  presets SHALL follow the rows as a `Warnings:` line and one `- <warning>` line
-  per warning. The report SHALL be styled by the command-report rules: its first
-  line is a bold accent-colored heading, the `Warnings:` line and every line
-  after it are warning-colored, and on every other line the label up to and
-  including the first colon is muted.
+  aligned to the longest label in the report. After the rows and a blank line,
+  the report SHALL show the `Config:` block from core's `configStatusLines`: a
+  `User:` and a `Project:` row with each file's state (`loaded`, `not found`,
+  `invalid: <reason>`, or `skipped (untrusted)`) and its path on the next line.
+  Warnings about values in the loaded files SHALL follow as a `Warnings:` line
+  and one `- <warning>` line per warning; file problems shown in the `Config:`
+  block SHALL NOT be repeated there. The report SHALL be styled by the
+  command-report rules: its first line is a bold accent-colored heading, the
+  `Warnings:` line and every line after it are warning-colored, and on every
+  other line the label up to and including the first colon is muted.
 
 The picker provides additional in-overlay paths to `clear` and `status` whose
 textual content is identical but whose delivery surface is the shared
@@ -775,6 +788,15 @@ info-dialog overlay (see the picker capability for those scenarios).
 - **WHEN** the user runs `/presets status` and no preset is active
 - **THEN** the command report SHALL be the `Presets Plus Status` heading
   followed by `No preset is active.` on its own line, indented two spaces
+- **AND** the `Config:` block SHALL follow after a blank line
+
+#### Scenario: Status shows a skipped project file
+
+- **WHEN** the user runs `/presets status` in an untrusted project that has a
+  project configuration file
+- **THEN** the `Config:` block SHALL show `Project: skipped (untrusted)` with
+  the file's path
+- **AND** the untrusted-project warning SHALL NOT appear under `Warnings:`
 
 #### Scenario: Status with baseline-managed attachment from prompt
 

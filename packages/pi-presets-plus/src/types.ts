@@ -4,9 +4,14 @@
  * thinking levels a preset may record.
  */
 
-/** A parsed version 2 configuration document, including unknown fields. */
+import type { ConfigFile } from "@sherif-fanous/pi-extensions-core";
+
+/**
+ * A parsed version 2 configuration document, including unknown fields. A
+ * document without `version` reads as version 2.
+ */
 export interface ConfigDocument {
-  version: 2;
+  version?: 2;
   showInactiveStatus?: boolean;
   presets?: unknown[];
   policy?: unknown;
@@ -94,7 +99,10 @@ export interface PresetOverlayBaseline {
 
 /** Result of loading one consolidated configuration scope. */
 export interface ScopeConfig {
+  /** The file's contents, or `{}` when the file was not loaded. */
   readonly document: ConfigDocument;
+  /** What reading the file found, for the status report's `Config:` block. */
+  readonly file: ConfigFile;
   /**
    * A `showInactiveStatus` value that is not a boolean. Its warning names
    * the value that applies instead, which depends on the other scope, so

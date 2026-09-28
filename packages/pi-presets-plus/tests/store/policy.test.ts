@@ -7,10 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { loadScope } from "../../src/store/config.js";
-import {
-  getGlobalConfigPath,
-  getProjectConfigPath,
-} from "../../src/store/paths.js";
+import { getConfigPath } from "../../src/store/paths.js";
 import {
   isPermitted,
   loadPolicy,
@@ -42,7 +39,7 @@ function preset(name: string, extra: Partial<LoadedPreset> = {}): LoadedPreset {
 }
 
 async function writePolicy(value: unknown): Promise<void> {
-  const path = getGlobalConfigPath(agentDir);
+  const path = getConfigPath("user", process.cwd(), agentDir);
   const object = value as { rules?: unknown; version?: number };
   const document =
     object.version === 1
@@ -75,20 +72,20 @@ describe("loadPolicy", () => {
 
     expect(unsupported).toEqual({ rules: [], warnings: [] });
     expect(
-      (await loadScope("user", process.cwd(), agentDir)).warnings.file.join(
-        " ",
-      ),
-    ).toContain("unsupported version 3");
+      (
+        await loadScope("user", { agentDir, cwd: process.cwd(), trusted: true })
+      ).warnings.file.join(" "),
+    ).toContain("has version 3, but only version 2 is supported");
 
-    await writeFile(getGlobalConfigPath(agentDir), "{");
+    await writeFile(getConfigPath("user", process.cwd(), agentDir), "{");
 
     const malformed = await loadPolicy(agentDir);
 
     expect(malformed).toEqual({ rules: [], warnings: [] });
     expect(
-      (await loadScope("user", process.cwd(), agentDir)).warnings.file.join(
-        " ",
-      ),
+      (
+        await loadScope("user", { agentDir, cwd: process.cwd(), trusted: true })
+      ).warnings.file.join(" "),
     ).toContain("is not valid JSON");
   });
 
@@ -130,7 +127,7 @@ describe("loadPolicy", () => {
 describe("policy matching and permissions", () => {
   it("ignores project policy and reports the trust-boundary warning", async () => {
     const cwd = join(agentDir, "project");
-    const path = getProjectConfigPath(cwd);
+    const path = getConfigPath("project", cwd, agentDir);
 
     await mkdir(join(cwd, ".pi", "presets-plus"), { recursive: true });
     await writeFile(
@@ -138,7 +135,7 @@ describe("policy matching and permissions", () => {
       JSON.stringify({ version: 2, policy: { rules: [{ match: ".*" }] } }),
     );
 
-    const result = await loadScope("project", cwd, agentDir);
+    const result = await loadScope("project", { agentDir, cwd, trusted: true });
 
     expect(result.presets).toEqual([]);
     expect(result.warnings.policy).toHaveLength(1);

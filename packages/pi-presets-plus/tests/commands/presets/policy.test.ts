@@ -11,7 +11,7 @@ import {
   formatPolicy,
   runPolicy,
 } from "../../../src/commands/presets/policy.js";
-import { getGlobalConfigPath } from "../../../src/store/paths.js";
+import { getConfigPath } from "../../../src/store/paths.js";
 import type {
   CompiledPolicyMatcher,
   CompiledPolicyRule,
@@ -204,7 +204,7 @@ describe("runPolicy", () => {
     previousAgentDir = process.env.PI_CODING_AGENT_DIR;
     process.env.PI_CODING_AGENT_DIR = tempAgentDir;
 
-    const path = getGlobalConfigPath(tempAgentDir);
+    const path = getConfigPath("user", process.cwd(), tempAgentDir);
     const original = `${JSON.stringify({ policy: { rules: [{ allow: {}, match: "work" }] }, version: 2 }, null, 2)}\n`;
     const notify = vi.fn();
 
@@ -214,6 +214,7 @@ describe("runPolicy", () => {
     await runPolicy(
       {
         cwd: "/work/project",
+        isProjectTrusted: () => true,
         mode: "print",
         modelRegistry: {
           find: () => undefined,

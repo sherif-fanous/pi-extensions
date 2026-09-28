@@ -589,11 +589,11 @@ The class SHALL own:
    at the top of `src/activation/apply.ts`), exposed as
    `withSelfTriggeredModelSet(fn)` and `isSelfTriggered()`.
 3. The persistent session-entry writes for the `presets-plus:active` channel
-   (`pi.appendEntry( "presets-plus:active", { name, scope } | { name: null })`).
-   The shape of the persisted payload SHALL remain
-   `{ name: string; scope: PresetScope } | { name: null }` — the class
-   encapsulates the channel name and the null-clear marker so no other module
-   references either.
+   (`pi.appendEntry("presets-plus:active", { version: 1, name, scope } | { version: 1, name: null })`).
+   The shape of the persisted payload SHALL be
+   `{ version: 1; name: string; scope: PresetScope } | { version: 1; name: null }`
+   — the class encapsulates the channel name, the payload version, and the
+   null-clear marker so no other module references them.
 4. The status-badge refresh: the class is the single writer of
    `ctx.ui.setStatus("presets-plus", …)` in the codebase.
 5. The dirty / clean transitions previously in `src/activation/dirty.ts`.
@@ -862,8 +862,9 @@ Concretely:
    rendering SHALL continue to match without string edits.
 2. The on-disk preset file format ( `{ version: 1, presets: Preset[] }`) and
    field set SHALL be unchanged.
-3. The persistent session-entry shape on the `presets-plus:active` channel (
-   `{ name: string; scope: PresetScope } | { name: null }`) SHALL be unchanged.
+3. The persistent session-entry shape on the `presets-plus:active` channel
+   (`{ version: 1; name: string; scope: PresetScope } | { version: 1; name: null }`)
+   SHALL be unchanged.
 4. The pi extension API surface registered by the package (`/presets` command,
    `--preset` flag, message renderer for `ACTIVATED_MESSAGE_TYPE`, lifecycle
    handlers) SHALL be unchanged.

@@ -1,75 +1,62 @@
 /**
- * Loads and validates one consolidated version 2 configuration document.
+ * Loads and validates one scope's `config.json`.
  * Section warnings preserve fail-open reads while marking the document unsafe to rewrite.
  */
-import { readFile } from "node:fs/promises";
+import { access } from "node:fs/promises";
 
 import type {
+  ConfigDocument,
   Preset,
   PresetScope,
   ScopeConfig,
   ScopeWarnings,
 } from "../types.js";
 import { parsePresetArray } from "./load.js";
-import { getGlobalConfigPath, getProjectConfigPath } from "./paths.js";
+import { getConfigPath, getProjectPresetsPath } from "./paths.js";
 import {
+  configFileWarnings,
   isNotFoundError,
   isRecord,
-  malformedConfigWarning,
-  parseJsonObject,
-  unreadableConfigWarning,
+  readConfigFile,
+  untrustedProjectConfigWarning,
+  type ConfigFile,
 } from "@sherif-fanous/pi-extensions-core";
 
-/** File-system seam used by scope loading tests. */
-export interface ConfigFs {
-  readonly readFile: typeof readFile;
+/** The `version` this release reads and writes. */
+export const CONFIG_VERSION = 2;
+
+/** The value of every setting that no scope sets. */
+export const DEFAULT_CONFIG = { showInactiveStatus: true } as const;
+
+/** Where one scope's configuration lives and whether Pi trusts the project. */
+export interface ScopeLocation {
+  /** Pi's agent directory. Defaults to `getAgentDir()`; tests pass their own. */
+  readonly agentDir?: string;
+  readonly cwd: string;
+  /**
+   * Whether Pi trusts the project, from `ctx.isProjectTrusted()`. Only the
+   * project scope consults it.
+   */
+  readonly trusted: boolean;
 }
 
-const defaultFs: ConfigFs = { readFile };
-
-/** Load one scope's complete version 2 document and validated preset section. */
+/** Load one scope's complete document and validated preset section. */
 export async function loadScope(
   scope: PresetScope,
-  cwd: string,
-  agentDir?: string,
-  fs: ConfigFs = defaultFs,
+  location: ScopeLocation,
 ): Promise<ScopeConfig> {
-  const path =
-    scope === "user"
-      ? getGlobalConfigPath(agentDir)
-      : getProjectConfigPath(cwd);
-  let rawData: string;
+  const file = await readScopeFile(scope, location);
+  const warnings: ScopeWarnings = {
+    file: configFileWarnings([file]),
+    presets: [],
+    policy: [],
+  };
 
-  try {
-    rawData = await fs.readFile(path, "utf-8");
-  } catch (error) {
-    if (isNotFoundError(error)) {
-      return {
-        document: { version: 2 },
-        presets: [],
-        warnings: emptyWarnings(),
-      };
-    }
+  if (file.state !== "loaded")
+    return { document: {}, file, presets: [], warnings };
 
-    return invalidScope(unreadableConfigWarning(path, error));
-  }
-
-  const parsedResult = parseJsonObject(rawData);
-
-  if (!parsedResult.ok) {
-    return invalidScope(malformedConfigWarning(path, parsedResult));
-  }
-
-  const parsed = parsedResult.value;
-
-  if (parsed.version !== 2) {
-    return invalidScope(
-      `Configuration at ${path} uses unsupported version ${JSON.stringify(parsed.version)}; expected 2. Ignored the file.`,
-    );
-  }
-
-  const document = parsed as ScopeConfig["document"];
-  const warnings = emptyWarnings();
+  const { path } = file;
+  const document = file.data as ConfigDocument;
   let showInactiveStatus: boolean | undefined;
   let invalidShowInactiveStatus: { value: unknown } | undefined;
 
@@ -110,6 +97,7 @@ export async function loadScope(
 
   return {
     document,
+    file,
     presets,
     ...(showInactiveStatus === undefined ? {} : { showInactiveStatus }),
     ...(invalidShowInactiveStatus === undefined
@@ -119,14 +107,36 @@ export async function loadScope(
   };
 }
 
-function emptyWarnings(): ScopeWarnings {
-  return { file: [], presets: [], policy: [] };
-}
+/**
+ * Read one scope's `config.json`. In an untrusted project without one, a
+ * legacy `presets.json` the migration left alone is reported as skipped
+ * too, since it is still project configuration.
+ */
+async function readScopeFile(
+  scope: PresetScope,
+  { agentDir, cwd, trusted }: ScopeLocation,
+): Promise<ConfigFile> {
+  const file = await readConfigFile({
+    path: getConfigPath(scope, cwd, agentDir),
+    scope,
+    trusted,
+    version: CONFIG_VERSION,
+  });
 
-function invalidScope(warning: string): ScopeConfig {
+  if (file.state !== "missing" || scope === "user" || trusted) return file;
+
+  const legacyPath = getProjectPresetsPath(cwd);
+
+  try {
+    await access(legacyPath);
+  } catch (error) {
+    if (isNotFoundError(error)) return file;
+  }
+
   return {
-    document: { version: 2 },
-    presets: [],
-    warnings: { ...emptyWarnings(), file: [warning] },
+    path: legacyPath,
+    scope,
+    state: "untrusted",
+    warning: untrustedProjectConfigWarning(legacyPath),
   };
 }

@@ -79,7 +79,6 @@ import {
   keyHint,
   listPosition,
   matchSelectAction,
-  notifyWarnings,
   overlayOptions,
   padToWidth,
   wrapKeyHints,
@@ -394,9 +393,10 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
 
   /** {@link PickerCommandHost} member. */
   async refreshPresets(selectionKey?: string): Promise<void> {
-    const { presets, warnings } = await loadAll(this.ctx);
+    // Load warnings show at session start and on /presets reload, so a
+    // refresh does not repeat them.
+    const { presets } = await loadAll(this.ctx);
 
-    notifyWarnings(this.ctx, EXTENSION_NAME, warnings);
     this.allPresets = presets;
     this.inheritedTools = this.pi?.getActiveTools() ?? this.inheritedTools;
     this.invalidateVisible();
@@ -694,10 +694,9 @@ export async function openPicker(
   ctx: ExtensionCommandContext,
   options: PickerOptions,
 ): Promise<PickerResult | undefined> {
-  const { presets, warnings } = await loadAll(ctx);
-
-  notifyWarnings(ctx, EXTENSION_NAME, warnings);
-
+  // Load warnings show at session start and on /presets reload, so opening
+  // the picker does not repeat them.
+  const { presets } = await loadAll(ctx);
   const inheritedTools = options.inheritedTools ?? [];
   let currentPicker: PresetPickerComponent | undefined;
 

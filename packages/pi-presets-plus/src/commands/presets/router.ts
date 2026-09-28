@@ -164,14 +164,17 @@ async function activateNamedPreset(
   session: ActivePresetSession,
 ): Promise<boolean> {
   const { presets, warnings } = await loadAll(ctx);
-
-  notifyWarnings(ctx, EXTENSION_NAME, warnings);
-
   const preset = presets.find(
     (candidate) => candidate.name === name && !candidate.shadowed,
   );
 
-  if (!preset) return false;
+  // Load warnings show at session start and on /presets reload. They are
+  // repeated only when the name is not loaded, since one may explain why.
+  if (!preset) {
+    notifyWarnings(ctx, EXTENSION_NAME, warnings);
+
+    return false;
+  }
 
   const result = await requestActivation(preset, ctx, pi, session);
 

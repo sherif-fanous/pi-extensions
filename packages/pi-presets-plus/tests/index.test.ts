@@ -2,13 +2,14 @@
  * Covers session-start configuration loading, warning delivery, and picking
  * up an externally edited configuration on extension reload.
  */
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
-  getGlobalPresetsPath,
+  getConfigPath,
   getProjectPresetsPath,
+  getUserPresetsPath,
 } from "../src/store/paths.js";
 import type {
   ExtensionAPI,
@@ -50,11 +51,12 @@ function makeContext(
   status: Record<string, string | undefined>,
   mode: ExtensionContext["mode"] = "tui",
   branch: ReturnType<ExtensionContext["sessionManager"]["getBranch"]> = [],
+  trusted = true,
 ) {
   const notify = vi.fn();
   const ctx = {
     cwd: join(agentDir, "project"),
-    isProjectTrusted: () => true,
+    isProjectTrusted: () => trusted,
     mode,
     model: { id: "gpt-5", provider: "openai" },
     modelRegistry: { find: vi.fn() },
@@ -128,7 +130,7 @@ async function writeConfig(contents: string): Promise<void> {
 
 async function writeLegacyPresets(contents: string): Promise<void> {
   await mkdir(join(agentDir, "presets-plus"), { recursive: true });
-  await writeFile(getGlobalPresetsPath(agentDir), contents, "utf-8");
+  await writeFile(getUserPresetsPath(agentDir), contents, "utf-8");
 }
 
 async function writeProjectLegacyPresets(
@@ -215,7 +217,7 @@ describe("session_start configuration", () => {
     await handlers.get("session_start")?.({ type: "session_start" }, ctx);
 
     expect(notify).toHaveBeenCalledWith(
-      expect.stringContaining("Presets Plus migrated user configuration"),
+      `Presets Plus migrated its configuration to ${join(agentDir, "presets-plus", "config.json")}.`,
       "info",
     );
   });
@@ -250,7 +252,7 @@ describe("session_start configuration", () => {
     await handlers.get("session_start")?.({ type: "session_start" }, ctx);
 
     expect(notify).toHaveBeenCalledWith(
-      "Presets Plus migrated user configuration to config.json.",
+      `Presets Plus migrated its configuration to ${join(agentDir, "presets-plus", "config.json")}.`,
       "info",
     );
 
@@ -415,6 +417,99 @@ describe("session_start configuration", () => {
       expect.stringContaining("directory-default"),
       expect.anything(),
     );
+  });
+
+  it("names both migrated files in one info message", async () => {
+    const cwd = join(agentDir, "project");
+
+    await writeLegacyPresets(JSON.stringify({ version: 1, presets: [] }));
+    await writeProjectLegacyPresets(
+      JSON.stringify({ version: 1, presets: [] }),
+      cwd,
+    );
+
+    const { handlers, pi } = makePi();
+    const { ctx, notify } = makeContext({});
+
+    presetsPlus(pi);
+    await handlers.get("session_start")?.({ type: "session_start" }, ctx);
+
+    expect(notify).toHaveBeenCalledWith(
+      `Presets Plus migrated its configuration to ${getConfigPath("user", cwd, agentDir)} and ${getConfigPath("project", cwd, agentDir)}.`,
+      "info",
+    );
+  });
+
+  it("skips a project configuration in an untrusted project with one warning", async () => {
+    loadAllMock.mockImplementation(realLoadAll);
+
+    const cwd = join(agentDir, "project");
+    const path = getConfigPath("project", cwd, agentDir);
+
+    await mkdir(join(cwd, ".pi", "presets-plus"), { recursive: true });
+    await writeFile(
+      path,
+      JSON.stringify({
+        presets: [
+          { hotkey: "ctrl+alt+p", model: "m", name: "project", provider: "p" },
+        ],
+        showInactiveStatus: false,
+      }),
+    );
+
+    const { handlers, pi, spies } = makePi();
+    const status: Record<string, string | undefined> = {};
+    const { ctx, notify } = makeContext(status, "tui", [], false);
+
+    presetsPlus(pi);
+    await handlers.get("session_start")?.({ type: "session_start" }, ctx);
+
+    expect(notify.mock.calls).toEqual([
+      [
+        `Presets Plus: 1 warning\n- Skipped project configuration at ${path} because the project is not trusted. Trust the project to use it.`,
+        "warning",
+      ],
+    ]);
+    expect(status["presets-plus"]).toBe("Preset: none");
+    expect(spies.registerShortcut).not.toHaveBeenCalled();
+  });
+
+  it("stays silent in an untrusted project without a project configuration", async () => {
+    loadAllMock.mockImplementation(realLoadAll);
+
+    const { handlers, pi } = makePi();
+    const { ctx, notify } = makeContext({}, "tui", [], false);
+
+    presetsPlus(pi);
+    await handlers.get("session_start")?.({ type: "session_start" }, ctx);
+
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("leaves a legacy project file in an untrusted project and warns about it", async () => {
+    loadAllMock.mockImplementation(realLoadAll);
+
+    const cwd = join(agentDir, "project");
+    const legacy = JSON.stringify({ version: 1, presets: [] });
+
+    await writeProjectLegacyPresets(legacy, cwd);
+
+    const { handlers, pi } = makePi();
+    const { ctx, notify } = makeContext({}, "tui", [], false);
+
+    presetsPlus(pi);
+    await handlers.get("session_start")?.({ type: "session_start" }, ctx);
+
+    expect(notify.mock.calls).toEqual([
+      [
+        `Presets Plus: 1 warning\n- Skipped project configuration at ${getProjectPresetsPath(cwd)} because the project is not trusted. Trust the project to use it.`,
+        "warning",
+      ],
+    ]);
+    expect(await readFile(getProjectPresetsPath(cwd), "utf-8")).toBe(legacy);
+    await expect(
+      readFile(getConfigPath("project", cwd, agentDir), "utf-8"),
+    ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("warns about malformed configuration without skipping preset loading", async () => {

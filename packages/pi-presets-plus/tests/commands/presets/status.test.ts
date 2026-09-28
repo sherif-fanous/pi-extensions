@@ -36,6 +36,35 @@ function pi(thinkingLevel: string, tools: string[]) {
   };
 }
 
+const userFile = {
+  data: {},
+  path: "/agent/presets-plus/config.json",
+  renamedKeys: [],
+  scope: "user",
+  state: "loaded",
+} as const;
+const projectFile = {
+  path: "/repo/.pi/presets-plus/config.json",
+  scope: "project",
+  state: "missing",
+} as const;
+const configBlock = [
+  "Config:",
+  "  User:    loaded",
+  "           /agent/presets-plus/config.json",
+  "  Project: not found",
+  "           /repo/.pi/presets-plus/config.json",
+].join("\n");
+
+function loaded(presets: LoadedPreset[]) {
+  return {
+    files: [userFile, projectFile],
+    presets,
+    valueWarnings: [],
+    warnings: [],
+  };
+}
+
 afterEach(() => {
   loadAll.mockReset();
 });
@@ -52,6 +81,8 @@ describe("runStatus", () => {
       },
     };
 
+    loadAll.mockResolvedValue(loaded([]));
+
     await runStatus(
       ctx as never,
       pi("medium", []) as never,
@@ -59,7 +90,56 @@ describe("runStatus", () => {
     );
 
     expect(notifications).toEqual([
-      ["Presets Plus Status\n  No preset is active.", "info"],
+      [`Presets Plus Status\n  No preset is active.\n\n${configBlock}`, "info"],
+    ]);
+  });
+
+  it("shows file problems in the Config block and value warnings under Warnings", async () => {
+    const notifications: Array<[string, string]> = [];
+    const ctx = {
+      ui: {
+        notify: (message: string, severity: string) => {
+          notifications.push([message, severity]);
+        },
+        theme: createPlainTheme(),
+      },
+    };
+    const skipped = `Skipped project configuration at ${projectFile.path} because the project is not trusted. Trust the project to use it.`;
+    const invalidPreset = `Skipped preset 1 in ${userFile.path}: It needs a name.`;
+
+    loadAll.mockResolvedValue({
+      files: [
+        userFile,
+        { ...projectFile, state: "untrusted", warning: skipped },
+      ],
+      presets: [],
+      valueWarnings: [invalidPreset],
+      warnings: [skipped, invalidPreset],
+    });
+
+    await runStatus(
+      ctx as never,
+      pi("medium", []) as never,
+      new ActivePresetSession(),
+    );
+
+    expect(notifications).toEqual([
+      [
+        [
+          "Presets Plus Status",
+          "  No preset is active.",
+          "",
+          "Config:",
+          "  User:    loaded",
+          "           /agent/presets-plus/config.json",
+          "  Project: skipped (untrusted)",
+          "           /repo/.pi/presets-plus/config.json",
+          "",
+          "Warnings:",
+          `- ${invalidPreset}`,
+        ].join("\n"),
+        "info",
+      ],
     ]);
   });
 
@@ -88,13 +168,14 @@ describe("runStatus", () => {
     ] as never;
 
     session.restoreFromBranch(branch, [preset], ctx as never);
-    loadAll.mockResolvedValue({ presets: [preset], warnings: [] });
+    loadAll.mockResolvedValue(loaded([preset]));
 
     await runStatus(ctx as never, pi("high", ["read"]) as never, session);
 
     expect(notifications).toHaveLength(1);
     expect(notifications[0]?.[0]).toContain("Presets Plus Status");
     expect(notifications[0]?.[0]).toContain("Preset:                 plan");
+    expect(notifications[0]?.[0]?.endsWith(`\n\n${configBlock}`)).toBe(true);
     expect(notifications[0]?.[1]).toBe("info");
   });
 });

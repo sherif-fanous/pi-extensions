@@ -1,7 +1,7 @@
 /**
  * Reports `/presets status`: which preset is active, the baseline it
- * overlays, and how the session's current model, thinking level, and
- * tools compare against both.
+ * overlays, how the session's current model, thinking level, and tools
+ * compare against both, and the state of each configuration file.
  */
 import type { OverlayFieldClassification } from "../../activation/classify-overlay-field.js";
 import { assessOverlay } from "../../activation/overlay-assessment.js";
@@ -33,9 +33,15 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-import { alignLabelRows } from "@sherif-fanous/pi-extensions-core";
+import {
+  alignLabelRows,
+  configStatusLines,
+} from "@sherif-fanous/pi-extensions-core";
 
-/** Report text, its severity, and the warnings the preset load produced. */
+/**
+ * Report text, its severity, and the warnings about values in the loaded
+ * files. File problems show in the body's `Config:` block instead.
+ */
 export interface StatusBodyResult {
   readonly body: string;
   readonly severity: "info" | "warning";
@@ -119,37 +125,44 @@ export function formatStatus(
   ].join("\n");
 }
 
-/** Load the presets and build the status report, severity, and warnings. */
+/**
+ * Load the presets and build the status report, severity, and warnings.
+ * The body ends with the `Config:` block after a blank line.
+ */
 export async function formatStatusBody(
   ctx: ExtensionCommandContext,
   pi: ExtensionAPI,
   session: ActivePresetSession,
 ): Promise<StatusBodyResult> {
   const active = session.current();
+  const { files, presets, valueWarnings } = await loadAll(ctx);
+  const withConfig = (main: string) =>
+    [main, "", ...configStatusLines(files)].join("\n");
 
   if (!active) {
     return {
-      body: `${STATUS_DIALOG_TITLE}\n  No preset is active.`,
+      body: withConfig(`${STATUS_DIALOG_TITLE}\n  No preset is active.`),
       severity: "info",
-      warnings: [],
+      warnings: valueWarnings,
     };
   }
 
-  const { presets, warnings } = await loadAll(ctx);
   const preset = findPreset(presets, active);
 
   if (!preset) {
     return {
-      body: `${STATUS_DIALOG_TITLE}\n  Active preset "${active.name}" is no longer loaded.`,
+      body: withConfig(
+        `${STATUS_DIALOG_TITLE}\n  Active preset "${active.name}" is no longer loaded.`,
+      ),
       severity: "warning",
-      warnings,
+      warnings: valueWarnings,
     };
   }
 
   return {
-    body: formatStatus(active, preset, ctx, pi),
+    body: withConfig(formatStatus(active, preset, ctx, pi)),
     severity: "info",
-    warnings,
+    warnings: valueWarnings,
   };
 }
 

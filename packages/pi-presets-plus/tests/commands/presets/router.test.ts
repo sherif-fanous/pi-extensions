@@ -47,6 +47,7 @@ function makeStubCtx(mode: "tui" | "rpc" | "json" | "print" = "tui") {
     setStatus,
     ctx: {
       cwd: "/tmp/pi-presets-router-does-not-exist",
+      isProjectTrusted: () => true,
       mode,
       ui: {
         notify,
@@ -301,6 +302,60 @@ describe("handlePresetsCommand", () => {
     );
   });
 
+  it("does not repeat load warnings when the named preset is loaded", async () => {
+    const { ctx, notify } = makeStubCtx();
+    const preset = {
+      model: "claude-opus",
+      name: "plan",
+      provider: "anthropic",
+    };
+
+    await mkdir(join(agentDir, "presets-plus"), { recursive: true });
+    await writeFile(
+      join(agentDir, "presets-plus", "config.json"),
+      JSON.stringify({ presets: [preset, { name: "broken" }], version: 2 }),
+    );
+
+    await handlePresetsCommand(
+      "plan",
+      ctx,
+      makeStubPi(),
+      new ActivePresetSession(),
+      new HotkeyRegistry(),
+    );
+
+    expect(requestActivationMock).toHaveBeenCalledOnce();
+    expect(notify).not.toHaveBeenCalledWith(expect.anything(), "warning");
+  });
+
+  it("shows the load warnings when the named preset is not loaded", async () => {
+    const { ctx, notify } = makeStubCtx();
+
+    await mkdir(join(agentDir, "presets-plus"), { recursive: true });
+    await writeFile(
+      join(agentDir, "presets-plus", "config.json"),
+      JSON.stringify({ presets: [{ name: "plan" }], version: 2 }),
+    );
+
+    await handlePresetsCommand(
+      "plan",
+      ctx,
+      makeStubPi(),
+      new ActivePresetSession(),
+      new HotkeyRegistry(),
+    );
+
+    expect(requestActivationMock).not.toHaveBeenCalled();
+    expect(notify.mock.calls.map(([message]) => message)).toEqual([
+      expect.stringMatching(
+        /^Presets Plus: 1 warning\n- Skipped preset "plan"/u,
+      ),
+      expect.stringMatching(
+        /^Presets Plus: 1 warning\n- Unknown subcommand "plan"\./u,
+      ),
+    ]);
+  });
+
   it("routes picker activation through the shared request", async () => {
     const { ctx } = makeStubCtx();
     const pi = makeStubPi();
@@ -433,6 +488,39 @@ describe("handlePresetsCommand", () => {
     expect(notify).toHaveBeenCalledTimes(1);
     expect(notify.mock.calls[0]?.[0]).toContain("Reloaded 0 presets");
     expect(notify.mock.calls[0]?.[1]).toBe("info");
+  });
+
+  it("shows the configuration warnings again on presets reload", async () => {
+    const { ctx, notify } = makeStubCtx();
+    const cwd = join(agentDir, "project");
+    const userPath = join(agentDir, "presets-plus", "config.json");
+    const projectPath = join(cwd, ".pi", "presets-plus", "config.json");
+
+    await mkdir(join(agentDir, "presets-plus"), { recursive: true });
+    await writeFile(userPath, "{");
+    await mkdir(join(cwd, ".pi", "presets-plus"), { recursive: true });
+    await writeFile(projectPath, JSON.stringify({ version: 2 }));
+
+    await handlePresetsCommand(
+      "reload",
+      { ...ctx, cwd, isProjectTrusted: () => false },
+      makeStubPi(),
+      new ActivePresetSession(),
+      new HotkeyRegistry(),
+    );
+
+    expect(notify.mock.calls).toEqual([
+      ["Reloaded 0 presets.", "info"],
+      [
+        expect.stringMatching(
+          new RegExp(
+            `^Presets Plus: 2 warnings\\n- Configuration at ${userPath} is not valid JSON: .+\\n- Skipped project configuration at ${projectPath} because the project is not trusted\\. Trust the project to use it\\.$`,
+            "u",
+          ),
+        ),
+        "warning",
+      ],
+    ]);
   });
 
   it("applies showInactiveStatus during presets reload", async () => {

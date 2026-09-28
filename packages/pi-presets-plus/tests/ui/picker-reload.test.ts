@@ -73,7 +73,11 @@ function preset(hotkey?: string): LoadedPreset {
  * Binds a hotkey registry to the preset, opens the picker, and deletes the
  * selection with the given answer to the reload prompt.
  */
-async function runDelete(hotkey: string | undefined, reloadAnswer = false) {
+async function runDelete(
+  hotkey: string | undefined,
+  reloadAnswer = false,
+  warnings: string[] = [],
+) {
   const selected = preset(hotkey);
 
   const hotkeys = new HotkeyRegistry();
@@ -90,7 +94,7 @@ async function runDelete(hotkey: string | undefined, reloadAnswer = false) {
 
   const ctx = makeCtx();
 
-  loadAll.mockResolvedValue({ presets: [selected], warnings: [] });
+  loadAll.mockResolvedValue({ presets: [selected], warnings });
   removePreset.mockResolvedValue({ ok: true });
   openConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(reloadAnswer);
 
@@ -134,6 +138,16 @@ describe("openPicker delete reload prompt", () => {
     expect(openConfirm).toHaveBeenCalledTimes(1);
     expect(ctx.reload).not.toHaveBeenCalled();
     expect(loadAll).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not repeat load warnings when it opens or refreshes", async () => {
+    const ctx = await runDelete(undefined, true, ["Skipped preset 2."]);
+
+    expect(loadAll).toHaveBeenCalledTimes(2);
+    expect(ctx.ui.notify).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "warning",
+    );
   });
 
   it("refreshes and stays open when the user declines reload", async () => {

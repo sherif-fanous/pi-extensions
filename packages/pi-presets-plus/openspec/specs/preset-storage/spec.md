@@ -3,18 +3,18 @@
 ## Purpose
 
 The `preset-storage` capability defines how `pi-presets-plus` persists preset
-definitions on disk: two coexisting versioned JSON files (global/user scope
-under `<agent-dir>/presets-plus/presets.json` and project scope under
-`<cwd>/.pi/presets-plus/presets.json`), validation that separates file-level
-errors (treat file as empty + warn) from per-preset errors (skip preset + warn),
-availability classification against pi's model registry, atomic writes that
-never leave the destination partially written, merge-with-shadowing semantics
-where project presets override same-named global presets, a
-reload-on-`session_start`-and-`ctx.reload` lifecycle with no surviving caches,
-and the initial `/presets list` / `/presets reload` / bare-invocation command
-surface. Subsequent changes in the project plan (activation, picker, editor,
-drift detection, shortcuts) consume this capability without re-specifying its
-contracts.
+definitions on disk: two coexisting versioned JSON files (user scope at
+`<agent-dir>/presets-plus/config.json` and project scope at
+`<cwd>/.pi/presets-plus/config.json`, the latter read only while Pi trusts the
+project), validation that separates file-level errors (treat file as empty +
+warn) from per-preset errors (skip preset + warn), availability classification
+against pi's model registry, atomic writes that never leave the destination
+partially written, merge-with-shadowing semantics where project presets override
+same-named user presets, a reload-on-`session_start`-and-`ctx.reload` lifecycle
+with no surviving caches, when configuration warnings are shown, and the
+`/presets reload` command. Subsequent changes in the project plan (activation,
+picker, editor, drift detection, shortcuts) consume this capability without
+re-specifying its contracts.
 
 ## Requirements
 
@@ -30,7 +30,7 @@ remain visible in listings tagged as `shadowed: true`.
   contains a preset also named `plan`
 - **THEN** the project version SHALL be the one consulted by activation in later
   changes
-- **AND** listings (e.g. `/presets list`) SHALL include the global `plan` with a
+- **AND** listings (e.g. the picker) SHALL include the global `plan` with a
   `shadowed: true` indicator
 
 ### Requirement: Preset shape validation at load time
@@ -134,12 +134,16 @@ operation SHALL return a failure and SHALL NOT write that file. A missing file
 is a valid empty scope and SHALL remain writable.
 
 Accepted mutations SHALL replace only the target scope's `presets` value while
-preserving all other top-level keys and section values. A new scope file SHALL
-use version 2. A cross-scope move SHALL validate both scope files, source
-existence, and destination name availability before its first write. It SHALL
-write the destination before removing the source. If source removal fails while
-the process remains running, it SHALL attempt to restore the previous
-destination contents before reporting the failure.
+preserving all other top-level keys and section values. Every write SHALL put
+`version: 2` as the file's first key, including a write to a file that had no
+`version`. A mutation targeting the project scope while Pi does not trust the
+project SHALL return the failure
+`The project is not trusted, so <path> was not saved. Trust the project and try again.`
+and SHALL NOT write any file. A cross-scope move SHALL validate both scope
+files, source existence, and destination name availability before its first
+write. It SHALL write the destination before removing the source. If source
+removal fails while the process remains running, it SHALL attempt to restore the
+previous destination contents before reporting the failure.
 
 #### Scenario: Add to project scope
 
@@ -153,6 +157,19 @@ destination contents before reporting the failure.
 - **WHEN** a preset is saved to a scope with no configuration or legacy files
 - **THEN** the package SHALL create a version 2 `config.json` containing the
   preset
+
+#### Scenario: Save stamps the version first
+
+- **WHEN** a preset is added to a user `config.json` that has no `version`
+- **THEN** the written file SHALL start with `version: 2`
+- **AND** its other keys SHALL be preserved
+
+#### Scenario: Mutation refuses an untrusted project
+
+- **WHEN** a mutation targets the project scope, or moves a preset out of it,
+  while Pi does not trust the project
+- **THEN** it SHALL return the untrusted-project failure
+- **AND** it SHALL NOT create, change, or remove any configuration file
 
 #### Scenario: Rename via update
 
@@ -260,26 +277,6 @@ across these events.
 - **WHEN** the user edits the JSON file directly and runs `/reload`
 - **THEN** the new contents SHALL be reflected on the next call to `loadAll`
 
-### Requirement: /presets list subcommand
-
-The `/presets` command SHALL accept a `list` subcommand that prints a textual
-summary of every loaded preset (across both scopes), one preset per block,
-including: name, scope, `provider/model`, thinking level, tool count or
-"inherit", hotkey if set, an availability indicator if `unavailable`, and a
-shadowed indicator if `shadowed`.
-
-#### Scenario: List with no presets
-
-- **WHEN** the user runs `/presets list` and no presets are loaded
-- **THEN** an info message SHALL state that no presets are configured and SHALL
-  note the file paths the user could create
-
-#### Scenario: List with presets
-
-- **WHEN** the user runs `/presets list` with at least one loaded preset
-- **THEN** each loaded preset SHALL appear in the output with the fields listed
-  above
-
 ### Requirement: /presets reload subcommand
 
 The `/presets` command SHALL accept a `reload` subcommand that re-reads the user
@@ -292,26 +289,79 @@ changes that need `/reload`, and any warnings.
 - **WHEN** the user edits a `presets` array and runs `/presets reload`
 - **THEN** the new presets SHALL be loaded
 - **AND** an info notification SHALL state how many presets are now loaded
-- **AND** any load warnings SHALL follow in one warning notification
+- **AND** any load warnings, including file problems and a skipped untrusted
+  project file, SHALL follow in one warning notification
 
-### Requirement: /presets bare invocation explains the absence of UI
+### Requirement: Configuration warnings show at session start and on reload
 
-When `/presets` is invoked with no arguments, the package SHALL emit an
-informational notification stating that no UI is available yet and pointing the
-user at `/presets list` and `/presets reload`.
+The package SHALL show its configuration warnings, in order migration warnings,
+file problems, then invalid values, in the one startup warning notification at
+`session_start`. `/presets reload` SHALL show the current load warnings again,
+because the user asked for a fresh read. Opening or refreshing the picker and
+activating a loaded preset by name SHALL NOT repeat load warnings. When
+`/presets <name>` names no loaded preset, the package SHALL show the load
+warnings before the unknown-subcommand warning, since one may explain why.
 
-#### Scenario: Bare invocation
+#### Scenario: Picker does not repeat load warnings
 
-- **WHEN** the user runs `/presets` with no arguments
-- **THEN** an info notification SHALL be displayed describing the available
-  subcommands and noting that the picker UI arrives in a later change
+- **WHEN** a configuration file has a load warning and the user opens the picker
+  or the picker refreshes after a change
+- **THEN** no warning notification SHALL be shown for it
+
+#### Scenario: Activation of a loaded preset does not repeat load warnings
+
+- **WHEN** a configuration file has a load warning and the user runs
+  `/presets <name>` for a loaded preset
+- **THEN** the preset SHALL be activated without a load warning notification
+
+#### Scenario: Activation of a preset that failed to load
+
+- **WHEN** the user runs `/presets <name>` and no loaded preset has that name
+- **THEN** the load warnings SHALL be shown in one warning notification
+- **AND** the unknown-subcommand warning SHALL follow
+
+### Requirement: Project configuration requires project trust
+
+The package SHALL read, migrate, and save the project `config.json` only while
+`ctx.isProjectTrusted()` returns `true`. When Pi does not trust the project and
+the project `config.json` exists, the package SHALL NOT read it and SHALL warn
+`Skipped project configuration at <path> because the project is not trusted. Trust the project to use it.`
+When the project `config.json` is absent but a legacy
+`.pi/presets-plus/presets.json` exists, the same warning SHALL name the legacy
+file. An untrusted project without either file SHALL produce no warning. The
+user configuration SHALL load regardless of project trust.
+
+#### Scenario: Untrusted project file is skipped
+
+- **WHEN** a session starts in an untrusted project whose
+  `.pi/presets-plus/config.json` contains presets, a hotkey, and
+  `showInactiveStatus`
+- **THEN** none of its presets, hotkeys, or settings SHALL take effect
+- **AND** the startup warning notification SHALL contain the untrusted-project
+  warning naming that file
+
+#### Scenario: Untrusted project without a file stays silent
+
+- **WHEN** a session starts in an untrusted project without a project
+  configuration or legacy preset file
+- **THEN** no warning SHALL be shown about the project configuration
+
+#### Scenario: Untrusted legacy project file stays in place
+
+- **WHEN** a session starts in an untrusted project containing a valid version 1
+  `.pi/presets-plus/presets.json`
+- **THEN** the package SHALL NOT create `.pi/presets-plus/config.json` or delete
+  the legacy file
+- **AND** the startup warning notification SHALL contain the untrusted-project
+  warning naming the legacy file
 
 ### Requirement: Consolidated version 2 configuration storage
 
 The package SHALL read user configuration from
 `<agent-dir>/presets-plus/config.json` and project configuration from
 `<cwd>/.pi/presets-plus/config.json`. A supported file SHALL be a JSON object
-with `version: 2`. It MAY contain a top-level `showInactiveStatus` boolean, a
+whose `version` is `2` or absent. A file without `version` SHALL load as version
+2 without a warning. It MAY contain a top-level `showInactiveStatus` boolean, a
 top-level `presets` array, and, at user scope only, a `policy` object. Missing
 optional sections SHALL use their defaults.
 
@@ -345,6 +395,12 @@ order.
   disjoint names
 - **THEN** all presets SHALL load with their respective scopes
 
+#### Scenario: File without a version
+
+- **WHEN** a configuration file has no `version` key
+- **THEN** it SHALL load as version 2
+- **AND** no warning SHALL be emitted
+
 #### Scenario: Unsupported version
 
 - **WHEN** a configuration file declares a version other than `2` and is not
@@ -362,7 +418,9 @@ order.
 
 During `session_start`, before loading effective configuration, the package
 SHALL migrate each eligible scope independently when no version 2 configuration
-exists there. User migration SHALL combine supported version 1 `config.json`,
+exists there. A `config.json` without `version` reads as version 2 and SHALL NOT
+be overwritten. The project scope SHALL be migrated only while Pi trusts the
+project. User migration SHALL combine supported version 1 `config.json`,
 `presets.json`, and `policy.json` files. Project migration SHALL convert the
 existing version 1 `presets.json`. The generated version 2 file SHALL retain
 `showInactiveStatus` at the top level, copy the preset array to `presets`, and
@@ -378,11 +436,12 @@ be retried on a later `session_start`.
 The package SHALL atomically write the complete version 2 file, replacing a user
 `config.json` version 1 at the same path, before deleting migrated
 `presets.json` and `policy.json` files. It SHALL treat an already-missing legacy
-file during cleanup as success. The scopes that migrated SHALL be named together
-in one info notification. Migration warnings from both scopes SHALL be added to
-the startup warning collection, so they show in the one startup warning
-notification. A failure SHALL name the affected file and reason and point to the
-README migration guidance.
+file during cleanup as success. The files written SHALL be named together in one
+info notification,
+`Presets Plus migrated its configuration to <path>[ and <path>].` Migration
+warnings from both scopes SHALL be added to the startup warning collection, so
+they show in the one startup warning notification. A failure SHALL name the
+affected file and reason and point to the README migration guidance.
 
 When a version 2 configuration already exists, the package SHALL neither read
 nor report any remaining legacy files in that scope.
@@ -454,7 +513,7 @@ when the file cannot be read,
 `Configuration at <path> is not valid JSON: <message>. Ignored the file.` for
 invalid JSON, `Configuration at <path> must be a JSON object. Ignored the file.`
 for any other top-level value, and
-`Configuration at <path> uses unsupported version <version>; expected 2. Ignored the file.`
+`Configuration at <path> has version <version>, but only version 2 is supported. Ignored the file.`
 for a version other than `2`. An invalid `showInactiveStatus` SHALL use the
 inherited or default value and emit the warning
 `<User|Project> setting "showInactiveStatus" must be a boolean, not <value>.`

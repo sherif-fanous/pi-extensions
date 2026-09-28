@@ -30,9 +30,16 @@ export interface ActivePresetStartOptions {
   readonly preset: LoadedPreset;
 }
 
-type ActiveEntryData =
+/** Custom session entry type that records the active preset. */
+const ACTIVE_ENTRY_TYPE = "presets-plus:active";
+
+/** Payload version this release writes; a payload without one is version 1. */
+const ACTIVE_ENTRY_VERSION = 1;
+
+type ActiveEntryData = { readonly version?: unknown } & (
   | { readonly name: string; readonly scope?: LoadedPreset["scope"] }
-  | { readonly name: null };
+  | { readonly name: null }
+);
 
 type Branch = ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
 type SessionContext = Pick<ExtensionContext, "ui">;
@@ -77,7 +84,8 @@ export class ActivePresetSession {
       scope: preset.scope,
     };
 
-    pi.appendEntry("presets-plus:active", {
+    pi.appendEntry(ACTIVE_ENTRY_TYPE, {
+      version: ACTIVE_ENTRY_VERSION,
       name: preset.name,
       scope: preset.scope,
     });
@@ -97,14 +105,21 @@ export class ActivePresetSession {
     if (!this.active) return;
 
     this.active = { ...this.active, name, scope };
-    pi.appendEntry("presets-plus:active", { name, scope });
+    pi.appendEntry(ACTIVE_ENTRY_TYPE, {
+      version: ACTIVE_ENTRY_VERSION,
+      name,
+      scope,
+    });
     this.setStatus(ctx);
   }
 
   /** Clear the active-preset attachment and persist the clear marker. */
   clear(ctx: SessionContext, pi: SessionPi): void {
     this.active = undefined;
-    pi.appendEntry("presets-plus:active", { name: null });
+    pi.appendEntry(ACTIVE_ENTRY_TYPE, {
+      version: ACTIVE_ENTRY_VERSION,
+      name: null,
+    });
     this.setStatus(ctx);
   }
 
@@ -145,7 +160,7 @@ export class ActivePresetSession {
       .reverse()
       .find(
         (entry): entry is Extract<typeof entry, { type: "custom" }> =>
-          entry.type === "custom" && entry.customType === "presets-plus:active",
+          entry.type === "custom" && entry.customType === ACTIVE_ENTRY_TYPE,
       );
 
     if (!activeEntry) {
@@ -154,7 +169,12 @@ export class ActivePresetSession {
 
     const data = activeEntry.data as ActiveEntryData | undefined;
 
-    if (!data || data.name === null) {
+    // An entry from a release with another payload version is not read.
+    if (
+      !data ||
+      (data.version ?? 1) !== ACTIVE_ENTRY_VERSION ||
+      data.name === null
+    ) {
       return { state: undefined, warnings: [] };
     }
 

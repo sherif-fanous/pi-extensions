@@ -11,34 +11,46 @@ import type {
   ScopeConfig,
 } from "../types.js";
 import { formatScopeName } from "../ui/widgets.js";
-import { loadScope } from "./config.js";
+import { CONFIG_VERSION, DEFAULT_CONFIG, loadScope } from "./config.js";
 import { mergeScopes } from "./merge.js";
-import { getGlobalConfigPath, getProjectConfigPath } from "./paths.js";
+import { getConfigPath } from "./paths.js";
 import { loadPolicy } from "./policy.js";
 import { computeClampWarning } from "./validate.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { writeJsonFile } from "@sherif-fanous/pi-extensions-core";
-
-/** Whether the status line shows when no preset is active, unless configured. */
-const DEFAULT_SHOW_INACTIVE_STATUS = true;
+import {
+  configFileWarnings,
+  updateConfigFile,
+  type ConfigFile,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** Result of loading all presets. */
 export interface LoadAllResult {
+  /** The User then the Project file, for the status report's `Config:` block. */
+  readonly files: readonly [ConfigFile, ConfigFile];
   readonly hotkeyAnalysis: HotkeyAnalysis;
   readonly presets: LoadedPreset[];
   readonly showInactiveStatus: boolean;
+  /**
+   * Warnings about values inside the loaded files: invalid settings,
+   * presets, and a project policy section. The file problems the
+   * `Config:` block shows are left out.
+   */
+  readonly valueWarnings: string[];
+  /** Every load warning: the file problems first, then `valueWarnings`. */
   readonly warnings: string[];
 }
 /** Result type for mutating operations. */
 export type SaveResult = { ok: true } | { ok: false; reason: string };
 /** Subset of context needed by storage operations. */
-type StorageContext = Pick<ExtensionContext, "cwd" | "modelRegistry">;
+type StorageContext = Pick<
+  ExtensionContext,
+  "cwd" | "isProjectTrusted" | "modelRegistry"
+>;
 /** Test seam for move writes. */
 type WriteScope = (
   scope: PresetScope,
   presets: readonly Preset[],
   ctx: StorageContext,
-  previousDocument: ScopeConfig["document"],
 ) => Promise<void>;
 
 /** Append a preset to a safe scope. */
@@ -58,30 +70,29 @@ export async function addPreset(
     };
   }
 
-  await writeDocument(
-    scope,
-    loaded.document,
-    [...loaded.presets, preset],
-    ctx,
-    loaded.path,
-  );
+  await writeDocument(scope, [...loaded.presets, preset], ctx);
 
   return { ok: true };
 }
 
-/** Load both consolidated scopes, preserving user then project merge order. */
+/**
+ * Load both consolidated scopes, preserving user then project merge order.
+ * The project file is read only while Pi trusts the project.
+ */
 export async function loadAll(ctx: StorageContext): Promise<LoadAllResult> {
+  const location = { cwd: ctx.cwd, trusted: ctx.isProjectTrusted() };
   const [user, project] = await Promise.all([
-    loadScope("user", ctx.cwd),
-    loadScope("project", ctx.cwd),
+    loadScope("user", location),
+    loadScope("project", location),
   ]);
+  const files = [user.file, project.file] as const;
   const showInactiveStatus =
     project.showInactiveStatus ?? user.showInactiveStatus;
   // Policy warnings for the user scope belong to loadPolicy. The project
   // scope has no other reader, so its policy warnings surface here.
-  const warnings = [
-    ...scopeLoadWarnings("user", user, showInactiveStatus),
-    ...scopeLoadWarnings("project", project, showInactiveStatus),
+  const valueWarnings = [
+    ...scopeValueWarnings("user", user, showInactiveStatus),
+    ...scopeValueWarnings("project", project, showInactiveStatus),
     ...project.warnings.policy,
   ];
   const presets = mergeScopes(
@@ -95,10 +106,12 @@ export async function loadAll(ctx: StorageContext): Promise<LoadAllResult> {
   }));
 
   return {
+    files,
     hotkeyAnalysis: analyzeHotkeys(presets),
     presets,
-    showInactiveStatus: showInactiveStatus ?? DEFAULT_SHOW_INACTIVE_STATUS,
-    warnings,
+    showInactiveStatus: showInactiveStatus ?? DEFAULT_CONFIG.showInactiveStatus,
+    valueWarnings,
+    warnings: [...configFileWarnings(files), ...valueWarnings],
   };
 }
 
@@ -146,23 +159,13 @@ export async function movePreset(
     (_preset, index) => index !== sourceIndex,
   );
 
-  await writeScope(
-    destinationScope,
-    [...destination.presets, nextPreset],
-    ctx,
-    destination.document,
-  );
+  await writeScope(destinationScope, [...destination.presets, nextPreset], ctx);
 
   try {
-    await writeScope(sourceScope, nextSource, ctx, source.document);
+    await writeScope(sourceScope, nextSource, ctx);
   } catch (sourceError) {
     try {
-      await writeScope(
-        destinationScope,
-        destination.presets,
-        ctx,
-        destination.document,
-      );
+      await writeScope(destinationScope, destination.presets, ctx);
     } catch (rollbackError) {
       throw new AggregateError(
         [sourceError, rollbackError],
@@ -190,7 +193,7 @@ export async function removePreset(
   const next = loaded.presets.filter((preset) => preset.name !== name);
 
   if (next.length !== loaded.presets.length)
-    await writeDocument(scope, loaded.document, next, ctx, loaded.path);
+    await writeDocument(scope, next, ctx);
 
   return { ok: true };
 }
@@ -222,19 +225,18 @@ export async function reorderWithinScope(
 
   for (const preset of loaded.presets)
     if (!seen.has(preset.name)) next.push(preset);
-  await writeDocument(scope, loaded.document, next, ctx, loaded.path);
+  await writeDocument(scope, next, ctx);
 
   return { ok: true };
 }
 
-/** Replace only a scope's presets section, preserving the complete loaded document. */
+/** Replace only a scope's presets section, preserving the rest of the file. */
 export async function saveScope(
   scope: PresetScope,
   presets: readonly Preset[],
   ctx: StorageContext,
-  previousDocument: ScopeConfig["document"],
 ): Promise<void> {
-  await writeDocument(scope, previousDocument, presets, ctx);
+  await writeDocument(scope, presets, ctx);
 }
 
 /** Project a preset onto its persisted fields. */
@@ -290,7 +292,7 @@ export async function updatePreset(
   const next = [...loaded.presets];
 
   next[index] = nextPreset;
-  await writeDocument(scope, loaded.document, next, ctx, loaded.path);
+  await writeDocument(scope, next, ctx);
 
   return { ok: true };
 }
@@ -300,18 +302,25 @@ function loadableWarnings(loaded: ScopeConfig): string[] {
   return [...loaded.warnings.file, ...loaded.warnings.presets];
 }
 
-function pathForScope(scope: PresetScope, ctx: StorageContext): string {
-  return scope === "user"
-    ? getGlobalConfigPath()
-    : getProjectConfigPath(ctx.cwd);
-}
-
+/**
+ * Load one scope for a mutation, or refuse when the project is not
+ * trusted or the file did not load completely.
+ */
 async function readScope(
   scope: PresetScope,
   ctx: StorageContext,
-): Promise<(ScopeConfig & { path: string }) | { ok: false; reason: string }> {
-  const path = pathForScope(scope, ctx);
-  const result = await loadScope(scope, ctx.cwd);
+): Promise<ScopeConfig | { ok: false; reason: string }> {
+  const path = getConfigPath(scope, ctx.cwd);
+  const trusted = ctx.isProjectTrusted();
+
+  if (scope === "project" && !trusted) {
+    return {
+      ok: false,
+      reason: `The project is not trusted, so ${path} was not saved. Trust the project and try again.`,
+    };
+  }
+
+  const result = await loadScope(scope, { cwd: ctx.cwd, trusted });
   // Compiled-rule warnings only come from loadPolicy, which also carries
   // the user policy bucket, so the raw bucket is read here for project only.
   const policyWarnings =
@@ -327,16 +336,16 @@ async function readScope(
     };
   }
 
-  return { ...result, path };
+  return result;
 }
 
 /**
- * Warnings `loadAll` shows for one scope, in file, setting, then preset
- * order. An invalid `showInactiveStatus` warning names the default when no
+ * Warnings `loadAll` shows about one scope's values, in setting, then
+ * preset order. An invalid `showInactiveStatus` warning names the default when no
  * scope supplies a valid value, and otherwise says the value was ignored,
  * since the other scope's value applies.
  */
-function scopeLoadWarnings(
+function scopeValueWarnings(
   scope: PresetScope,
   loaded: ScopeConfig,
   effectiveShowInactiveStatus: boolean | undefined,
@@ -348,30 +357,30 @@ function scopeLoadWarnings(
       : [
           `${formatScopeName(scope)} setting "showInactiveStatus" must be a boolean, not ${JSON.stringify(invalid.value)}. ${
             effectiveShowInactiveStatus === undefined
-              ? `Using the default value ${String(DEFAULT_SHOW_INACTIVE_STATUS)}.`
+              ? `Using the default value ${String(DEFAULT_CONFIG.showInactiveStatus)}.`
               : "Ignored it."
           }`,
         ];
 
-  return [
-    ...loaded.warnings.file,
-    ...settingWarnings,
-    ...loaded.warnings.presets,
-  ];
+  return [...settingWarnings, ...loaded.warnings.presets];
 }
 
+/**
+ * Replace one scope's `presets` with `presets`, keeping the file's other
+ * keys and stamping the current `version`.
+ */
 async function writeDocument(
   scope: PresetScope,
-  document: ScopeConfig["document"],
   presets: readonly Preset[],
   ctx: StorageContext,
-  targetPath: string = pathForScope(scope, ctx),
 ): Promise<void> {
-  const nextDocument = {
-    ...document,
-    version: 2,
-    presets: presets.map(toPersistedPreset),
-  };
-
-  await writeJsonFile(targetPath, nextDocument);
+  await updateConfigFile(
+    {
+      path: getConfigPath(scope, ctx.cwd),
+      scope,
+      trusted: ctx.isProjectTrusted(),
+      version: CONFIG_VERSION,
+    },
+    (data) => ({ ...data, presets: presets.map(toPersistedPreset) }),
+  );
 }

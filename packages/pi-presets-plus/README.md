@@ -84,84 +84,108 @@ If you have remapped Pi's keys, the editor follows your bindings.
 
 ## Configuration
 
-Presets Plus reads these files:
+Presets Plus reads one `config.json` per scope:
 
-| Scope   | File                                   | Notes                                                                                                                        |
-| ------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| User    | `<agent-dir>/presets-plus/config.json` | Available in every project. It can contain presets, the inactive-status setting, and policy rules.                           |
-| Project | `<repo>/.pi/presets-plus/config.json`  | Available in that repository. It can contain presets and the inactive-status setting. Policy rules in this file are ignored. |
+| Scope   | Path                                   |
+| :------ | :------------------------------------- |
+| User    | `~/.pi/agent/presets-plus/config.json` |
+| Project | `.pi/presets-plus/config.json`         |
 
-A minimal file looks like this:
+The Project path is relative to the directory Pi starts in. If you set
+`PI_CODING_AGENT_DIR`, it replaces `~/.pi/agent`. Presets from both files are
+available, and a Project preset takes precedence over a User preset with the
+same name. For `showInactiveStatus`, the Project value wins over the User value,
+which wins over the default. Policy rules are read only from the User file.
+
+Presets Plus reads, migrates, and saves the Project file only while Pi trusts
+the project. In an untrusted project it skips the file, warns when the session
+starts and on `/presets reload`, and shows `skipped (untrusted)` in
+`/presets status`. An untrusted project without the file stays silent. See [Pi's
+project trust documentation][pi-project-trust] for how to trust a project.
+
+Neither file exists until you save a preset or create it yourself. This User
+file has every setting at its default:
 
 ```json
 {
   "version": 2,
-  "presets": [
-    {
-      "name": "plan",
-      "provider": "anthropic",
-      "model": "claude-opus-4-5",
-      "thinkingLevel": "high",
-      "hotkey": "ctrl+alt+p"
-    }
-  ]
+  "showInactiveStatus": true,
+  "presets": [],
+  "policy": { "rules": [] }
 }
 ```
 
-The following table lists the configuration keys. Paths use `[]` for an item in
-an array. User files support every key. Project files support `version`,
-`showInactiveStatus`, and `presets`; a project `policy` section is ignored and
-produces a warning.
+The following table lists the keys. Paths use `[]` for an item in an array. A
+Project file supports every key except `policy`, which produces a warning there.
 
-| Key                                 | Explanation                                                                                                 |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `version`                           | Required. Must be `2`. A file without it, or with another value, is ignored with a warning.                 |
-| `showInactiveStatus`                | Set to `false` to hide `Preset: none` when no preset is active. The project value overrides the user value. |
-| `presets`                           | An array of preset objects. Project presets take precedence when both scopes contain the same name.         |
-| `presets[].name`                    | Required unique name within the file.                                                                       |
-| `presets[].provider`                | Required provider that hosts the model.                                                                     |
-| `presets[].model`                   | Required model identifier.                                                                                  |
-| `presets[].thinkingLevel`           | Reasoning level to request, such as `low`, `medium`, or `high`.                                             |
-| `presets[].tools`                   | Exact tool list. Omit it or leave it empty to keep the active tools.                                        |
-| `presets[].instructions`            | Extra instructions added to Pi's system prompt.                                                             |
-| `presets[].hotkey`                  | Optional key combination that activates the preset.                                                         |
-| `presets[].order`                   | Optional ordering value preserved in the file. The array order is used by default.                          |
-| `policy`                            | Contains directory rules. Only the user configuration supports this key.                                    |
-| `policy.rules`                      | Array of directory policy rules.                                                                            |
-| `policy.rules[].match`              | Regular expression tested against the current working directory.                                            |
-| `policy.rules[].allow`              | Matchers that form the allow list. If present, a preset must match one of them.                             |
-| `policy.rules[].prohibit`           | Matchers that prevent activation. Prohibited matches override allowed matches.                              |
-| `policy.rules[].default`            | Matcher used to choose a preset in a fresh session.                                                         |
-| `policy.rules[].allow[].field`      | Field to test: `name`, `provider`, or `model`. It defaults to `name`.                                       |
-| `policy.rules[].allow[].pattern`    | Regular expression tested against the selected field.                                                       |
-| `policy.rules[].prohibit[].field`   | Field to test: `name`, `provider`, or `model`. It defaults to `name`.                                       |
-| `policy.rules[].prohibit[].pattern` | Regular expression tested against the selected field.                                                       |
-| `policy.rules[].default.field`      | Field to test: `name`, `provider`, or `model`. It defaults to `name`.                                       |
-| `policy.rules[].default.pattern`    | Regular expression tested against the selected field.                                                       |
+| Key                                 | Default  | Description                                                                                                 |
+| :---------------------------------- | :------- | :---------------------------------------------------------------------------------------------------------- |
+| `version`                           | `2`      | The file format. A file without it reads as version 2. A file with another value is ignored with a warning. |
+| `showInactiveStatus`                | `true`   | Set to `false` to hide `Preset: none` when no preset is active.                                             |
+| `presets`                           | `[]`     | An array of preset objects.                                                                                 |
+| `presets[].name`                    | required | Unique name within the file.                                                                                |
+| `presets[].provider`                | required | Provider that hosts the model.                                                                              |
+| `presets[].model`                   | required | Model identifier.                                                                                           |
+| `presets[].thinkingLevel`           | none     | Reasoning level to request: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`.                   |
+| `presets[].tools`                   | none     | Exact tool list. Omit it or leave it empty to keep the active tools.                                        |
+| `presets[].instructions`            | none     | Extra instructions added to Pi's system prompt.                                                             |
+| `presets[].hotkey`                  | none     | Key combination that activates the preset.                                                                  |
+| `presets[].order`                   | none     | Ordering value preserved in the file. The array order is used.                                              |
+| `policy`                            | none     | Directory rules. Only the User file supports this key.                                                      |
+| `policy.rules`                      | `[]`     | Array of directory policy rules.                                                                            |
+| `policy.rules[].match`              | required | Regular expression tested against the current working directory.                                            |
+| `policy.rules[].allow`              | none     | Matchers that form the allow list. If present, a preset must match one of them.                             |
+| `policy.rules[].prohibit`           | none     | Matchers that prevent activation. Prohibited matches override allowed matches.                              |
+| `policy.rules[].default`            | none     | Matcher used to choose a preset in a fresh session.                                                         |
+| `policy.rules[].allow[].field`      | `name`   | Field to test: `name`, `provider`, or `model`.                                                              |
+| `policy.rules[].allow[].pattern`    | required | Regular expression tested against the selected field.                                                       |
+| `policy.rules[].prohibit[].field`   | `name`   | Field to test: `name`, `provider`, or `model`.                                                              |
+| `policy.rules[].prohibit[].pattern` | required | Regular expression tested against the selected field.                                                       |
+| `policy.rules[].default.field`      | `name`   | Field to test: `name`, `provider`, or `model`.                                                              |
+| `policy.rules[].default.pattern`    | required | Regular expression tested against the selected field.                                                       |
 
-User presets work across projects. Project presets stay with their repository.
-After editing either configuration file by hand, run `/presets reload`. It loads
-the new presets and the `showInactiveStatus` setting at once. Hotkey changes
-need Pi's `/reload`, and `/presets reload` names the presets whose hotkeys
-changed. Policy rules are read each time a preset activates.
+A preset looks like this:
+
+```json
+{
+  "name": "plan",
+  "provider": "anthropic",
+  "model": "claude-opus-4-5",
+  "thinkingLevel": "high",
+  "hotkey": "ctrl+alt+p"
+}
+```
+
+### Applying changes
+
+Pi reads this file at session start. Run `/reload` after editing it. Instead,
+`/presets reload` re-reads both files in place: it loads the new presets and the
+`showInactiveStatus` setting at once, shows any configuration warnings again,
+and names the presets whose hotkey changes still need `/reload`. Policy rules
+are read each time a preset activates. Saving from the picker or the editor
+writes the file directly, and offers a reload when a hotkey changed.
 
 ### Migrating from 0.10 and earlier
 
 Version 0.10 and earlier kept presets, settings, and policy rules in separate
-files. When a session starts, the extension moves them into one `config.json`
-per scope:
+files. When a session starts, Presets Plus moves them into one `config.json` per
+scope and says so in one message naming the files it wrote:
 
-- User scope: `<agent-dir>/presets-plus/config.json` (version 1),
+- User scope: `~/.pi/agent/presets-plus/config.json` (version 1),
   `presets.json`, and `policy.json` become one version 2 `config.json`.
-- Project scope: `<repo>/.pi/presets-plus/presets.json` becomes
-  `<repo>/.pi/presets-plus/config.json`.
+- Project scope: `.pi/presets-plus/presets.json` becomes
+  `.pi/presets-plus/config.json`. This happens only while Pi trusts the project;
+  in an untrusted project the old file stays, and the session start warning
+  names it.
 
 The old files are deleted only after the new file is written. If any old file in
 a scope is unreadable, is not valid JSON, or lacks `"version": 1`, nothing in
 that scope changes, the scope starts empty for that session, and a warning names
 the file. Fix or remove that file, then run `/reload` or start a new session to
-retry. You can also write the version 2 `config.json` yourself. Once a version 2
-file exists, the old files in that scope are ignored.
+retry. You can also write the version 2 `config.json` yourself. Once a
+`config.json` exists, the old files in that scope are left alone and ignored.
+
+### Directory policy
 
 Policy rules use raw, unanchored JavaScript regular expressions. Rules whose
 `match` fits the current directory combine their `allow` and `prohibit`
@@ -241,12 +265,12 @@ regardless of where their settings come from.
 
 ## Commands
 
-| Command                       | What it does                                                    |
-| ----------------------------- | --------------------------------------------------------------- |
-| `/presets`                    | Opens the picker.                                               |
-| `/presets <name>`             | Activates the named preset.                                     |
-| `/presets clear`              | Clears the active preset and returns to Pi's defaults.          |
-| `/presets reload`             | Re-reads your configuration files after you edit them by hand.  |
-| `/presets status`             | Shows the active preset's settings compared to Pi's defaults.   |
-| `/presets policy`             | Shows allowed and prohibited presets for the current directory. |
-| `/presets show-prompt [name]` | Shows the active preset's prompt, or the named preset's prompt. |
+| Command                       | What it does                                                                                 |
+| ----------------------------- | -------------------------------------------------------------------------------------------- |
+| `/presets`                    | Opens the picker.                                                                            |
+| `/presets <name>`             | Activates the named preset.                                                                  |
+| `/presets clear`              | Clears the active preset and returns to Pi's defaults.                                       |
+| `/presets reload`             | Re-reads your configuration files after you edit them by hand.                               |
+| `/presets status`             | Shows the active preset compared to Pi's defaults, and the state of each configuration file. |
+| `/presets policy`             | Shows allowed and prohibited presets for the current directory.                              |
+| `/presets show-prompt [name]` | Shows the active preset's prompt, or the named preset's prompt.                              |

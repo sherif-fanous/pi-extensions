@@ -129,7 +129,7 @@ describe("ActivePresetSession", () => {
 
     expect(session.current()).toMatchObject({ dirty: false, name: "plan" });
     expect(entries).toContainEqual({
-      data: { name: "plan", scope: "project" },
+      data: { version: 1, name: "plan", scope: "project" },
       type: "presets-plus:active",
     });
     expect(status["presets-plus"]).toBe("Preset: plan");
@@ -138,7 +138,7 @@ describe("ActivePresetSession", () => {
 
     expect(session.current()).toBeUndefined();
     expect(entries).toContainEqual({
-      data: { name: null },
+      data: { version: 1, name: null },
       type: "presets-plus:active",
     });
     expect(status["presets-plus"]).toBe("Preset: none");
@@ -210,6 +210,37 @@ describe("ActivePresetSession", () => {
     expect(result.warnings).toEqual([]);
     expect(result.state).toMatchObject({ name: "plan", scope: "project" });
     expect(session.current()).toEqual(result.state);
+  });
+
+  it("restores a version 1 entry", () => {
+    const { ctx, session } = harness();
+    const branch = [
+      {
+        customType: "presets-plus:active",
+        data: { version: 1, name: "plan", scope: "project" },
+        type: "custom",
+      },
+    ] as ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
+
+    const result = session.restoreFromBranch(branch, [loadedPreset], ctx);
+
+    expect(result.state).toMatchObject({ name: "plan", scope: "project" });
+  });
+
+  it("does not restore an entry with another version", () => {
+    const { ctx, session } = harness();
+    const branch = [
+      {
+        customType: "presets-plus:active",
+        data: { version: 2, name: "plan", scope: "project" },
+        type: "custom",
+      },
+    ] as ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
+
+    const result = session.restoreFromBranch(branch, [loadedPreset], ctx);
+
+    expect(result).toEqual({ state: undefined, warnings: [] });
+    expect(session.current()).toBeUndefined();
   });
 
   it("refreshes the status badge after a successful restore", () => {

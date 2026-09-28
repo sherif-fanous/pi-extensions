@@ -64,7 +64,7 @@ export default function presetsPlus(pi: ExtensionAPI) {
       const startupWarnings: string[] = [];
 
       try {
-        const migration = describeMigration(await migrateAll(ctx.cwd));
+        const migration = describeMigration(await migrateAll(ctx));
 
         if (migration.info) ctx.ui.notify(migration.info, "info");
 

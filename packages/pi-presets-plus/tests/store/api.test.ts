@@ -22,10 +22,9 @@ import {
   movePreset,
   removePreset,
   reorderWithinScope,
-  saveScope as saveScopeImpl,
+  saveScope,
   updatePreset,
 } from "../../src/store/api.js";
-import { loadScope } from "../../src/store/config.js";
 import type { Preset, PresetScope } from "../../src/types.js";
 import {
   makeStubModelRegistry,
@@ -45,9 +44,10 @@ let agentDir: string;
 let projectDir: string;
 let prevAgentDirEnv: string | undefined;
 
-function makeCtx(cwd: string, stub: RegistryStub) {
+function makeCtx(cwd: string, stub: RegistryStub, trusted = true) {
   return {
     cwd,
+    isProjectTrusted: () => trusted,
     modelRegistry: makeStubModelRegistry(stub),
   };
 }
@@ -65,16 +65,6 @@ function presetPath(scope: PresetScope): string {
   return scope === "user"
     ? join(agentDir, "presets-plus", "config.json")
     : join(projectDir, ".pi", "presets-plus", "config.json");
-}
-
-async function saveScope(
-  scope: PresetScope,
-  presets: readonly Preset[],
-  ctx: ReturnType<typeof makeCtx>,
-): Promise<void> {
-  const loaded = await loadScope(scope, ctx.cwd);
-
-  await saveScopeImpl(scope, presets, ctx, loaded.document);
 }
 
 function unsafeMutationReason(scope: PresetScope, path: string): string {
@@ -369,6 +359,64 @@ describe("addPreset", () => {
     const result = await addPreset(preset("plan"), "project", ctx);
 
     expect(result).toEqual({ ok: true });
+  });
+});
+
+describe("mutations in an untrusted project", () => {
+  it("refuses to create a project file", async () => {
+    const ctx = makeCtx(projectDir, fullRegistry, false);
+    const path = presetPath("project");
+
+    expect(await addPreset(preset("plan"), "project", ctx)).toEqual({
+      ok: false,
+      reason: `The project is not trusted, so ${path} was not saved. Trust the project and try again.`,
+    });
+    await expect(stat(path)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("refuses to move a preset out of a skipped project file", async () => {
+    const project = JSON.stringify({ presets: [preset("move")], version: 2 });
+    const path = await writeRawScope("project", project);
+    const ctx = makeCtx(projectDir, fullRegistry, false);
+
+    const result = await movePreset(
+      "move",
+      "project",
+      "user",
+      preset("move"),
+      ctx,
+    );
+
+    expect(result.ok).toBe(false);
+    expect(await readFile(path, "utf-8")).toBe(project);
+    await expect(stat(presetPath("user"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("still saves the user scope", async () => {
+    const ctx = makeCtx(projectDir, fullRegistry, false);
+
+    expect(await addPreset(preset("plan"), "user", ctx)).toEqual({ ok: true });
+  });
+});
+
+describe("saving a file without version", () => {
+  it("stamps version 2 first and keeps the other keys", async () => {
+    const ctx = makeCtx(projectDir, fullRegistry);
+    const path = await writeRawScope(
+      "user",
+      JSON.stringify({ showInactiveStatus: false, presets: [] }),
+    );
+
+    expect(await addPreset(preset("plan"), "user", ctx)).toEqual({ ok: true });
+    expect(await readFile(path, "utf-8")).toBe(
+      `${JSON.stringify(
+        { version: 2, showInactiveStatus: false, presets: [preset("plan")] },
+        null,
+        2,
+      )}\n`,
+    );
   });
 });
 
