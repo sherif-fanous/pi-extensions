@@ -49,3 +49,19 @@
   the same movement, scrolling, and `(n/m)` position.
 - `scrollLines`, which scrolls a text body with `↑` and `↓` edge markers.
 - `emptyStateLines`, which draws an empty or no-match state as muted text.
+- `loadConfigFiles` and `readConfigFile`, which read an extension's
+  `config.json` in each scope into a `loaded`, `missing`, `invalid`, or
+  `untrusted` state, skip a project file Pi does not trust, and ignore a file
+  with another `version`.
+- `configFilePath`, `configScopeLabel`, and `configFileWarnings`, which locate
+  the file, label its scope `User` or `Project`, and collect the warnings to
+  show once.
+- `renameConfigKeys` and `migrateRenamedConfigKeys`, which read a renamed key
+  under its old name and rewrite the file with the new one.
+- `updateConfigFile` and `writeConfigFile`, which save with the current
+  `version` first and refuse to overwrite an invalid file or save to an
+  untrusted project.
+- `configStatusLines`, which writes the `Config:` block of a status report.
+- `configMigratedMessage`, `untrustedProjectConfigWarning`, and
+  `unsupportedConfigVersionWarning`, which word the migration message and the
+  new warnings.

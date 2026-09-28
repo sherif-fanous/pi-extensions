@@ -1,6 +1,8 @@
 import {
   malformedConfigWarning,
   unreadableConfigWarning,
+  unsupportedConfigVersionWarning,
+  untrustedProjectConfigWarning,
 } from "../src/index.js";
 import { describe, expect, it } from "vitest";
 
@@ -46,6 +48,28 @@ describe("malformedConfigWarning", () => {
       }),
     ).toBe(
       "Configuration at /a/config.json must be a JSON object. Ignored the file.",
+    );
+  });
+});
+
+describe("untrustedProjectConfigWarning", () => {
+  it("names the skipped file and how to use it", () => {
+    expect(untrustedProjectConfigWarning("/repo/.pi/x/config.json")).toBe(
+      "Skipped project configuration at /repo/.pi/x/config.json because the project is not trusted. Trust the project to use it.",
+    );
+  });
+});
+
+describe("unsupportedConfigVersionWarning", () => {
+  it("names the found and supported versions", () => {
+    expect(unsupportedConfigVersionWarning("/a/config.json", 3, 2)).toBe(
+      "Configuration at /a/config.json has version 3, but only version 2 is supported. Ignored the file.",
+    );
+  });
+
+  it("writes a non-number version as JSON", () => {
+    expect(unsupportedConfigVersionWarning("/a/config.json", "2", 2)).toBe(
+      'Configuration at /a/config.json has version "2", but only version 2 is supported. Ignored the file.',
     );
   });
 });

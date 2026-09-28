@@ -8,6 +8,12 @@
 
 export { createDeferred, type Deferred, flushPromises } from "./async.js";
 export {
+  createProjectTrustContext,
+  createTempConfigDirs,
+  type ProjectTrustContext,
+  type TempConfigDirs,
+} from "./config.js";
+export {
   createFakeCustom,
   type CustomComponent,
   type FakeCustomOptions,

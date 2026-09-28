@@ -11,8 +11,37 @@ export {
   writeJsonFile,
 } from "./atomic-write.js";
 export {
+  type ConfigContext,
+  type ConfigFile,
+  configFilePath,
+  type ConfigFileFs,
+  type ConfigFileLocation,
+  configFileWarnings,
+  type ConfigScope,
+  configScopeLabel,
+  loadConfigFiles,
+  type LoadConfigFilesOptions,
+  readConfigFile,
+  type ReadConfigFileOptions,
+  updateConfigFile,
+  writeConfigFile,
+} from "./config-file.js";
+export {
+  type ConfigKeyRename,
+  renameConfigKeys,
+  type RenamedConfigKeys,
+} from "./config-keys.js";
+export {
+  type ConfigKeyMigration,
+  configMigratedMessage,
+  migrateRenamedConfigKeys,
+} from "./config-migration.js";
+export { configStatusLines } from "./config-report.js";
+export {
   malformedConfigWarning,
   unreadableConfigWarning,
+  unsupportedConfigVersionWarning,
+  untrustedProjectConfigWarning,
 } from "./config-warnings.js";
 export { describeError, describeErrorSentence } from "./errors.js";
 export {
