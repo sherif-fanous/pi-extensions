@@ -32,7 +32,7 @@ API on load. The command MUST accept the subcommand arguments `enable`,
   `disable`, or `status`
 - **THEN** the extension MUST surface a user-facing error message listing the
   valid subcommands
-- **AND** the session toggle state MUST NOT change
+- **AND** the rewriting toggle state MUST NOT change
 
 ### Requirement: Bash Tool Integration
 

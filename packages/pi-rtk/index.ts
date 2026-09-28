@@ -52,8 +52,9 @@ const RTK_USAGE_FORMS: readonly [string, ...string[]] = [
   ...RTK_SUBCOMMANDS.map(({ name }) => `/rtk ${name}`),
 ];
 
-// Session state is intentionally in-memory only: it resets to enabled on every
-// Pi process start and is never persisted to disk.
+// The rewriting toggle belongs to the Pi process, not the session: it survives
+// /new, /resume and /fork, resets to enabled when Pi restarts, and is never
+// persisted to disk.
 let sessionEnabled = true;
 
 // Whether the last spawn of the rtk binary succeeded. ENOENT and EACCES mark it
@@ -212,7 +213,7 @@ function rtkStatusReport(): string {
   return [
     `${EXTENSION_NAME} Status`,
     ...alignLabelRows([
-      ["Session toggle:", isSessionEnabled() ? "on" : "off"],
+      ["Rewriting:", isSessionEnabled() ? "on" : "off"],
       ["Binary:", binary],
       ["Tip:", "Bypass rtk for one command with !RTK_DISABLED=1 <cmd>."],
     ]),

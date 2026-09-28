@@ -184,6 +184,22 @@ describe("footer badge", () => {
     );
   });
 
+  it("keeps rewriting off across a session switch", async () => {
+    const { command, sessionStart, userBash } = await loadRtk();
+    const { ctx, setStatus } = makeContext();
+
+    await sessionStart({ reason: "startup", type: "session_start" }, ctx);
+    await command("disable", ctx);
+    await sessionStart({ reason: "new", type: "session_start" }, ctx);
+
+    expect(setStatus).toHaveBeenLastCalledWith("rtk", "<dim>RTK: off</dim>");
+
+    mocks.spawnSync.mockClear();
+    await userBash(userBashEvent("git status"), ctx);
+
+    expect(mocks.spawnSync).not.toHaveBeenCalled();
+  });
+
   it("follows rtk availability detected by later rewrites", async () => {
     const { sessionStart, userBash } = await loadRtk();
     const { ctx, setStatus } = makeContext();

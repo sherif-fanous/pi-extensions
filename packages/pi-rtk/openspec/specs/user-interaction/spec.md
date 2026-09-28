@@ -87,7 +87,7 @@ toggle MUST NOT be persisted to disk.
 
 #### Scenario: /rtk disable turns the toggle off
 
-- **GIVEN** the session toggle is in any state
+- **GIVEN** the rewriting toggle is in any state
 - **WHEN** the user invokes `/rtk disable`
 - **THEN** the toggle MUST transition to `disabled`
 - **AND** the extension MUST surface a user-facing confirmation
@@ -95,23 +95,29 @@ toggle MUST NOT be persisted to disk.
 
 #### Scenario: /rtk enable turns the toggle on
 
-- **GIVEN** the session toggle is in any state
+- **GIVEN** the rewriting toggle is in any state
 - **WHEN** the user invokes `/rtk enable`
 - **THEN** the toggle MUST transition to `enabled`
 - **AND** the extension MUST surface a user-facing confirmation
 - **AND** the footer indicator MUST update to reflect the enabled state
 
+#### Scenario: toggle survives a session switch
+
+- **GIVEN** the user has invoked `/rtk disable`
+- **WHEN** the user switches session with `/new`, `/resume`, or `/fork`
+- **THEN** the rewriting toggle MUST remain `disabled`
+
 #### Scenario: toggle resets on new Pi process
 
 - **WHEN** Pi exits and is launched again
-- **THEN** the session toggle MUST start in the `enabled` state
+- **THEN** the rewriting toggle MUST start in the `enabled` state
 - **AND** no toggle state MUST be read from disk
 
 ### Requirement: Persistent Footer State Indicator
 
 The extension MUST register a single footer status entry via
 `ctx.ui.setStatus("rtk", ...)` and MUST keep that entry present for the lifetime
-of the extension. The entry MUST reflect both the session toggle and whether the
+of the extension. The entry MUST reflect both the rewriting toggle and whether the
 `rtk` binary runs:
 
 - `RTK: on` in the theme's `dim` color when the toggle is `enabled` and the last
@@ -121,7 +127,7 @@ of the extension. The entry MUST reflect both the session toggle and whether the
 - `RTK: unavailable` in the theme's `warning` color when the toggle is `enabled`
   and the last spawn of `rtk` failed with `ENOENT` or `EACCES`.
 
-The entry MUST update immediately when the session toggle changes and whenever a
+The entry MUST update immediately when the rewriting toggle changes and whenever a
 spawn of `rtk` (the `session_start` probe, a rewrite, or `/rtk status`) changes
 the binary's availability. Other spawn failures, such as a timeout, MUST NOT
 change the entry.
@@ -175,7 +181,7 @@ subcommand's completion description:
 
 ### Requirement: /rtk Status Report
 
-`/rtk status` MUST report the current session toggle state and the detected
+`/rtk status` MUST report the current rewriting toggle state and the detected
 `rtk` binary identity, and MUST include a static educational tip about rtk's
 per-command `!RTK_DISABLED=1 <cmd>` bypass. The tip MUST be plain documentation
 text — the extension MUST NOT read environment variables when producing the
@@ -185,7 +191,7 @@ The report MUST be a command report whose first line is the heading
 `RTK Status`, followed by three rows whose values are aligned to the longest
 label:
 
-- `Session toggle:` with `on` or `off`
+- `Rewriting:` with `on` or `off`
 - `Binary:` with the detected `rtk` version and path, or
   `rtk not detected on PATH`
 - `Tip:` with `Bypass rtk for one command with !RTK_DISABLED=1 <cmd>.`
@@ -200,7 +206,7 @@ muted; the toggle value MUST NOT carry its own color.
 
 - **WHEN** the user invokes `/rtk status`
 - **THEN** the report MUST start with the `RTK Status` heading
-- **AND** the `Session toggle:` row MUST identify the current session toggle
+- **AND** the `Rewriting:` row MUST identify the current rewriting toggle
   state (`on` or `off`)
 - **AND** the `Binary:` row MUST identify the detected `rtk` binary version and
   path, or MUST clearly indicate when `rtk` is not on PATH
