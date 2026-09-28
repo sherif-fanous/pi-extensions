@@ -67,6 +67,23 @@ describe("openConfirm", () => {
     ]);
   });
 
+  it("leaves out the n hint when its choice repeats the cancel action", async () => {
+    const harness = makeConfirmHarness(["n"], { width: 72 });
+
+    await expect(
+      openConfirm(harness.ctx, "Policy Override", "Activate it anyway?", {
+        no: "Cancel",
+        yes: "Override",
+      }),
+    ).resolves.toBe(false);
+
+    const footer = harness.rendered.find((line) => line.includes("Choose"));
+
+    expect(footer).toContain(
+      "←/→ Choose · Enter Confirm · y Override · Esc Cancel",
+    );
+  });
+
   it("opens as a nested overlay", async () => {
     const custom = vi.fn(
       createFakeCustom({ keybindings: createPiKeybindings(), keys: ["n"] }),

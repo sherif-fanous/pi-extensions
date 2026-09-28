@@ -107,7 +107,8 @@ class ConfirmComponent implements Component, Focusable {
       `←/→ Choose`,
       keyHint(this.keybindings, "tui.select.confirm", "Confirm"),
       `y ${this.labels.yes}`,
-      `n ${this.labels.no}`,
+      // `n` still works, but its hint would repeat the cancel hint's action.
+      this.labels.no === CANCEL_LABEL ? undefined : `n ${this.labels.no}`,
       keyHint(this.keybindings, "tui.select.cancel", CANCEL_LABEL),
     ];
     const messageRowsFor = (footerLineCount: number): number =>

@@ -937,8 +937,9 @@ every line SHALL fit the width the dialog is given.
 
 The confirmation dialog's footer SHALL read
 `←/→ Choose · Enter Confirm · y <Yes> · n <No> · Esc Cancel`, where `<Yes>` and
-`<No>` are its two choices. The info dialog's footer SHALL read
-`Enter/Esc Close`.
+`<No>` are its two choices. When `<No>` is `Cancel`, the `n` hint SHALL be left
+out, because it would repeat `Esc Cancel`; `n` still chooses it. The info
+dialog's footer SHALL read `Enter/Esc Close`.
 
 #### Scenario: Long prompt in the info dialog
 
