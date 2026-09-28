@@ -171,13 +171,22 @@ subcommand's completion description:
 - `Stop rewriting shell commands` for `disable`
 - `Show RTK status` for `status`
 
+The menu opens wherever Pi has a UI (TUI and RPC mode). In print and JSON mode,
+bare `/rtk` MUST NOT open it and MUST deliver the `/rtk status` report instead.
+
 #### Scenario: bare /rtk opens overlay
 
-- **WHEN** the user invokes `/rtk` with no arguments
+- **WHEN** the user invokes `/rtk` with no arguments in TUI or RPC mode
 - **THEN** the extension MUST display an interactive selection overlay titled
   with the current footer text and listing the three descriptions above
 - **AND** selecting an item MUST execute the corresponding subcommand
 - **AND** dismissing the overlay MUST NOT change any state
+
+#### Scenario: bare /rtk in print or JSON mode
+
+- **WHEN** the user invokes `/rtk` with no arguments in print or JSON mode
+- **THEN** the extension MUST NOT open the selection overlay
+- **AND** the extension MUST deliver the same report as `/rtk status`
 
 ### Requirement: /rtk Status Report
 

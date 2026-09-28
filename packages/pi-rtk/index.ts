@@ -279,8 +279,11 @@ export default function (pi: ExtensionAPI) {
     handler: guardCommand(EXTENSION_NAME, async (args, ctx) => {
       const subcommand = args.trim();
 
+      // Print and JSON mode have no UI to open a menu in, so bare /rtk shows
+      // the status report, its text equivalent. RPC clients get the menu.
       if (subcommand.length === 0) {
-        await showRtkOverlay(ctx, pi);
+        if (ctx.hasUI) await showRtkOverlay(ctx, pi);
+        else showRtkStatus(ctx, pi);
 
         return;
       }

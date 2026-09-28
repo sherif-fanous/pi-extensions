@@ -115,7 +115,15 @@ User !!<cmd>
 - `/rtk enable` turns command rewriting on for the running Pi process, across /new, /resume and /fork, until Pi restarts.
 - `/rtk disable` turns command rewriting off for the running Pi process, across /new, /resume and /fork, until Pi restarts.
 - `/rtk status` shows the current toggle state, detected `rtk` binary details, and a bypass tip.
-- `/rtk` opens a menu, titled with the current state, where you can choose the same actions interactively.
+- `/rtk` opens a menu, titled with the current state, where you can choose the same actions interactively. Outside Pi's interactive terminal UI it shows the `/rtk status` report instead.
+
+| Key       | Action                  |
+| :-------- | :---------------------- |
+| `↑` / `↓` | Move the selection      |
+| `Enter`   | Run the selected action |
+| `Esc`     | Close without choosing  |
+
+If you have remapped Pi's keys, the menu follows your bindings.
 
 The footer includes a persistent RTK status indicator: dim `RTK: on` when rewriting is enabled and the `rtk` binary runs, dim `RTK: off` when rewriting is disabled, and `RTK: unavailable` in warning color when rewriting is enabled but the `rtk` binary is missing from `PATH` or not executable.
 

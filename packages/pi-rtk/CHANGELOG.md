@@ -8,6 +8,7 @@ This changelog follows [Common Changelog](https://common-changelog.org/).
 
 - **Breaking:** pi-rtk now requires Pi `0.80.4` or later. Upgrade Pi to `0.80.4` or newer before upgrading this extension.
 - The footer indicator now shows the real state: dim `RTK: on` when rewriting is enabled and the `rtk` binary runs, dim `RTK: off` when rewriting is disabled, and `RTK: unavailable` in warning color when rewriting is enabled but the `rtk` binary is missing from PATH or not executable. Previously it showed a green `rtk ✓` even when `rtk` was missing.
+- A bare `/rtk` outside Pi's interactive terminal UI now shows the `/rtk status` report instead of opening the menu.
 
 ## [0.6.0] - 2026-05-13
 

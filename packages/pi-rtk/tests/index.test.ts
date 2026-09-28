@@ -122,7 +122,11 @@ function makeContext(
     theme: createMarkerTheme(),
     ...overrides,
   };
-  const ctx: Pick<ExtensionContext, "mode"> & { ui: FakeUi } = { mode, ui };
+  const ctx: Pick<ExtensionContext, "hasUI" | "mode"> & { ui: FakeUi } = {
+    hasUI: mode === "tui" || mode === "rpc",
+    mode,
+    ui,
+  };
 
   return { ctx: ctx as ExtensionCommandContext, notify, setStatus };
 }
@@ -241,6 +245,30 @@ describe("/rtk command", () => {
     ]);
     expect(notify).toHaveBeenCalledWith("Command rewriting disabled.", "info");
     expect(setStatus).toHaveBeenLastCalledWith("rtk", "<dim>RTK: off</dim>");
+  });
+
+  it("opens the menu for an RPC client", async () => {
+    const select = vi.fn(() => Promise.resolve(undefined));
+    const { command } = await loadRtk();
+    const { ctx } = makeContext("rpc", { select });
+
+    await command("", ctx);
+
+    expect(select).toHaveBeenCalledOnce();
+  });
+
+  it("shows the status report instead of the menu in print mode", async () => {
+    const select = vi.fn(() => Promise.resolve(undefined));
+    const { command } = await loadRtk();
+    const { ctx, notify } = makeContext("print", { select });
+
+    await command("", ctx);
+
+    expect(select).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(/^<accent><b>RTK Status<\/b><\/accent>\n/u),
+      "info",
+    );
   });
 
   it("warns about an unknown subcommand and lists every form", async () => {
