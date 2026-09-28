@@ -1,11 +1,12 @@
 /**
  * Covers extension scaffolding: the command and event guards' error text
- * and pass-through, warning notifications, and first-word subcommand
- * completions.
+ * and pass-through, warning notifications, the usage-mistake warning, and
+ * first-word subcommand completions.
  */
 import {
   guardCommand,
   guardEvent,
+  notifyUsageWarning,
   notifyWarnings,
   subcommandCompletions,
   type GuardContext,
@@ -158,20 +159,45 @@ describe("notifyWarnings", () => {
   });
 });
 
+describe("notifyUsageWarning", () => {
+  it.each([
+    [["/notifications"], "Try /notifications."],
+    [
+      ["/theme-sync", "/theme-sync status"],
+      "Try /theme-sync or /theme-sync status.",
+    ],
+    [
+      ["/rtk", "/rtk enable", "/rtk disable", "/rtk status"],
+      "Try /rtk, /rtk enable, /rtk disable, or /rtk status.",
+    ],
+  ] as const)("lists the forms %j as alternatives", (forms, suggestion) => {
+    const { ctx, notify } = notifyingContext();
+
+    notifyUsageWarning(ctx, "RTK", " foo bar ", forms);
+
+    expect(notify).toHaveBeenCalledExactlyOnceWith(
+      `RTK: 1 warning\n- Unknown subcommand "foo bar". ${suggestion}`,
+      "warning",
+    );
+  });
+});
+
 describe("subcommandCompletions", () => {
   const complete = subcommandCompletions([
-    { description: "show status", name: "status" },
+    { description: "Show status", name: "status" },
     { name: "enable" },
   ]);
 
   it("completes the first word by prefix, ignoring leading whitespace", () => {
     expect(complete("  st")).toEqual([
-      { label: "status: show status", value: "status" },
+      { description: "Show status", label: "status", value: "status" },
     ]);
   });
 
-  it("labels a subcommand without a description by its name", () => {
-    expect(complete("en")).toEqual([{ label: "enable", value: "enable" }]);
+  it("omits the description of a subcommand without one", () => {
+    expect(complete("en")).toStrictEqual([
+      { label: "enable", value: "enable" },
+    ]);
   });
 
   it("returns null once the argument contains a space", () => {

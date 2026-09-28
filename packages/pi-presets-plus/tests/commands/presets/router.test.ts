@@ -120,9 +120,10 @@ describe("getArgumentCompletions", () => {
     expect(await getArgumentCompletions("list --json")).toEqual([]);
   });
 
-  it("each entry carries a human-readable label", async () => {
+  it("labels each entry by its name and describes it in Pi's description column", async () => {
     for (const entry of await getArgumentCompletions("")) {
-      expect(entry.label.length).toBeGreaterThan(entry.value.length);
+      expect(entry.label).toBe(entry.value);
+      expect(entry).toHaveProperty("description", expect.stringMatching(/\S/));
     }
   });
 

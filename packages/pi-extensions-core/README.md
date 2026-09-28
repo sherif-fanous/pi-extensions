@@ -17,7 +17,34 @@ mid-sentence.
 ```ts
 import { describeError } from "@sherif-fanous/pi-extensions-core";
 
-ctx.ui.notify(`Could not load presets: ${describeError(err)}.`, "error");
+warnings.push(`Skipped preset "${name}" (${describeError(err)}).`);
+```
+
+### `describeErrorSentence(error: unknown): string`
+
+Returns the `describeError` text followed by a full stop, unless it already ends
+in `.`, `!`, or `?`. Use it when the error ends the sentence, so the text never
+shows `..`.
+
+```ts
+import { describeErrorSentence } from "@sherif-fanous/pi-extensions-core";
+
+ctx.ui.notify(
+  `Could not save the configuration: ${describeErrorSentence(err)}`,
+  "error",
+);
+```
+
+### `pluralize(count: number, singular: string, plural?: string): string`
+
+Returns the count followed by the noun in the matching number: `1 preset`,
+`0 presets`, `3 presets`. `plural` defaults to `singular` followed by `s`; pass
+it for irregular nouns.
+
+```ts
+import { pluralize } from "@sherif-fanous/pi-extensions-core";
+
+ctx.ui.notify(`Sliced ${pluralize(count, "entry", "entries")}.`, "info");
 ```
 
 ### `isRecord(value: unknown): value is Record<string, unknown>`
@@ -181,7 +208,7 @@ export default function (pi: ExtensionAPI) {
         "Theme Sync Status",
         ...alignLabelRows([
           ["Appearance:", "dark"],
-          ["Applied Theme:", "solarized-dark"],
+          ["Applied theme:", "solarized-dark"],
         ]),
       ].join("\n");
 
@@ -260,22 +287,48 @@ notifyWarnings(ctx, "Notification Center", warnings);
 // - Configuration at /agent/notification-center/config.json must be a JSON object. Ignored the file.
 ```
 
+### `notifyUsageWarning(ctx: GuardContext, extensionName: string, argument: string, forms: readonly [string, ...string[]]): void`
+
+Answers an argument the command does not accept with one warning through
+`notifyWarnings`. `forms` lists every valid way to run the command as the user
+types it; a command that takes no argument passes only its bare form. The
+argument is trimmed.
+
+```ts
+import { notifyUsageWarning } from "@sherif-fanous/pi-extensions-core";
+
+notifyUsageWarning(ctx, "RTK", args, [
+  "/rtk",
+  "/rtk enable",
+  "/rtk disable",
+  "/rtk status",
+]);
+// RTK: 1 warning
+// - Unknown subcommand "foo". Try /rtk, /rtk enable, /rtk disable, or /rtk status.
+
+notifyUsageWarning(ctx, "Notification Center", args, ["/notifications"]);
+// Notification Center: 1 warning
+// - Unknown subcommand "foo". Try /notifications.
+```
+
 ### `subcommandCompletions(subcommands: readonly SubcommandCompletion[])`
 
 Returns a `getArgumentCompletions` function for fixed subcommands, each
 `{ name, description? }`. Only the first word completes: after leading
 whitespace is ignored, a prefix containing a space returns `null`. Otherwise the
-function returns the subcommands whose names start with the prefix, labeled
-`<name>: <description>` or just `<name>`, or `null` when none match.
+function returns the subcommands whose names start with the prefix, or `null`
+when none match. Each completion is labeled with the name alone and carries the
+description in its `description` field, which Pi shows as a dimmed column beside
+the name, as it does for its own commands.
 
 ```ts
 import { subcommandCompletions } from "@sherif-fanous/pi-extensions-core";
 
 pi.registerCommand("rtk", {
   getArgumentCompletions: subcommandCompletions([
-    { name: "enable" },
-    { name: "disable" },
-    { name: "status", description: "show rtk status" },
+    { name: "enable", description: "Rewrite shell commands with RTK" },
+    { name: "disable", description: "Stop rewriting shell commands" },
+    { name: "status", description: "Show RTK status" },
   ]),
   handler,
 });

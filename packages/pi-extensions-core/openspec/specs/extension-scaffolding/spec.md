@@ -3,9 +3,10 @@
 ## Purpose
 
 Give Pi extension entry points one way to report command and event handler
-failures, show warnings, complete fixed subcommands, and detect the interactive
-terminal UI or warn when a command needs it, so every extension words its
-failures and warnings alike and none redefines the same wrappers.
+failures, show warnings, answer usage mistakes, complete fixed subcommands, and
+detect the interactive terminal UI or warn when a command needs it, so every
+extension words its failures and warnings alike and none redefines the same
+wrappers.
 
 ## Requirements
 
@@ -108,6 +109,41 @@ return without throwing.
   `notify` throws
 - **THEN** `notifyWarnings` returns without throwing
 
+### Requirement: Usage mistakes get one standard warning
+
+The package SHALL export a
+`notifyUsageWarning(ctx, extensionName, argument, forms)` function, where
+`forms` is a non-empty list of the ways to run the command as the user types
+them. It SHALL show, through `notifyWarnings` under `extensionName`, the single
+warning `Unknown subcommand "<argument>". Try <alternatives>.`, where
+`<argument>` is `argument` with surrounding whitespace removed and
+`<alternatives>` is the forms in order: the one form alone, two forms joined by
+the word "or", or three or more forms separated by commas with "or" before the
+last, as in `a, b, or c`.
+
+#### Scenario: A command without arguments
+
+- **WHEN** `notifyUsageWarning` receives the extension name
+  `Notification Center`, the argument `foo`, and the single form
+  `/notifications`
+- **THEN** it notifies `Notification Center: 1 warning` and
+  `- Unknown subcommand "foo". Try /notifications.` on separate lines at
+  `warning` severity
+
+#### Scenario: Two forms
+
+- **WHEN** `notifyUsageWarning` receives the argument `foo` and the forms
+  `/theme-sync` and `/theme-sync status`
+- **THEN** the warning reads
+  `Unknown subcommand "foo". Try /theme-sync or /theme-sync status.`
+
+#### Scenario: Three or more forms
+
+- **WHEN** `notifyUsageWarning` receives the argument `foo`, surrounded by
+  spaces, and the forms `/rtk`, `/rtk enable`, `/rtk disable`, and `/rtk status`
+- **THEN** the warning reads
+  `Unknown subcommand "foo". Try /rtk, /rtk enable, /rtk disable, or /rtk status.`
+
 ### Requirement: Fixed subcommands complete on the first word
 
 The package SHALL export a `subcommandCompletions(subcommands)` function that
@@ -115,7 +151,8 @@ takes a list of `{ name, description? }` entries and returns a
 `getArgumentCompletions` function. That function SHALL ignore leading whitespace
 in the argument prefix, return `null` when the rest contains a space, and
 otherwise return every subcommand whose name starts with the prefix as
-`{ value: name, label }`, in list order, or `null` when none match.
+`{ value: name, label: name }`, plus its `description` when it has one, in list
+order, or `null` when none match.
 
 #### Scenario: A first-word prefix
 
@@ -133,21 +170,25 @@ otherwise return every subcommand whose name starts with the prefix as
 - **WHEN** no subcommand name starts with the argument prefix
 - **THEN** the function returns `null`
 
-### Requirement: Subcommand completion labels carry the description
+### Requirement: Subcommand descriptions use Pi's description column
 
-Each completion `subcommandCompletions` returns SHALL be labeled
-`<name>: <description>` when its entry has a description, and `<name>`
-otherwise.
+Each completion `subcommandCompletions` returns SHALL use the subcommand name
+alone as its label, and SHALL carry the entry's description in the completion's
+`description` field, which Pi shows as a separate dimmed column. A completion
+for an entry without a description SHALL have no `description` field.
 
 #### Scenario: A subcommand with a description
 
-- **WHEN** a matching subcommand has a description
-- **THEN** its label is `<name>: <description>`
+- **WHEN** a matching subcommand named `status` has the description
+  `Show status`
+- **THEN** its completion is
+  `{ value: "status", label: "status", description: "Show status" }`
 
 #### Scenario: A subcommand without a description
 
 - **WHEN** a matching subcommand has no description
 - **THEN** its label is its name alone
+- **AND** the completion has no `description` field
 
 ### Requirement: The interactive terminal UI is detected by run mode
 

@@ -13,6 +13,17 @@ export {
   type FakeCustomOptions,
 } from "./custom.js";
 export {
+  createShownTextRecorder,
+  findShownTextViolations,
+  type RecordableCommand,
+  type RecordedKey,
+  type RecordedKeyKind,
+  type ShownSurface,
+  type ShownText,
+  type ShownTextRecorder,
+  type ShownTextStandard,
+} from "./shown-text.js";
+export {
   createFakeKeybindings,
   createFakeTui,
   createFakeWidgets,

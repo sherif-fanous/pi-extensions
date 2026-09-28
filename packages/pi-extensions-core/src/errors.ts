@@ -18,7 +18,16 @@ export function describeError(error: unknown): string {
  * unless the message already ends in `.`, `!`, or `?`.
  */
 export function describeErrorSentence(error: unknown): string {
-  const message = describeError(error);
+  let message: string;
+
+  try {
+    message = describeError(error).trim();
+  } catch {
+    // A thrown value whose conversion to text throws in turn.
+    message = "";
+  }
+
+  if (message === "") return "Unknown error.";
 
   return /[!.?]$/u.test(message) ? message : `${message}.`;
 }

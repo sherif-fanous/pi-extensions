@@ -14,11 +14,12 @@ export {
   malformedConfigWarning,
   unreadableConfigWarning,
 } from "./config-warnings.js";
-export { describeError } from "./errors.js";
+export { describeError, describeErrorSentence } from "./errors.js";
 export {
   guardCommand,
   type GuardContext,
   guardEvent,
+  notifyUsageWarning,
   notifyWarnings,
   subcommandCompletions,
   type SubcommandCompletion,
@@ -34,3 +35,4 @@ export {
   createCommandReport,
   styleReport,
 } from "./report.js";
+export { pluralize } from "./text.js";

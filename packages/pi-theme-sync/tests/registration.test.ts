@@ -26,16 +26,24 @@ test("registers the status entry renderer and revised command description", () =
     description: string;
     getArgumentCompletions(
       prefix: string,
-    ): { value: string; label: string }[] | null;
+    ): { value: string; label: string; description?: string }[] | null;
   };
 
   expect(command.description).toBe("Configure theme sync or report its status");
   expect(command.getArgumentCompletions("")).toEqual([
-    { value: "status", label: "status: show theme sync status" },
+    {
+      value: "status",
+      label: "status",
+      description: "show theme sync status",
+    },
   ]);
 
   expect(command.getArgumentCompletions("sta")).toEqual([
-    { value: "status", label: "status: show theme sync status" },
+    {
+      value: "status",
+      label: "status",
+      description: "show theme sync status",
+    },
   ]);
   expect(command.getArgumentCompletions("status ")).toBeNull();
   expect(command.getArgumentCompletions("other")).toBeNull();

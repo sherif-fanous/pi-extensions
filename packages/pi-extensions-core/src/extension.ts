@@ -1,10 +1,11 @@
 /**
  * Scaffolding for extension entry points: error guards for command and
- * event handlers, warning notifications, and argument completion for
- * fixed subcommands.
+ * event handlers, warning notifications, the usage-mistake warning, and
+ * argument completion for fixed subcommands.
  */
 
 import { describeErrorSentence } from "./errors.js";
+import { pluralize } from "./text.js";
 import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
@@ -18,7 +19,7 @@ export interface GuardContext {
 
 /** One fixed subcommand offered by {@link subcommandCompletions}. */
 export interface SubcommandCompletion {
-  /** Short text shown after the name in the completion label. */
+  /** Text Pi shows in its dimmed column beside the name. */
   readonly description?: string;
   /** Token the user types, and the value the completion inserts. */
   readonly name: string;
@@ -77,6 +78,26 @@ export function guardEvent<E, R, C extends GuardContext>(
 }
 
 /**
+ * Show the standard reply to a command argument the command does not
+ * accept, through {@link notifyWarnings}:
+ * `Unknown subcommand "<argument>". Try <forms>.`
+ *
+ * `argument` is trimmed. `forms` lists every valid way to run the command,
+ * as the user types it, and reads `a`, `a or b`, or `a, b, or c`. A
+ * command that takes no argument passes only its bare form.
+ */
+export function notifyUsageWarning(
+  ctx: GuardContext,
+  extensionName: string,
+  argument: string,
+  forms: readonly [string, ...string[]],
+): void {
+  notifyWarnings(ctx, extensionName, [
+    `Unknown subcommand "${argument.trim()}". Try ${joinAlternatives(forms)}.`,
+  ]);
+}
+
+/**
  * Show every warning one operation produced as one warning notification.
  *
  * Does nothing when `warnings` is empty. Otherwise notifies
@@ -90,13 +111,11 @@ export function notifyWarnings(
   extensionName: string,
   warnings: readonly string[],
 ): void {
-  const count = warnings.length;
-
-  if (count === 0) return;
+  if (warnings.length === 0) return;
 
   try {
     ctx.ui.notify(
-      `${extensionName}: ${String(count)} warning${count === 1 ? "" : "s"}\n- ${warnings.join("\n- ")}`,
+      `${extensionName}: ${pluralize(warnings.length, "warning")}\n- ${warnings.join("\n- ")}`,
       "warning",
     );
   } catch {
@@ -109,8 +128,9 @@ export function notifyWarnings(
  *
  * Only the first word completes: once the argument, ignoring leading
  * whitespace, contains a space, the function returns `null`. Otherwise it
- * returns the subcommands whose names start with the argument, labeled
- * `<name>: <description>` or just `<name>`, or `null` when none match.
+ * returns the subcommands whose names start with the argument, each with
+ * its name as label and value and its description, if any, in Pi's
+ * description column, or `null` when none match.
  */
 export function subcommandCompletions(
   subcommands: readonly SubcommandCompletion[],
@@ -123,12 +143,20 @@ export function subcommandCompletions(
     const matches = subcommands
       .filter(({ name }) => name.startsWith(prefix))
       .map(({ description, name }) => ({
-        label: description ? `${name}: ${description}` : name,
+        ...(description === undefined ? {} : { description }),
+        label: name,
         value: name,
       }));
 
     return matches.length > 0 ? matches : null;
   };
+}
+
+/** Join alternatives as `a`, `a or b`, or `a, b, or c`. */
+function joinAlternatives(items: readonly [string, ...string[]]): string {
+  if (items.length <= 2) return items.join(" or ");
+
+  return `${items.slice(0, -1).join(", ")}, or ${items.at(-1) ?? ""}`;
 }
 
 /**

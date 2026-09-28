@@ -40,6 +40,32 @@ embed the result mid-sentence and apply their own sentence ending.
 - **WHEN** `describeError` receives an `Error` whose message is `disk full.`
 - **THEN** it returns `disk full.` unchanged
 
+### Requirement: Descriptions can end a sentence
+
+The package SHALL export a `describeErrorSentence(error: unknown): string`
+function that returns the `describeError` text followed by a full stop, unless
+that text already ends in `.`, `!`, or `?`, so a message that ends a sentence
+never shows `..`. When that text is empty, or the value can't be converted to
+text, it SHALL return `Unknown error.`
+
+#### Scenario: Empty or unprintable value
+
+- **WHEN** `describeErrorSentence` receives an `Error` with an empty message, or
+  a value whose conversion to text throws
+- **THEN** it returns `Unknown error.`
+
+#### Scenario: Message without a terminator
+
+- **WHEN** `describeErrorSentence` receives an `Error` whose message is
+  `disk full`
+- **THEN** it returns `disk full.`
+
+#### Scenario: Message that already ends a sentence
+
+- **WHEN** `describeErrorSentence` receives an `Error` whose message is
+  `Disk full!`
+- **THEN** it returns `Disk full!` unchanged
+
 ### Requirement: Helpers hold no module-level state
 
 Every export of the package SHALL be stateless, because each installed extension
