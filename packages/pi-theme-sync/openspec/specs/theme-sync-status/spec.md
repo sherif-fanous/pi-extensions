@@ -64,6 +64,14 @@ behavior.
   sync active state, detection strategy, available detection methods, polling
   interval, last update time, last event summary, and warnings when present
 
+#### Scenario: Report words toggles and absent values the family way
+
+- **WHEN** the status report is rendered
+- **THEN** its heading is `Theme Sync Status`, its labels are in sentence case,
+  as in `Applied theme:`, sync shows `on` or `off`, a desired theme that is not
+  known shows `none`, a missing last update shows `never`, and warnings follow
+  one `Warnings:` line as `- ` items
+
 #### Scenario: Polling strategy identifies concrete detector
 
 - **WHEN** polling-based detection is active

@@ -209,6 +209,11 @@ export async function loadConfig(
   };
 }
 
+/** Name the user sees for a configuration scope, as Pi names its own scopes. */
+export function scopeLabel(scope: ConfigScope): string {
+  return scope === "project" ? "Project" : "User";
+}
+
 /** Merges editable values into one configuration file. */
 export async function writeConfigChanges(
   scope: ConfigScope,
@@ -226,7 +231,7 @@ export async function writeConfigChanges(
   if (result.warning) {
     return {
       ok: false,
-      reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It must be readable and contain a valid JSON object. Fix the file and try again.`,
+      reason: `Could not save the ${scopeLabel(scope)} configuration: ${filePath} must be readable and contain a valid JSON object. Fix the file and try again.`,
     };
   }
 
@@ -360,11 +365,6 @@ function resolveTheme(
     },
     warnings,
   );
-}
-
-/** Label that starts a setting warning, naming the file's scope. */
-function scopeLabel(scope: ConfigScope): string {
-  return scope === "project" ? "Project" : "Global";
 }
 
 function valid<T>(value: T): ParsedSetting<T> {

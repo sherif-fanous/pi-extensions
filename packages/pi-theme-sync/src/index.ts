@@ -1,6 +1,7 @@
 /** Registers the `/theme-sync` command and session lifecycle handlers. */
 
 import { runThemeSyncCommand } from "./command.js";
+import { EXTENSION_NAME } from "./extension-name.js";
 import { createThemeSyncRuntime } from "./runtime.js";
 import { registerStatusReportRenderer } from "./ui/status-report.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -16,18 +17,18 @@ export default function (pi: ExtensionAPI) {
 
   registerStatusReportRenderer(pi);
   pi.registerCommand("theme-sync", {
-    description: "Configure theme sync or report its status",
+    description: "Configure Theme Sync or show its status",
     getArgumentCompletions: subcommandCompletions([
-      { name: "status", description: "show theme sync status" },
+      { name: "status", description: "Show Theme Sync status" },
     ]),
-    handler: guardCommand("Theme Sync", (args, ctx) =>
+    handler: guardCommand(EXTENSION_NAME, (args, ctx) =>
       runThemeSyncCommand(args, runtime, ctx, pi),
     ),
   });
 
   pi.on(
     "session_start",
-    guardEvent("Theme Sync", "session_start", (_event, ctx) =>
+    guardEvent(EXTENSION_NAME, "session_start", (_event, ctx) =>
       runtime.setupAppearanceMonitoring(ctx),
     ),
   );

@@ -32,7 +32,7 @@ const config: LoadedRuntimeConfig = {
 const theme = {
   bold: (text: string) => `\x1b[1m${text}\x1b[22m`,
   fg: (color: string, text: string) =>
-    `\x1b[3${color === "error" ? "1" : color === "success" ? "2" : color === "warning" ? "3" : "6"}m${text}\x1b[39m`,
+    `\x1b[3${color === "error" ? "1" : color === "success" ? "2" : color === "muted" ? "7" : "6"}m${text}\x1b[39m`,
 } as Theme;
 
 test("renders the main and every nested view in a complete frame", async () => {
@@ -42,30 +42,30 @@ test("renders the main and every nested view in a complete frame", async () => {
   expect(overlay.component.render(58).join("\n")).toContain("Ctrl+S Save");
 
   overlay.component.handleInput("\r");
-  assertFrame(overlay.component.render(58), "Light Mode Theme", 58);
+  assertFrame(overlay.component.render(58), "Light mode theme", 58);
   overlay.component.handleInput("\x1b");
   overlay.component.handleInput("\x1b[B");
   overlay.component.handleInput("\r");
-  assertFrame(overlay.component.render(58), "Dark Mode Theme", 58);
+  assertFrame(overlay.component.render(58), "Dark mode theme", 58);
   overlay.component.handleInput("\x1b");
   overlay.component.handleInput("\x1b[B");
   overlay.component.handleInput("\x1b[B");
   overlay.component.handleInput("\r");
-  assertFrame(overlay.component.render(58), "Polling Interval", 58);
+  assertFrame(overlay.component.render(58), "Polling interval", 58);
   overlay.component.handleInput("\x1b");
   overlay.component.handleInput("\x1b[B");
   overlay.component.handleInput("\x1b[B");
   overlay.component.handleInput("\x1b[B");
   overlay.component.handleInput("\r");
-  assertFrame(overlay.component.render(58), "Sync Status", 58);
+  assertFrame(overlay.component.render(58), "Sync status", 58);
   overlay.component.handleInput("\x1b");
   overlay.component.handleInput("\x13");
   await vi.waitFor(() =>
     expect(overlay.component.render(58).join("\n")).toContain(
-      "Write Config To",
+      "Write config to",
     ),
   );
-  assertFrame(overlay.component.render(58), "Write Config To", 58);
+  assertFrame(overlay.component.render(58), "Write config to", 58);
 });
 
 test.each([0, 1, 2])(
@@ -97,7 +97,7 @@ test("uses terminal height for a long list while keeping frame chrome visible", 
   const lines = overlay.component.render(50);
 
   expect(lines.length).toBeLessThanOrEqual(9);
-  assertFrame(lines, "Light Mode Theme", 50);
+  assertFrame(lines, "Light mode theme", 50);
 });
 
 test("keeps wrapped polling errors and frame chrome within a short terminal", () => {
@@ -170,7 +170,7 @@ test("keeps wrapped path failures inside a short complete frame", async () => {
   failed.component.handleInput("\x13");
   await vi.waitFor(() =>
     expect(failed.component.render(34).join("\n")).toContain(
-      "Error resolving config paths",
+      "Could not resolve the",
     ),
   );
 
@@ -192,7 +192,7 @@ test.each([
     style: "\x1b[31m",
   },
   {
-    expected: "Saved 1 changed setting(s)",
+    expected: "Saved 1 changed setting to Project.",
     result: { ok: true as const },
     style: "\x1b[32m",
   },
@@ -208,7 +208,7 @@ test.each([
 
     await vi.waitFor(() =>
       expect(overlay.component.render(42).join("\n")).toContain(
-        "Write Config To",
+        "Write config to",
       ),
     );
     overlay.component.handleInput("\r");
@@ -234,7 +234,7 @@ test("renders path failures and save states inline with semantic styling", async
   await vi.waitFor(() => {
     const rendered = failed.component.render(46).join("\n");
 
-    expect(rendered).toContain("Error resolving config paths: permission");
+    expect(rendered).toContain("Could not resolve the configuration paths:");
     expect(rendered).toContain("denied.");
   });
   expect(failed.component.render(46).join("\n")).toContain("\x1b[31m");
@@ -247,19 +247,20 @@ test("renders path failures and save states inline with semantic styling", async
 
   saving.component.handleInput("\x13");
   await vi.waitFor(() =>
-    expect(saving.component.render(58).join("\n")).toContain("Write Config To"),
+    expect(saving.component.render(58).join("\n")).toContain("Write config to"),
   );
   saving.component.handleInput("\r");
   expect(saving.component.render(58).join("\n")).toContain(
     "Saving configuration.",
   );
-  expect(saving.component.render(58).join("\n")).toContain("\x1b[33m");
+  expect(saving.component.render(58).join("\n")).toContain("\x1b[37m");
   finish({ ok: true });
   await vi.waitFor(() =>
     expect(saving.component.render(58).join("\n")).toContain(
       "No changes to save.",
     ),
   );
+  expect(saving.component.render(58).join("\n")).toContain("\x1b[37m");
 });
 
 function assertFrame(lines: string[], title: string, width: number): void {

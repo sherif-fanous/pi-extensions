@@ -1,6 +1,7 @@
 /** Routes `/theme-sync` and orchestrates configuration and status delivery. */
 
 import { getConfigPath, loadConfig, writeConfigChanges } from "./config.js";
+import { EXTENSION_NAME } from "./extension-name.js";
 import type { ThemeSyncRuntime } from "./runtime.js";
 import { ConfigOverlayComponent } from "./ui/config-overlay.js";
 import { deliverStatusReport, formatStatusReport } from "./ui/status-report.js";
@@ -9,7 +10,7 @@ import type {
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 import {
-  notifyWarnings,
+  notifyUsageWarning,
   requireInteractiveTui,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -18,7 +19,7 @@ export async function openThemeSyncOverlay(
   _runtime: ThemeSyncRuntime,
   ctx: ExtensionCommandContext,
 ): Promise<void> {
-  if (!requireInteractiveTui(ctx, "Theme Sync", "/theme-sync")) return;
+  if (!requireInteractiveTui(ctx, EXTENSION_NAME, "/theme-sync")) return;
 
   const config = await loadConfig(ctx);
   let component: ConfigOverlayComponent | undefined;
@@ -83,7 +84,8 @@ export async function runThemeSyncCommand(
     return;
   }
 
-  notifyWarnings(ctx, "Theme Sync", [
-    `Unknown subcommand "${argument}". Try /theme-sync or /theme-sync status.`,
+  notifyUsageWarning(ctx, EXTENSION_NAME, argument, [
+    "/theme-sync",
+    "/theme-sync status",
   ]);
 }

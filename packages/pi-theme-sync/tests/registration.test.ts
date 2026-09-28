@@ -29,12 +29,12 @@ test("registers the status entry renderer and revised command description", () =
     ): { value: string; label: string; description?: string }[] | null;
   };
 
-  expect(command.description).toBe("Configure theme sync or report its status");
+  expect(command.description).toBe("Configure Theme Sync or show its status");
   expect(command.getArgumentCompletions("")).toEqual([
     {
       value: "status",
       label: "status",
-      description: "show theme sync status",
+      description: "Show Theme Sync status",
     },
   ]);
 
@@ -42,7 +42,7 @@ test("registers the status entry renderer and revised command description", () =
     {
       value: "status",
       label: "status",
-      description: "show theme sync status",
+      description: "Show Theme Sync status",
     },
   ]);
   expect(command.getArgumentCompletions("status ")).toBeNull();

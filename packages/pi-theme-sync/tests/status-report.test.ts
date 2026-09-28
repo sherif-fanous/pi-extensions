@@ -34,18 +34,18 @@ test("formats every runtime status field while omitting config provenance", () =
     [
       "Theme Sync Status",
       `  ${"Appearance:".padEnd(20)} dark`,
-      `  ${"Applied Theme:".padEnd(20)} solarized-dark`,
-      `  ${"Desired Theme:".padEnd(20)} solarized-dark`,
-      `  ${"Sync Active:".padEnd(20)} yes`,
-      `  ${"Detection Strategy:".padEnd(20)} OSC 11`,
-      `  ${"Available Detectors:".padEnd(20)} OSC 11, System Appearance`,
-      `  ${"Polling Interval:".padEnd(20)} 5000ms`,
-      `  ${"Last Update:".padEnd(20)} formatted time`,
-      `  ${"Last Event:".padEnd(20)} Detected dark appearance`,
+      `  ${"Applied theme:".padEnd(20)} solarized-dark`,
+      `  ${"Desired theme:".padEnd(20)} solarized-dark`,
+      `  ${"Sync:".padEnd(20)} on`,
+      `  ${"Detection strategy:".padEnd(20)} OSC 11`,
+      `  ${"Available detectors:".padEnd(20)} OSC 11, System Appearance`,
+      `  ${"Polling interval:".padEnd(20)} 5000ms`,
+      `  ${"Last update:".padEnd(20)} formatted time`,
+      `  ${"Last event:".padEnd(20)} Detected dark appearance`,
       "",
       "Warnings:",
-      "  - First warning.",
-      "  - Second warning.",
+      "- First warning.",
+      "- Second warning.",
     ].join("\n"),
   );
   expect(report).not.toContain("Config");
@@ -61,10 +61,10 @@ test("formats absent status values without a warning section", () => {
     warnings: [],
   });
 
-  expect(report).toContain(`${"Desired Theme:".padEnd(20)} n/a`);
-  expect(report).toContain(`${"Sync Active:".padEnd(20)} no`);
-  expect(report).toContain(`${"Available Detectors:".padEnd(20)} none`);
-  expect(report).toContain(`${"Last Update:".padEnd(20)} never`);
+  expect(report).toContain(`${"Desired theme:".padEnd(20)} none`);
+  expect(report).toContain(`${"Sync:".padEnd(20)} off`);
+  expect(report).toContain(`${"Available detectors:".padEnd(20)} none`);
+  expect(report).toContain(`${"Last update:".padEnd(20)} never`);
   expect(report).not.toContain("Warnings:");
 });
 
@@ -72,7 +72,7 @@ test("formats a Unix epoch update instead of treating it as absent", () => {
   const formatTime = vi.fn(() => "Unix epoch");
   const report = formatStatusReport({ ...status, lastUpdateAt: 0 }, formatTime);
 
-  expect(report).toContain(`${"Last Update:".padEnd(20)} Unix epoch`);
+  expect(report).toContain(`${"Last update:".padEnd(20)} Unix epoch`);
   expect(formatTime).toHaveBeenCalledWith(0);
 });
 

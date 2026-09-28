@@ -4,7 +4,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 import { isInteractiveTui } from "@sherif-fanous/pi-extensions-core";
 
-const TUI_HANDLE_WIDGET_KEY = "pi-theme-sync-tui-handle";
+const TUI_HANDLE_WIDGET_KEY = "theme-sync:tui-handle";
 
 /** Gets the live TUI handle when Pi is running in interactive mode. */
 export function getTuiHandle(

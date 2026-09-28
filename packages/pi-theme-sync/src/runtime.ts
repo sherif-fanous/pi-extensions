@@ -12,6 +12,7 @@ import {
   type ColorSchemeSubscription,
 } from "./detectors/pi/color-scheme.js";
 import { getTuiHandle } from "./detectors/pi/tui-handle.js";
+import { EXTENSION_NAME } from "./extension-name.js";
 import type {
   Appearance,
   PollingDetector,
@@ -453,7 +454,7 @@ export function createThemeSyncRuntime(): ThemeSyncRuntime {
     // Any cleanup since, from shutdown or a newer setup, means this
     // session is gone and its warnings are no longer current.
     if (cleanupCount === setupCleanupCount) {
-      notifyWarnings(ctx, "Theme Sync", warnings);
+      notifyWarnings(ctx, EXTENSION_NAME, warnings);
     }
   };
 

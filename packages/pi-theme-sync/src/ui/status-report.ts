@@ -1,5 +1,6 @@
 /** Formats theme sync runtime status reports and delivers them as command reports. */
 
+import { EXTENSION_NAME } from "../extension-name.js";
 import type { RuntimeStatus } from "../types.js";
 import {
   alignLabelRows,
@@ -27,22 +28,22 @@ export function formatStatusReport(
     new Date(timestamp).toLocaleString(),
 ): string {
   const lines = [
-    "Theme Sync Status",
+    `${EXTENSION_NAME} Status`,
     ...alignLabelRows([
       ["Appearance:", status.currentAppearance],
-      ["Applied Theme:", status.appliedTheme],
-      ["Desired Theme:", status.desiredTheme ?? "n/a"],
-      ["Sync Active:", status.syncStatus === "active" ? "yes" : "no"],
-      ["Detection Strategy:", status.detectionStrategy],
-      ["Available Detectors:", status.availableDetectors.join(", ") || "none"],
-      ["Polling Interval:", `${String(status.pollIntervalMs)}ms`],
+      ["Applied theme:", status.appliedTheme],
+      ["Desired theme:", status.desiredTheme ?? "none"],
+      ["Sync:", status.syncStatus === "active" ? "on" : "off"],
+      ["Detection strategy:", status.detectionStrategy],
+      ["Available detectors:", status.availableDetectors.join(", ") || "none"],
+      ["Polling interval:", `${String(status.pollIntervalMs)}ms`],
       [
-        "Last Update:",
+        "Last update:",
         status.lastUpdateAt !== undefined
           ? formatTime(status.lastUpdateAt)
           : "never",
       ],
-      ["Last Event:", status.lastEvent],
+      ["Last event:", status.lastEvent],
     ]),
   ];
 
@@ -50,7 +51,7 @@ export function formatStatusReport(
     lines.push(
       "",
       "Warnings:",
-      ...status.warnings.map((warning) => `  - ${warning}`),
+      ...status.warnings.map((warning) => `- ${warning}`),
     );
   }
 

@@ -88,7 +88,7 @@ test.each([
         const rendered = overlay.render(240).join("\n");
 
         expect(rendered).toContain(`Project (${project})`);
-        expect(rendered).toContain(`Global (${global})`);
+        expect(rendered).toContain(`User (${global})`);
       });
     });
   },
@@ -115,7 +115,7 @@ test("refreshes paths when reopening after migration and retains pending edits",
       const rendered = overlay.render(240).join("\n");
 
       expect(rendered).toContain(`Project (${projectPreferred})`);
-      expect(rendered).toContain(`Global (${globalPreferred})`);
+      expect(rendered).toContain(`User (${globalPreferred})`);
     });
 
     const { writeJsonFile } = await import("@sherif-fanous/pi-extensions-core");
@@ -156,7 +156,7 @@ test("keeps an unreadable preferred file selected, refuses to save over it, and 
     overlay.handleInput?.("\r");
     await vi.waitFor(() =>
       expect(overlay.render(240).join("\n")).toContain(
-        "It must be readable and contain a valid JSON object.",
+        "must be readable and contain a valid JSON object.",
       ),
     );
     expect(writeSpy).not.toHaveBeenCalled();

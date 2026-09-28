@@ -115,7 +115,7 @@ polling interval, and `isSyncActive`.
 - **WHEN** a scope's polling interval is present but not a number from `1000` to
   `60000` milliseconds, inclusive
 - **THEN** the extension emits the warning
-  `<Project|Global> setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not <value>.`
+  `<Project|User> setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not <value>.`
   followed by `Using the default value 2000.` when no scope supplies a valid
   interval, or by `Ignored it.` when the other scope's interval applies
 
@@ -123,7 +123,7 @@ polling interval, and `isSyncActive`.
 
 - **WHEN** a scope's `isSyncActive` is present but not a boolean
 - **THEN** the extension emits the warning
-  `<Project|Global> setting "isSyncActive" must be a boolean, not <value>.`
+  `<Project|User> setting "isSyncActive" must be a boolean, not <value>.`
   followed by `Using the default value true.` when no scope supplies a valid
   value, or by `Ignored it.` when the other scope's value applies
 
@@ -181,7 +181,7 @@ directory. It SHALL NOT automatically move or delete config files.
 
 #### Scenario: Write config change to global scope
 
-- **WHEN** the user saves config changes and chooses `Global (<path>)`
+- **WHEN** the user saves config changes and chooses `User (<path>)`
 - **THEN** the extension writes those changes to the global config file
 
 #### Scenario: Save continues using a selected legacy file

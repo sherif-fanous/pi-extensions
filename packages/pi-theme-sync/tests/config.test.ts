@@ -75,7 +75,7 @@ describe("loadConfig", () => {
       );
 
       expect(result.warnings).toEqual([
-        `${scope === "project" ? "Project" : "Global"} setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not 60001. Using the default value 2000.`,
+        `${scope === "project" ? "Project" : "User"} setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not 60001. Using the default value 2000.`,
       ]);
     },
   );
@@ -198,10 +198,10 @@ describe("loadConfig", () => {
     });
 
     expect(result.warnings).toEqual([
-      'Global setting "isSyncActive" must be a boolean, not "no". Ignored it.',
+      'User setting "isSyncActive" must be a boolean, not "no". Ignored it.',
       'Theme "missing-light" was not found in Pi. Ignored it.',
       'Theme "missing-dark" was not found in Pi. Ignored it.',
-      'Global setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not 60001. Ignored it.',
+      'User setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not 60001. Ignored it.',
     ]);
   });
 
@@ -232,7 +232,7 @@ describe("loadConfig", () => {
       'Theme "missing-dark" was not found in Pi. Using the default theme "dark".',
       'Theme 42 was not found in Pi. Using the default theme "dark".',
       'Project setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not 999. Using the default value 2000.',
-      'Global setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not "3000". Using the default value 2000.',
+      'User setting "pollIntervalMs" must be a number between 1000 and 60000 milliseconds, not "3000". Using the default value 2000.',
     ]);
   });
 
@@ -267,7 +267,7 @@ describe("loadConfig", () => {
     expect(result.runtimeConfigSources.isSyncActive).toBe("default");
     expect(result.warnings).toEqual([
       'Project setting "isSyncActive" must be a boolean, not "invalid". Using the default value true.',
-      'Global setting "isSyncActive" must be a boolean, not "no". Using the default value true.',
+      'User setting "isSyncActive" must be a boolean, not "no". Using the default value true.',
     ]);
   });
 
@@ -445,7 +445,7 @@ describe("writeConfigChanges", () => {
           await writeConfigChanges(scope, projectDirectory, changes),
         ).toEqual({
           ok: false,
-          reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It must be readable and contain a valid JSON object. Fix the file and try again.`,
+          reason: `Could not save the ${scope === "project" ? "Project" : "User"} configuration: ${filePath} must be readable and contain a valid JSON object. Fix the file and try again.`,
         });
         expect(writeSpy).not.toHaveBeenCalled();
         expect(await readFile(filePath, "utf8")).toBe(malformedContents);
@@ -504,7 +504,7 @@ describe("writeConfigChanges", () => {
           }),
         ).toEqual({
           ok: false,
-          reason: `Theme Sync did not change the ${scope} config file at ${filePath}. It must be readable and contain a valid JSON object. Fix the file and try again.`,
+          reason: `Could not save the ${scope === "project" ? "Project" : "User"} configuration: ${filePath} must be readable and contain a valid JSON object. Fix the file and try again.`,
         });
         expect(writeSpy).not.toHaveBeenCalled();
         expect(await readFile(filePath, "utf8")).toBe(content);
@@ -779,7 +779,7 @@ describe.each(["project", "global"] as const)("%s file selection", (scope) => {
         }),
       ).toEqual({
         ok: false,
-        reason: `Theme Sync did not change the ${scope} config file at ${preferred}. It must be readable and contain a valid JSON object. Fix the file and try again.`,
+        reason: `Could not save the ${scope === "project" ? "Project" : "User"} configuration: ${preferred} must be readable and contain a valid JSON object. Fix the file and try again.`,
       });
       expect(vi.mocked(writeJsonFile)).not.toHaveBeenCalled();
 

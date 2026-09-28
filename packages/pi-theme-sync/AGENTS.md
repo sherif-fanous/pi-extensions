@@ -93,11 +93,13 @@ code, so technical terms belong there. The prose rules above apply to both.
 
 Prose in notifications, dialog bodies, inline editor notices, warnings, and
 lead sentences uses complete sentences with terminal periods. Single-line
-labels do not carry one. Key/value labels in dialogs and status rows use Title
-Case with a trailing colon, as in `Appearance:`, `Applied Theme:`, `Sync
-Active:`, `Detection Strategy:`, and `Available Detectors:`. Editor form rows
-and standalone titles use the same Title Case text without the colon. Button
-and footer action labels use Title Case. Footer hint items are joined with
+labels do not carry one. Key/value labels in dialogs and status rows use
+sentence case with a trailing colon, as in `Appearance:`, `Applied theme:`,
+`Detection strategy:`, and `Available detectors:`. Editor form rows and nested
+view titles use the same sentence-case text without the colon. The overlay and
+report headings are `Theme Sync Config` and `Theme Sync Status`. Button and
+footer action labels use Title Case. The repository's `AGENTS.md` "Text and
+naming" section is the family standard these rules follow. Footer hint items are joined with
 ` · `. Group related keys with `/` and no surrounding spaces, as in `↑/↓
 Navigate · Enter Open`.
 

@@ -110,7 +110,7 @@ test("TUI handle acquisition still registers and removes its widget", () => {
   expect(getTuiHandle(ctx)).toBe(tui);
   expect(setWidget).toHaveBeenCalledTimes(2);
   expect(setWidget).toHaveBeenLastCalledWith(
-    "pi-theme-sync-tui-handle",
+    "theme-sync:tui-handle",
     undefined,
   );
 });

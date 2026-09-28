@@ -70,6 +70,26 @@ consistent semantic styling.
 - **THEN** the error appears inside the configuration frame in error styling and
   the overlay remains open for retry
 
+#### Scenario: Thrown save error names the failed action
+
+- **WHEN** resolving the write-target paths or saving the configuration throws
+- **THEN** the inline error reads
+  `Could not resolve the configuration paths: <message>` or
+  `Could not save the configuration: <message>`, where `<message>` is the
+  error description ending in one full stop
+
+#### Scenario: Progress and no-change messages are neutral
+
+- **WHEN** the overlay shows `Resolving configuration paths.`,
+  `Saving configuration.`, or `No changes to save.`
+- **THEN** the message uses muted styling rather than warning styling
+
+#### Scenario: Save result counts changed settings
+
+- **WHEN** a save writes one or more changed settings
+- **THEN** the overlay shows `Saved <n> changed setting to <Project|User>.`
+  with `setting` pluralized for any count other than one, in success styling
+
 #### Scenario: Error dialog uses a complete frame
 
 - **WHEN** a configuration action presents an error in a nested dialog
@@ -83,7 +103,7 @@ preserve input focus while the editor is active.
 
 #### Scenario: Polling editor receives focus
 
-- **WHEN** the user opens Polling Interval for editing
+- **WHEN** the user opens `Polling interval` for editing
 - **THEN** the current numeric value appears in a focused single-line input with
   a visible editing cursor
 
@@ -138,8 +158,8 @@ config overlay.
 #### Scenario: Config overlay lists editable settings
 
 - **WHEN** the config overlay is shown
-- **THEN** it offers `Light Mode Theme`, `Dark Mode Theme`, `Polling Interval`,
-  and `Sync Status`
+- **THEN** it offers `Light mode theme`, `Dark mode theme`, `Polling interval`,
+  and `Sync status`
 
 ### Requirement: Theme sync config overlay selects theme mappings from available Pi themes
 
@@ -148,19 +168,19 @@ light and dark theme mappings.
 
 #### Scenario: Light theme selection stays in overlay flow
 
-- **WHEN** the user edits `Light Mode Theme`
+- **WHEN** the user edits `Light mode theme`
 - **THEN** the extension shows the currently available Pi theme names inside the
   overlay flow and lets the user choose one
 
 #### Scenario: Dark theme selection stays in overlay flow
 
-- **WHEN** the user edits `Dark Mode Theme`
+- **WHEN** the user edits `Dark mode theme`
 - **THEN** the extension shows the currently available Pi theme names inside the
   overlay flow and lets the user choose one
 
 ### Requirement: Theme sync config overlay validates polling interval inline
 
-Theme sync SHALL validate `Polling Interval` inside the overlay before saving
+Theme sync SHALL validate `Polling interval` inside the overlay before saving
 it.
 
 #### Scenario: Accept valid polling interval
@@ -182,12 +202,12 @@ The extension SHALL let the user change sync status from the config overlay.
 
 #### Scenario: Sync status can be set active
 
-- **WHEN** the user edits `Sync Status` and chooses `active`
+- **WHEN** the user edits `Sync status` and chooses `active`
 - **THEN** the overlay stages `isSyncActive = true` for saving
 
 #### Scenario: Sync status can be set inactive
 
-- **WHEN** the user edits `Sync Status` and chooses `inactive`
+- **WHEN** the user edits `Sync status` and chooses `inactive`
 - **THEN** the overlay stages `isSyncActive = false` for saving
 
 ### Requirement: Theme sync config save flow asks where to write changes
@@ -206,7 +226,7 @@ labels from current filesystem state whenever the write-target view opens.
 
 #### Scenario: Save chooses global write target
 
-- **WHEN** the user saves config changes and chooses `Global (<path>)`
+- **WHEN** the user saves config changes and chooses `User (<path>)`
 - **THEN** the extension writes the saved config changes to the global config
   file
 
@@ -245,7 +265,7 @@ config overlay rather than in the status overlay.
 
 - **WHEN** the config overlay is rendered
 - **THEN** it shows source context for the editable settings using
-  project/global/default terminology
+  the labels `Project`, `User`, and `Default`
 
 ### Requirement: Theme sync config overlay supports keyboard-driven editing
 
