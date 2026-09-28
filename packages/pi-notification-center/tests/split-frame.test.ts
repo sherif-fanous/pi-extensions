@@ -1,121 +1,22 @@
 import {
-  frameLine,
-  frameSegment,
-  padToWidth,
   renderSplitFrame,
   SPLIT_FRAME_CHROME_COLUMNS,
-  SPLIT_FRAME_CHROME_ROWS,
+  splitFrameBodyRows,
   splitPaneWidths,
   type SplitPanes,
-} from "../src/ui/frame.js";
+} from "../src/ui/split-frame.js";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import {
+  createMarkerTheme,
+  createPlainTheme,
+  findOverflowingLines,
+  stripAnsi,
+} from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it } from "vitest";
 
 // Two columns each, so a string of them measures differently than it
 // counts.
 const WIDE = "日本語";
-// Red text. The escape sequences occupy no columns at all.
-const STYLED = "\u001B[31mabcdefgh\u001B[0m";
-
-describe("padToWidth", () => {
-  it("pads plain text to exactly the requested columns", () => {
-    expect(padToWidth("ab", 6)).toBe("ab    ");
-  });
-
-  it("pads with the requested fill character", () => {
-    expect(padToWidth("ab", 6, "-")).toBe("ab----");
-  });
-
-  it("pads an empty string to the full width", () => {
-    expect(padToWidth("", 4)).toBe("    ");
-  });
-
-  it("measures a wide character as the two columns it occupies", () => {
-    expect(visibleWidth(padToWidth("日本", 6))).toBe(6);
-    expect(padToWidth("日本", 6)).toBe("日本  ");
-  });
-
-  it("pads to an odd width around a wide character", () => {
-    expect(visibleWidth(padToWidth("日本", 5))).toBe(5);
-  });
-
-  it("ignores escape sequences when measuring styled text", () => {
-    expect(visibleWidth(padToWidth("\u001B[31mab\u001B[0m", 6))).toBe(6);
-  });
-
-  it("truncates plain text to exactly the requested columns", () => {
-    expect(visibleWidth(padToWidth("abcdefgh", 4))).toBe(4);
-  });
-
-  it("truncates wide characters to exactly the requested columns", () => {
-    expect(visibleWidth(padToWidth(WIDE, 4))).toBe(4);
-    expect(visibleWidth(padToWidth(WIDE, 5))).toBe(5);
-  });
-
-  it("truncates styled text to exactly the requested columns", () => {
-    expect(visibleWidth(padToWidth(STYLED, 4))).toBe(4);
-  });
-
-  it("leaves text that already fits untouched", () => {
-    expect(padToWidth("abcd", 4)).toBe("abcd");
-  });
-
-  // The library marks a truncation with three dots by default, which
-  // would cost two columns more than callers here budget for. Widening
-  // this mark silently over-runs every row that relies on it.
-  it("marks a truncation with a single-column ellipsis", () => {
-    const truncated = padToWidth("abcdefgh", 4);
-
-    expect(truncated).toContain("…");
-    expect(truncated).not.toContain("...");
-  });
-});
-
-describe("frameLine", () => {
-  it("wraps content in borders and pads to exactly the requested columns", () => {
-    expect(frameLine(" hi ", 10)).toBe("│ hi     │");
-  });
-
-  it("keeps its width with a wide character inside", () => {
-    const line = frameLine(" 日本 ", 10);
-
-    expect(visibleWidth(line)).toBe(10);
-    expect(line.startsWith("│")).toBe(true);
-    expect(line.endsWith("│")).toBe(true);
-  });
-
-  it("keeps its width with styled content inside", () => {
-    const line = frameLine(" \u001B[31mhi\u001B[0m ", 10);
-
-    expect(visibleWidth(line)).toBe(10);
-    expect(line.startsWith("│")).toBe(true);
-    expect(line.endsWith("│")).toBe(true);
-  });
-
-  it("truncates content too wide to fit between the borders", () => {
-    expect(visibleWidth(frameLine("abcdefghijklmno", 10))).toBe(10);
-  });
-
-  // Two columns is the documented minimum, and it leaves room for the
-  // borders alone.
-  it("draws only the borders at the minimum width", () => {
-    expect(frameLine("x", 2)).toBe("││");
-  });
-});
-
-describe("frameSegment", () => {
-  it("draws the given ends across exactly the requested columns", () => {
-    expect(frameSegment("┌", "┐", 8)).toBe("┌──────┐");
-  });
-
-  it("varies the ends independently of the width", () => {
-    expect(frameSegment("├", "┤", 4)).toBe("├──┤");
-  });
-
-  it("draws only the ends at the minimum width", () => {
-    expect(frameSegment("└", "┘", 2)).toBe("└┘");
-  });
-});
 
 describe("splitPaneWidths", () => {
   // The chrome is two outer borders, a space of padding on each side of
@@ -180,12 +81,69 @@ describe("renderSplitFrame", () => {
     }
   });
 
-  // The constant is what the caller budgets rows against, so it has to
-  // agree with what this function actually emits.
-  it("adds exactly the declared chrome rows to the content rows", () => {
-    expect(SPLIT_FRAME_CHROME_ROWS).toBe(6);
-    expect(split().length).toBe(3 + SPLIT_FRAME_CHROME_ROWS);
-    expect(split({ rows: 7 }).length).toBe(7 + SPLIT_FRAME_CHROME_ROWS);
+  it("fits every line at the narrowest width two panes allow", () => {
+    const lines = split({
+      footer: ["↑/↓ Move · Esc Close", "PgUp/PgDn Scroll Detail"],
+      left: { lines: ["x".repeat(80)], title: "", titleRight: "(10/12)" },
+      panes: panesFor(19),
+      right: { lines: [WIDE.repeat(20)], title: "Detail 1-10/40" },
+    });
+
+    expect(findOverflowingLines(lines, 19)).toEqual([]);
+  });
+
+  // The caller sizes its rows with `splitFrameBodyRows`, so the two have
+  // to agree on how many rows the chrome and the footer take.
+  it("draws exactly the height its rows were sized for", () => {
+    for (const footer of [[], ["one"], ["one", "two"]]) {
+      for (const height of [8, 12, 30]) {
+        const rows = splitFrameBodyRows(height, footer.length);
+
+        expect(split({ footer, rows })).toHaveLength(height);
+      }
+    }
+  });
+
+  it("puts the title in the top border and the footer below a rule", () => {
+    const lines = split();
+
+    expect(lines[0]).toBe("┌─ Notifications ───────────┐");
+    expect(lines.at(-3)).toBe("├─────────────┴─────────────┤");
+    expect(lines.at(-2)).toBe("│ Esc Close                 │");
+    expect(lines.at(-1)).toBe("└───────────────────────────┘");
+  });
+
+  it("draws every footer line, not only the first", () => {
+    const lines = split({ footer: ["↑/↓ Move", "Esc Close"] });
+
+    expect(lines.at(-3)).toContain("↑/↓ Move");
+    expect(lines.at(-2)).toContain("Esc Close");
+  });
+
+  it("colors the borders, the title, and the footer by meaning", () => {
+    const lines = split({ theme: createMarkerTheme() });
+
+    expect(lines[0]).toContain("<accent><b>Notifications</b></accent>");
+    expect(lines[0]).toContain("<border>");
+    expect(lines[2]).toBe("<border>├─────────────┬─────────────┤</border>");
+    expect(lines.at(-2)).toContain("<dim>Esc Close</dim>");
+    expect(lines.at(-1)?.startsWith("<border>└")).toBe(true);
+  });
+
+  it("puts a pane's right title at the right edge of its header", () => {
+    const lines = split({
+      left: { lines: [], title: "", titleRight: "(2/9)" },
+    });
+
+    expect(lines[1]).toBe("│       (2/9) │ R           │");
+  });
+
+  it("lets the left title give way to the right one", () => {
+    const lines = split({
+      left: { lines: [], title: "a very long title", titleRight: "(2/9)" },
+    });
+
+    expect(stripAnsi(lines[1] ?? "")).toBe("│ a ve… (2/9) │ R           │");
   });
 
   it("draws every line to the same width, so the borders stay straight", () => {
@@ -244,11 +202,12 @@ function split(
   overrides: Partial<Parameters<typeof renderSplitFrame>[0]> = {},
 ): string[] {
   return renderSplitFrame({
-    footer: "Esc Close",
+    footer: ["Esc Close"],
     left: { lines: ["a", "b"], title: "L" },
     panes: panesFor(29),
     right: { lines: ["x"], title: "R" },
     rows: 3,
+    theme: createPlainTheme(),
     title: "Notifications",
     ...overrides,
   });

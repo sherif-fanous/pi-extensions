@@ -35,14 +35,19 @@ describe("runNotificationsCommand", () => {
     expect(rendered.indexOf("newer")).toBeLessThan(rendered.indexOf("older"));
   });
 
-  it("requests an overlay wide enough for two panes", () => {
-    // Pi's default sizing is far too narrow for a split layout, so the
-    // command must ask for width explicitly.
+  // Pi's default sizing is far too narrow for a split layout, and the
+  // family opens every top-level surface centered at the main size.
+  it("opens the browser at the family's main overlay size", async () => {
     const harness = setup([createNotificationEntry("one", "info", FIRST)]);
 
-    return runNotificationsCommand(harness.ctx).then(() => {
-      expect(harness.overlayOptions?.width).toBe("80%");
-      expect(harness.overlayOptions?.minWidth).toBeGreaterThanOrEqual(60);
+    await runNotificationsCommand(harness.ctx);
+
+    expect(harness.overlayOptions).toMatchObject({
+      anchor: "center",
+      margin: 1,
+      maxHeight: "80%",
+      minWidth: 60,
+      width: "80%",
     });
   });
 

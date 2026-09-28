@@ -237,6 +237,19 @@ warn with the standard usage reply and do nothing else.
 - **THEN** the highlighted row changes and the detail pane shows the newly
   selected notification
 
+#### Scenario: User moves past either end of the list
+
+- **WHEN** the user moves down from the oldest notification or up from the
+  newest
+- **THEN** the selection wraps around to the other end of the list
+
+#### Scenario: List is longer than the list pane
+
+- **WHEN** the active branch holds more notifications than the list pane has
+  rows
+- **THEN** the list pane's header shows the selection's position as `(n/m)`,
+  and the header shows no position while every notification fits
+
 #### Scenario: Severities are distinguishable
 
 - **WHEN** the browser displays notifications of differing severity
@@ -252,7 +265,9 @@ warn with the standard usage reply and do nothing else.
 
 - **WHEN** the user runs `/notifications` before any notification has been
   captured in the active session
-- **THEN** the command shows a clear empty-state message
+- **THEN** the command opens the same titled frame with no panes, showing the
+  empty-state message `No notifications have been captured in this session
+  yet.` and the close key
 
 #### Scenario: User passes an argument
 
@@ -267,10 +282,52 @@ warn with the standard usage reply and do nothing else.
   cancel action
 - **THEN** the browser closes and keyboard focus returns to the prior component
 
+### Requirement: History browser keys follow Pi's keybindings
+
+The history browser SHALL act on Pi's `tui.select` keybindings: up and down move
+the selection, page up and page down scroll the detail pane, and cancel closes
+the browser. A key the user has remapped SHALL replace the default key rather
+than add to it.
+
+#### Scenario: User has remapped the keys
+
+- **WHEN** the user has bound other keys to Pi's `tui.select` actions
+- **THEN** the browser acts on those keys only and ignores the default keys
+
+### Requirement: History browser footer lists the keys that work
+
+The history browser's footer SHALL list only the keys that work, named by the
+key the user has bound, as `↑/↓ Move`, `PgUp/PgDn Scroll Detail`, and
+`Esc Close` with Pi's default keys. It SHALL wrap onto further lines between
+hints rather than cut a hint off.
+
+#### Scenario: Selected message fits the detail pane
+
+- **WHEN** the selected notification's complete message fits the detail pane
+- **THEN** the footer reads `↑/↓ Move · Esc Close`
+
+#### Scenario: Selected message is longer than the detail pane
+
+- **WHEN** the selected notification's message needs more rows than the detail
+  pane shows
+- **THEN** the footer reads `↑/↓ Move · PgUp/PgDn Scroll Detail · Esc Close`
+
+#### Scenario: User has remapped the keys for the footer
+
+- **WHEN** the user has bound other keys to Pi's `tui.select` actions
+- **THEN** the footer names the bound keys instead of the defaults
+
+#### Scenario: Footer is wider than the browser
+
+- **WHEN** the footer's hints do not fit on one line
+- **THEN** the footer continues on the next line, breaking only between hints,
+  and every hint remains visible
+
 ### Requirement: History browser is sized to the notification being read
 
-The history browser SHALL size itself to whichever of its panes needs the most
-rows, bounded by a documented share of the terminal height so its own header and
+The history browser SHALL open centered in the terminal at 80% of its width,
+widened to 60 columns where the terminal allows. It SHALL size itself to whichever of its panes needs
+the most rows, bounded by 80% of the terminal height so its own header and
 footer remain on screen. A notification whose complete message fits within that
 bound SHALL be shown in full without requiring the user to scroll.
 

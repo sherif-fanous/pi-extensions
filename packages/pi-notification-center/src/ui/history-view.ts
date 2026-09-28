@@ -12,28 +12,35 @@
 
 import type { NotificationEntry } from "../types.js";
 import {
-  FRAME_BODY_CHROME_COLUMNS,
-  frameLine,
-  frameSegment,
-  renderSplitFrame,
-  SPLIT_FRAME_CHROME_ROWS,
-  splitPaneWidths,
-} from "./frame.js";
-import {
   formatDetailTitle,
   formatHistoryDetail,
   formatHistoryRow,
   HISTORY_EMPTY_MESSAGE,
-  markDetailScroll,
   type HistoryTheme,
 } from "./history-format.js";
 import {
-  truncateToWidth,
-  wrapTextWithAnsi,
-  type Component,
-  type Focusable,
-  type KeybindingsManager,
+  renderSplitFrame,
+  splitFrameBodyRows,
+  splitPaneWidths,
+} from "./split-frame.js";
+import type {
+  Component,
+  Focusable,
+  KeybindingsManager,
 } from "@earendil-works/pi-tui";
+import {
+  emptyStateLines,
+  frameBodyRows,
+  frameBodyWidth,
+  keyHint,
+  listWindow,
+  matchSelectAction,
+  moveListSelection,
+  overlayMaxHeight,
+  renderFrame,
+  scrollLines,
+  wrapKeyHints,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** One placed frame, with the state the caller carries forward. */
 export interface HistoryLayout {
@@ -55,6 +62,8 @@ export interface HistoryLayoutOptions {
   detailOffset: number;
   /** Newest first, matching display order. */
   items: readonly NotificationEntry[];
+  /** Pi's keybindings, so the footer names the keys the user has bound. */
+  keybindings: Pick<KeybindingsManager, "getKeys">;
   locale?: Intl.LocalesArgument;
   /**
    * Page-scroll requests not yet applied, positive for down.
@@ -105,37 +114,34 @@ export class HistoryViewComponent implements Component, Focusable {
   }
 
   handleInput(data: string): void {
-    const { keybindings } = this.options;
+    switch (matchSelectAction(this.options.keybindings, data)) {
+      case "cancel":
+        this.close();
 
-    if (keybindings.matches(data, "tui.select.cancel")) {
-      this.close();
+        break;
+      case "down":
+        this.select("down");
 
-      return;
-    }
+        break;
+      // Page keys scroll the detail pane, the one thing here that can
+      // exceed the viewport and has no other way to move. Recorded in
+      // pages so the distance is measured against the layout about to be
+      // drawn, not the last one.
+      case "pageDown":
+        this.pendingPages += 1;
 
-    if (keybindings.matches(data, "tui.select.up")) {
-      this.selectBy(-1);
+        break;
+      case "pageUp":
+        this.pendingPages -= 1;
 
-      return;
-    }
+        break;
+      case "up":
+        this.select("up");
 
-    if (keybindings.matches(data, "tui.select.down")) {
-      this.selectBy(1);
-
-      return;
-    }
-
-    // Page keys scroll the detail pane, the one thing here that can
-    // exceed the viewport. Recorded in pages so the distance is measured
-    // against the layout about to be drawn, not the last one.
-    if (keybindings.matches(data, "tui.select.pageUp")) {
-      this.pendingPages -= 1;
-
-      return;
-    }
-
-    if (keybindings.matches(data, "tui.select.pageDown")) {
-      this.pendingPages += 1;
+        break;
+      case "confirm":
+      case undefined:
+        break;
     }
   }
 
@@ -147,6 +153,7 @@ export class HistoryViewComponent implements Component, Focusable {
     const layout = layoutHistory({
       detailOffset: this.detailOffset,
       items: this.items,
+      keybindings: this.options.keybindings,
       locale: this.options.locale,
       pendingPages: this.pendingPages,
       selected: this.selected,
@@ -175,8 +182,9 @@ export class HistoryViewComponent implements Component, Focusable {
   }
 
   /** Move the selection and reset the detail pane to the top. */
-  private selectBy(delta: number): void {
-    const next = clamp(this.selected + delta, 0, this.items.length - 1);
+  private select(move: "down" | "up"): void {
+    // ↑/↓ move one item, so the page size never applies.
+    const next = moveListSelection(this.selected, this.items.length, move, 1);
 
     if (next === this.selected) return;
 
@@ -201,16 +209,29 @@ export function canShowHistoryBrowser(terminalWidth: number): boolean {
 export function layoutHistory(
   options: HistoryLayoutOptions,
 ): HistoryLayout | undefined {
-  const { items, pendingPages, selected, theme, width } = options;
+  const { items, keybindings, pendingPages, selected, theme, width } = options;
   const panes = splitPaneWidths(width, MIN_PANE_WIDTH);
 
   if (!panes) return undefined;
 
+  const height = overlayMaxHeight(options.terminalHeight);
+  const footerWidth = frameBodyWidth(width);
+  const closeHint = keyHint(keybindings, "tui.select.cancel", "Close");
+
   if (items.length === 0) {
+    const footer = wrapKeyHints([closeHint], footerWidth);
+    const body = emptyStateLines(HISTORY_EMPTY_MESSAGE, footerWidth, theme);
+
     return {
       detailOffset: 0,
       left: [],
-      lines: fitToWidth(renderEmpty(theme, width), width),
+      lines: renderFrame({
+        body: body.slice(0, frameBodyRows(height, footer.length)),
+        footer,
+        theme,
+        title: HISTORY_TITLE,
+        width,
+      }),
       right: [],
       rows: 0,
     };
@@ -221,117 +242,98 @@ export function layoutHistory(
   const detail = entry
     ? formatHistoryDetail(entry, theme, panes.right, time)
     : [];
-
-  // Sized after the detail is formatted, since the taller pane decides
-  // how many rows the browser needs.
-  const rows = contentRows(
-    options.terminalHeight,
+  const moveHint = keyHint(
+    keybindings,
+    ["tui.select.up", "tui.select.down"],
+    "Move",
+  );
+  // The page hint only appears once the detail overflows, and it can add
+  // a footer line, so the rows are sized first without it. Adding it only
+  // ever takes rows away, so the detail still overflows afterwards.
+  let footer = wrapKeyHints([moveHint, closeHint], footerWidth);
+  let rows = contentRows(
+    splitFrameBodyRows(height, footer.length),
     Math.max(items.length, detail.length),
   );
-  const detailOffset = clamp(
+
+  if (detail.length > rows) {
+    const pageHint = keyHint(
+      keybindings,
+      ["tui.select.pageUp", "tui.select.pageDown"],
+      "Scroll Detail",
+    );
+
+    footer = wrapKeyHints([moveHint, pageHint, closeHint], footerWidth);
+    rows = contentRows(
+      splitFrameBodyRows(height, footer.length),
+      Math.max(items.length, detail.length),
+    );
+  }
+
+  const scrolled = scrollLines(
+    detail,
+    rows,
     options.detailOffset + pendingPages * rows,
-    0,
-    Math.max(0, detail.length - rows),
+    panes.right,
+    theme,
   );
-  const listStart = clamp(
-    selected - Math.floor(rows / 2),
-    0,
-    Math.max(0, items.length - rows),
-  );
-  const left = items.slice(listStart, listStart + rows).map((item, index) =>
+  const list = listWindow(selected, items.length, rows);
+  const left = items.slice(list.start, list.end).map((item, index) =>
     formatHistoryRow(item, theme, panes.left, {
       ...time,
-      selected: listStart + index === selected,
+      selected: list.start + index === selected,
     }),
   );
-  const right = markDetailScroll(
-    detail.slice(detailOffset, detailOffset + rows),
-    theme,
-    panes.right,
-    {
-      above: detailOffset > 0,
-      below: detailOffset + rows < detail.length,
-    },
-  );
   const lines = renderSplitFrame({
-    footer: theme.fg("dim", footerHint(detail.length, rows)),
+    footer,
     left: {
       lines: left,
-      title: theme.fg("dim", `${String(selected + 1)}/${String(items.length)}`),
+      title: "",
+      ...(list.position === undefined
+        ? {}
+        : { titleRight: theme.fg("muted", list.position) }),
     },
     panes,
     right: {
-      lines: right,
+      lines: scrolled.lines,
       title: theme.fg(
-        "dim",
-        formatDetailTitle(detailOffset, rows, detail.length),
+        "muted",
+        formatDetailTitle(scrolled.offset, rows, detail.length),
       ),
     },
     rows,
-    title: theme.fg("accent", theme.bold("Notifications")),
+    theme,
+    title: HISTORY_TITLE,
   });
 
-  return { detailOffset, left, lines: fitToWidth(lines, width), right, rows };
+  return {
+    detailOffset: scrolled.offset,
+    left,
+    lines,
+    right: scrolled.lines,
+    rows,
+  };
 }
 
 /**
  * Decide how many content rows to draw.
  *
  * Enough for whichever pane is taller, so a long notification uses the
- * terminal rather than forcing a scroll, and always few enough that the
- * frame's own rows keep the footer on screen.
+ * terminal rather than forcing a scroll, and never more than `available`,
+ * the rows left once the frame's own rows keep the footer on screen.
  */
-function contentRows(terminalHeight: number, neededRows: number): number {
-  const available =
-    Math.floor((terminalHeight * HISTORY_MAX_HEIGHT_PERCENT) / 100) -
-    SPLIT_FRAME_CHROME_ROWS -
-    1;
-
+function contentRows(available: number, neededRows: number): number {
   return Math.max(
     1,
     Math.min(available, Math.max(neededRows, MIN_CONTENT_ROWS)),
   );
 }
 
-/**
- * Bound every line to the width the browser was given, so no row can
- * overrun its viewport.
- */
-function fitToWidth(lines: readonly string[], width: number): string[] {
-  return lines.map((line) => truncateToWidth(line, width, ""));
-}
-
-function footerHint(detailLines: number, rows: number): string {
-  return detailLines > rows
-    ? "↑/↓ Select · PgUp/PgDn Scroll detail · Esc Close"
-    : "↑/↓ Select · Esc Close";
-}
-
-function renderEmpty(theme: HistoryTheme, width: number): string[] {
-  const bodyWidth = Math.max(1, width - FRAME_BODY_CHROME_COLUMNS);
-
-  return [
-    frameSegment("┌", "┐", width),
-    frameLine(` ${theme.fg("accent", theme.bold("Notifications"))}`, width),
-    frameSegment("├", "┤", width),
-    ...wrapTextWithAnsi(HISTORY_EMPTY_MESSAGE, bodyWidth).map((line) =>
-      frameLine(` ${line} `, width),
-    ),
-    frameSegment("├", "┤", width),
-    frameLine(` ${theme.fg("dim", "Esc Close")}`, width),
-    frameSegment("└", "┘", width),
-  ];
-}
-
-/** Percentage of the terminal height the browser may occupy. */
-export const HISTORY_MAX_HEIGHT_PERCENT = 80;
+/** Title of the browser's frame. */
+const HISTORY_TITLE = "Notifications";
 
 /** Fewest content rows worth drawing. */
 const MIN_CONTENT_ROWS = 6;
 
 /** Narrowest pane that still fits a time, a severity, and some text. */
 const MIN_PANE_WIDTH = 16;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}

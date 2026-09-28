@@ -5,12 +5,17 @@ import {
   HistoryViewComponent,
   layoutHistory,
   type HistoryLayout,
+  type HistoryViewOptions,
 } from "../src/ui/history-view.js";
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { visibleWidth, type KeybindingsManager } from "@earendil-works/pi-tui";
+import { overlayMaxHeight } from "@sherif-fanous/pi-extensions-core";
 import {
   createFakeKeybindings,
   createMarkerTheme,
+  createPiKeybindings,
   createPlainTheme,
+  findOverflowingLines,
+  stripAnsi,
 } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it, vi } from "vitest";
 
@@ -76,14 +81,26 @@ describe("HistoryViewComponent", () => {
     expect(layout.right.join(" ")).toContain("a │ b │ c");
   });
 
-  it("shows the selection count", () => {
-    const view = build(entries(4));
+  it("shows a muted list position once the list scrolls", () => {
+    const view = build(entries(30), { terminalHeight: () => 14 });
 
-    expect(view.render(100).join(" ")).toContain("1/4");
+    expect(view.render(100)[TITLE_ROW]).toMatch(/\(1\/30\) │ Detail/u);
 
     view.handleInput("DOWN");
 
-    expect(view.render(100).join(" ")).toContain("2/4");
+    expect(view.render(100)[TITLE_ROW]).toMatch(/\(2\/30\) │ Detail/u);
+
+    const marked = build(entries(30), {
+      terminalHeight: () => 14,
+      theme: createMarkerTheme(),
+    });
+
+    expect(marked.render(100)[TITLE_ROW]).toContain("<muted>(1/30)</muted>");
+    expect(marked.render(100)[TITLE_ROW]).toContain("<muted>Detail</muted>");
+  });
+
+  it("shows no list position while every entry fits", () => {
+    expect(build(entries(4)).render(100)[TITLE_ROW]).not.toMatch(/\d\/\d/u);
   });
 
   it("moves the detail pane with the selection", () => {
@@ -101,11 +118,9 @@ describe("HistoryViewComponent", () => {
   });
 
   it("colorizes severities in both panes", () => {
-    const lines = build(
-      [createNotificationEntry("bad news", "error", FIRST)],
-      () => undefined,
-      createMarkerTheme(),
-    ).render(100);
+    const lines = build([createNotificationEntry("bad news", "error", FIRST)], {
+      theme: createMarkerTheme(),
+    }).render(100);
     const text = lines.join(" ");
 
     expect(text).toContain("<error>");
@@ -115,7 +130,7 @@ describe("HistoryViewComponent", () => {
   it("highlights exactly one row, and it is the selected one", () => {
     // The marker theme is not zero-width, so assert on the highlight's
     // presence and position, never on text that it may have truncated.
-    const view = build(entries(3), () => undefined, createMarkerTheme());
+    const view = build(entries(3), { theme: createMarkerTheme() });
     const highlightedRow = (): number =>
       view.render(100).findIndex((line) => line.includes("<bg:selectedBg>"));
     const first = highlightedRow();
@@ -129,26 +144,44 @@ describe("HistoryViewComponent", () => {
     expect(highlightedRow()).toBe(first + 1);
   });
 
-  it("does not move the selection above the newest entry", () => {
-    const view = build(entries(5));
-    const top = view.render(100);
+  it("wraps from the newest entry up to the oldest", () => {
+    const view = build(entries(5), { theme: createMarkerTheme() });
+    const highlightedRow = (): number =>
+      view.render(100).findIndex((line) => line.includes("<bg:selectedBg>"));
+    const newest = highlightedRow();
 
     view.handleInput("UP");
 
-    expect(view.render(100)).toEqual(top);
+    expect(highlightedRow()).toBe(newest + 4);
   });
 
-  it("does not move the selection past the oldest entry", () => {
+  it("details the oldest entry after wrapping up from the newest", () => {
+    const view = build(entries(5));
+    const detail = (): string =>
+      view
+        .render(100)
+        .map((line) => line.split("│")[2] ?? "")
+        .join(" ");
+
+    expect(detail()).toContain("notification number 4");
+
+    view.handleInput("UP");
+
+    expect(detail()).toContain("notification number 0");
+    expect(detail()).not.toContain("notification number 4");
+  });
+
+  it("wraps from the oldest entry down to the newest", () => {
     const view = build(entries(3));
+    const top = view.render(100);
 
-    for (let index = 0; index < 20; index += 1) view.handleInput("DOWN");
+    for (let index = 0; index < 3; index += 1) view.handleInput("DOWN");
 
-    const end = view.render(100);
+    expect(view.render(100)).toEqual(top);
 
     view.handleInput("DOWN");
 
-    expect(view.render(100)).toEqual(end);
-    expect(end.join(" ")).toContain("3/3");
+    expect(view.render(100)).not.toEqual(top);
   });
 
   it("scrolls a long detail with page keys and resets on reselect", () => {
@@ -259,37 +292,145 @@ describe("HistoryViewComponent", () => {
     expect(layout.right.join(" ")).not.toMatch(/[↑↓↕]/u);
   });
 
-  it("fits its whole frame inside a short terminal", () => {
-    const view = new HistoryViewComponent({
-      done: () => undefined,
-      entries: entries(30),
-      keybindings: createFakeKeybindings(),
-      locale: "en-US",
-      terminalHeight: () => 14,
-      theme: createPlainTheme(),
-      timeZone: "UTC",
-    });
-    const lines = view.render(100);
+  // Pi keeps only the top rows of an overlay taller than it asked for, so
+  // the browser must fit the height Pi grants or lose its footer.
+  it("fits its whole frame inside the height Pi grants a short terminal", () => {
+    const long = createNotificationEntry(numberedLines(60), "info", FIRST);
 
-    expect(lines.length).toBeLessThanOrEqual(14);
-    // The footer must survive, since it carries the only close hint.
-    expect(lines.at(-2)).toContain("Esc Close");
+    for (const width of [39, 40, 100]) {
+      for (const list of [entries(30), [long], []]) {
+        const lines = build(list, { terminalHeight: () => 14 }).render(width);
+
+        expect(lines.length).toBeLessThanOrEqual(overlayMaxHeight(14));
+        // The footer must survive, since it carries the only close hint.
+        expect(lines.at(-2)).toContain("Esc Close");
+      }
+    }
   });
 
-  it("shows an empty state with no panes", () => {
-    const lines = build([]).render(100);
+  it("fits every line at narrow widths", () => {
+    const long = createNotificationEntry(
+      `${numberedLines(60)}\n${"wide 日本語 ".repeat(20)}`,
+      "warning",
+      FIRST,
+    );
 
-    expect(lines.join(" ")).toContain("No notifications have been captured");
+    for (const width of [39, 40]) {
+      for (const list of [entries(30), [long], []]) {
+        const lines = build(list, { terminalHeight: () => 20 }).render(width);
 
-    for (const line of lines) {
-      expect(visibleWidth(line)).toBe(100);
-      expect([...line].filter((char) => char === "│").length).toBeLessThan(3);
+        expect(lines.length).toBeGreaterThan(0);
+        expect(findOverflowingLines(lines, width)).toEqual([]);
+      }
     }
+  });
+
+  it("lists the keys that work in the footer", () => {
+    const short = layout2([createNotificationEntry("short", "info", FIRST)]);
+    const long = layout2(
+      [createNotificationEntry(numberedLines(60), "info", FIRST)],
+      { terminalHeight: 20 },
+    );
+
+    expect(short.lines.at(-2)).toBe(`│ ${"↑/↓ Move · Esc Close".padEnd(96)} │`);
+    expect(long.lines.at(-2)).toBe(
+      `│ ${"↑/↓ Move · PgUp/PgDn Scroll Detail · Esc Close".padEnd(96)} │`,
+    );
+  });
+
+  // A footer cut at the right edge loses its last hint, which is the one
+  // that says how to close the browser.
+  it("wraps the footer between hints rather than cutting it", () => {
+    const layout = layout2(
+      [createNotificationEntry(numberedLines(60), "info", FIRST)],
+      { terminalHeight: 20, width: 40 },
+    );
+    const footer = layout.lines
+      .slice(-3, -1)
+      .map((line) => line.slice(2, -2).trimEnd());
+
+    expect(footer).toEqual(["↑/↓ Move · PgUp/PgDn Scroll Detail", "Esc Close"]);
+    expect(footer.join(" ")).not.toContain("…");
+  });
+
+  it("colors the frame by meaning", () => {
+    const lines = build(entries(2), { theme: createMarkerTheme() }).render(100);
+
+    expect(lines[0]).toContain("<accent><b>Notifications</b></accent>");
+    expect(lines[0]?.startsWith("<border>┌")).toBe(true);
+    expect(lines.at(-2)).toContain("<dim>↑/↓ Move · Esc Close</dim>");
+  });
+
+  it("names and obeys the keys the user has bound instead of the defaults", () => {
+    const done = vi.fn();
+    const keybindings: KeybindingsManager = createPiKeybindings({
+      "tui.select.cancel": "q",
+      "tui.select.down": "j",
+      "tui.select.pageDown": "ctrl+f",
+      "tui.select.pageUp": "ctrl+b",
+      "tui.select.up": "k",
+    });
+    const long = createNotificationEntry(numberedLines(60), "info", FIRST);
+    const view = build(
+      [createNotificationEntry("older", "info", FIRST), long],
+      {
+        done,
+        keybindings,
+        terminalHeight: () => 20,
+      },
+    );
+    const top = view.render(100);
+
+    expect(stripAnsi(top.at(-2) ?? "")).toContain(
+      "k/j Move · Ctrl+B/Ctrl+F Scroll Detail · q Close",
+    );
+
+    // The default keys no longer do anything.
+    for (const key of ["\u001B[B", "\u001B[A", "\u001B[6~", "\u001B"]) {
+      view.handleInput(key);
+    }
+
+    expect(view.render(100)).toEqual(top);
+    expect(done).not.toHaveBeenCalled();
+
+    view.handleInput("\u0006");
+
+    expect(view.render(100)).not.toEqual(top);
+
+    view.handleInput("j");
+
+    expect(view.render(100).join(" ")).toContain("older");
+    expect(view.render(100)[TITLE_ROW]).toMatch(/│ Detail +│$/u);
+
+    view.handleInput("q");
+
+    expect(done).toHaveBeenCalledTimes(1);
+  });
+
+  it("frames the empty state with the title in the top border", () => {
+    const lines = build([]).render(50);
+
+    expect(lines).toEqual([
+      `┌─ Notifications ${"─".repeat(32)}┐`,
+      `│ ${"No notifications have been captured in this".padEnd(46)} │`,
+      `│ ${"session yet.".padEnd(46)} │`,
+      `├${"─".repeat(48)}┤`,
+      `│ ${"Esc Close".padEnd(46)} │`,
+      `└${"─".repeat(48)}┘`,
+    ]);
+  });
+
+  it("mutes the empty-state message", () => {
+    const lines = build([], { theme: createMarkerTheme() }).render(100);
+
+    expect(lines.join(" ")).toContain(
+      "<muted>No notifications have been captured in this session yet.</muted>",
+    );
   });
 
   it("closes exactly once on the configured cancel input", () => {
     const done = vi.fn();
-    const view = build(entries(2), done);
+    const view = build(entries(2), { done });
 
     view.handleInput("DOWN");
 
@@ -342,19 +483,19 @@ describe("canShowHistoryBrowser", () => {
 
 function build(
   list: NotificationEntry[],
-  done: () => void = () => undefined,
-  theme = createPlainTheme(),
+  overrides: Partial<HistoryViewOptions> = {},
 ): HistoryViewComponent {
   return new HistoryViewComponent({
-    done,
+    done: () => undefined,
     entries: list,
     keybindings: createFakeKeybindings(),
     locale: "en-US",
     // Tall enough that the row budget never binds, so a test that is not
     // about height asserts on content alone.
     terminalHeight: () => 40,
-    theme,
+    theme: createPlainTheme(),
     timeZone: "UTC",
+    ...overrides,
   });
 }
 
@@ -376,6 +517,7 @@ function layout2(
   const layout = layoutHistory({
     detailOffset: 0,
     items: [...list].reverse(),
+    keybindings: createFakeKeybindings(),
     locale: "en-US",
     pendingPages: 0,
     selected: 0,

@@ -15,12 +15,6 @@
  */
 
 import type { NotificationConfig, NotificationEntry } from "../types.js";
-import {
-  FRAME_BODY_CHROME_COLUMNS,
-  frameLine,
-  frameSegment,
-  padToWidth,
-} from "./frame.js";
 import { CARD_SEVERITY_LABELS, SEVERITY_COLORS } from "./severity.js";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
@@ -29,6 +23,12 @@ import {
   wrapTextWithAnsi,
   type Component,
 } from "@earendil-works/pi-tui";
+import {
+  frameBodyWidth,
+  frameLine,
+  frameSegment,
+  padToWidth,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** Theme surface used by the stack, so tests can pass a fake. */
 export type ToastTheme = Pick<Theme, "bold" | "fg">;
@@ -212,6 +212,12 @@ export const TOAST_HORIZONTAL_MARGIN = 1;
 const MIN_TOAST_WIDTH = 20;
 
 /**
+ * Columns a card's chrome takes from each row: two borders and one space
+ * of padding on each side, the inverse of `frameBodyWidth`.
+ */
+const CARD_CHROME_COLUMNS = 4;
+
+/**
  * Width the widest message would need to avoid wrapping.
  *
  * Measured per line, so a multiline message is sized by its longest line,
@@ -226,7 +232,7 @@ function naturalCardWidth(toasts: readonly NotificationEntry[]): number {
     }
   }
 
-  return widest + FRAME_BODY_CHROME_COLUMNS;
+  return widest + CARD_CHROME_COLUMNS;
 }
 
 function renderCard(
@@ -237,7 +243,7 @@ function renderCard(
 ): string[] {
   const color = SEVERITY_COLORS[toast.severity];
   const label = CARD_SEVERITY_LABELS[toast.severity];
-  const bodyWidth = Math.max(1, width - FRAME_BODY_CHROME_COLUMNS);
+  const bodyWidth = Math.max(1, frameBodyWidth(width));
   const body = toBodyLines(toast.message, bodyWidth, config.toast.maxLines);
   // The label is drawn into the top border, so measure its plain text
   // before styling to keep the fill count correct.
@@ -245,14 +251,22 @@ function renderCard(
   const fillWidth = Math.max(0, width - 2 - visibleWidth(labelText));
   const top =
     fillWidth > 0
-      ? `┌${theme.fg(color, theme.bold(labelText))}${"─".repeat(fillWidth)}┐`
-      : frameSegment("┌", "┐", width);
+      ? [
+          theme.fg("border", "┌"),
+          theme.fg(color, theme.bold(labelText)),
+          theme.fg("border", `${"─".repeat(fillWidth)}┐`),
+        ].join("")
+      : frameSegment("┌", "┐", width, theme);
 
   return [
     top,
     ...body.map((line) =>
-      frameLine(` ${theme.fg(color, padToWidth(line, bodyWidth))} `, width),
+      frameLine(
+        ` ${theme.fg(color, padToWidth(line, bodyWidth))} `,
+        width,
+        theme,
+      ),
     ),
-    frameSegment("└", "┘", width),
+    frameSegment("└", "┘", width, theme),
   ];
 }

@@ -11,11 +11,14 @@ import type { NotificationEntry } from "../types.js";
 import { HISTORY_EMPTY_MESSAGE } from "../ui/history-format.js";
 import {
   canShowHistoryBrowser,
-  HISTORY_MAX_HEIGHT_PERCENT,
   HistoryViewComponent,
 } from "../ui/history-view.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { isInteractiveTui, pluralize } from "@sherif-fanous/pi-extensions-core";
+import {
+  isInteractiveTui,
+  overlayOptions,
+  pluralize,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** Command-context surface used to open the overlay. */
 export type NotificationsCommandContext = Pick<
@@ -67,21 +70,14 @@ export async function runNotificationsCommand(
     {
       overlay: true,
       overlayOptions: {
-        // The same ceiling the component sizes itself to, so its last row
-        // is never clipped away.
-        maxHeight: `${HISTORY_MAX_HEIGHT_PERCENT}%`,
-        minWidth: HISTORY_MIN_WIDTH,
+        ...overlayOptions("main"),
         // Pi calls this every render cycle, so resizing the terminal
         // withdraws or restores the browser without a resize listener.
         visible: (termWidth) => canShowHistoryBrowser(termWidth),
-        width: "80%",
       },
     },
   );
 }
-
-/** Narrowest overlay worth requesting for the two-pane browser. */
-const HISTORY_MIN_WIDTH = 60;
 
 function defaultTerminalWidth(): number | undefined {
   return process.stdout.columns;

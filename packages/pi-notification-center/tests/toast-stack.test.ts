@@ -16,6 +16,7 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import {
   createMarkerTheme,
   createPlainTheme,
+  findOverflowingLines,
 } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it } from "vitest";
 
@@ -127,6 +128,35 @@ describe("renderToastStack", () => {
 
       expect(label).toContain(marker);
       expect(body).toContain(marker);
+    }
+  });
+
+  // Markers count as columns, so the card cuts each marked row short;
+  // only the start of each row is certain to survive.
+  it("draws the card border in the theme's border color", () => {
+    const [top, body, bottom] = renderMarked("error");
+
+    expect(top?.trimStart()).toMatch(/^<border>┌<\/border><error>/u);
+    expect(body?.trimStart().startsWith("<border>│</border>")).toBe(true);
+    expect(bottom?.trimStart().startsWith("<border>└─")).toBe(true);
+  });
+
+  it("fits every line at narrow widths", () => {
+    const toasts = [
+      createNotificationEntry("x".repeat(500), "error", 1),
+      createNotificationEntry("wide 日本語 ".repeat(20), "warning", 2),
+      createNotificationEntry("short", "info", 3),
+    ];
+
+    for (const width of [20, 30, 40]) {
+      const lines = renderToastStack(toasts, THEME, DEFAULT_CONFIG, {
+        terminalHeight: 100,
+        terminalWidth: width + 1,
+        viewportWidth: width,
+      });
+
+      expect(lines.length).toBeGreaterThan(0);
+      expect(findOverflowingLines(lines, width)).toEqual([]);
     }
   });
 
@@ -364,10 +394,14 @@ function render(
   });
 }
 
-/** One card styled with visible color markers instead of ANSI codes. */
+/**
+ * One card styled with visible color markers instead of ANSI codes. The
+ * message is long enough that the markers, which count as columns, are
+ * not cut off with the rest of a row wider than the card.
+ */
 function renderMarked(severity: NotificationSeverity): string[] {
   return renderToastStack(
-    [createNotificationEntry("a", severity, 1)],
+    [createNotificationEntry("a".repeat(40), severity, 1)],
     createMarkerTheme(),
     DEFAULT_CONFIG,
     {

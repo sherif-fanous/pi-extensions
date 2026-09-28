@@ -4,7 +4,6 @@ import {
   formatHistoryDetail,
   formatHistoryRow,
   HISTORY_EMPTY_MESSAGE,
-  markDetailScroll,
   toPreviewLine,
 } from "../src/ui/history-format.js";
 import { visibleWidth } from "@earendil-works/pi-tui";
@@ -59,7 +58,7 @@ describe("formatHistoryRow", () => {
     }
   });
 
-  it("colors the severity label and dims the time", () => {
+  it("colors the severity label and mutes the time", () => {
     const row = formatHistoryRow(
       createNotificationEntry("boom", "error", FIRST),
       MARKED,
@@ -67,7 +66,7 @@ describe("formatHistoryRow", () => {
       TIME,
     );
 
-    expect(row).toContain("<dim>08:09</dim>");
+    expect(row).toContain("<muted>08:09</muted>");
     expect(row).toContain("<error><b>ERROR</b></error>");
   });
 
@@ -180,7 +179,7 @@ describe("formatHistoryDetail", () => {
     expect(lines[3]).toBe("the whole message");
   });
 
-  it("colors the severity heading", () => {
+  it("mutes the date and colors the severity heading", () => {
     const lines = formatHistoryDetail(
       createNotificationEntry("m", "error", FIRST),
       MARKED,
@@ -188,6 +187,7 @@ describe("formatHistoryDetail", () => {
       TIME,
     );
 
+    expect(lines[0]).toBe("<muted>May 17, 2024, 8:09:10 AM</muted>");
     expect(lines[1]).toBe("<error><b>ERROR</b></error>");
   });
 
@@ -260,63 +260,6 @@ describe("formatDetailTitle", () => {
 
   it("shows the end of the range once scrolled to the bottom", () => {
     expect(formatDetailTitle(35, 10, 40)).toBe("Detail 36-40/40");
-  });
-});
-
-describe("markDetailScroll", () => {
-  const BELOW = { above: false, below: true };
-  const ABOVE = { above: true, below: false };
-  const BOTH = { above: true, below: true };
-
-  it("marks the last row when content follows", () => {
-    const marked = markDetailScroll(["one", "two"], PLAIN, 10, BELOW);
-
-    expect(marked[0]).toBe("one");
-    expect(marked[1]).toBe("two      ↓");
-    expect(visibleWidth(marked[1] ?? "")).toBe(10);
-  });
-
-  it("marks the first row when content sits above", () => {
-    expect(markDetailScroll(["one", "two"], PLAIN, 10, ABOVE)).toEqual([
-      "one      ↑",
-      "two",
-    ]);
-  });
-
-  it("marks both edges when the pane sits mid-message", () => {
-    expect(markDetailScroll(["one", "two", "three"], PLAIN, 10, BOTH)).toEqual([
-      "one      ↑",
-      "two",
-      "three    ↓",
-    ]);
-  });
-
-  it("combines both directions on a one-row pane", () => {
-    expect(markDetailScroll(["one"], PLAIN, 10, BOTH)).toEqual(["one      ↕"]);
-  });
-
-  it("keeps the pane width when the row is already full", () => {
-    const marked = markDetailScroll(["0123456789"], PLAIN, 10, BELOW);
-
-    expect(visibleWidth(marked[0] ?? "")).toBe(10);
-    expect(marked[0]?.endsWith("↓")).toBe(true);
-  });
-
-  it("styles only the marker", () => {
-    expect(markDetailScroll(["one"], MARKED, 6, BELOW)).toEqual([
-      "one  <dim>↓</dim>",
-    ]);
-  });
-
-  it("returns the rows untouched when there is nothing to mark", () => {
-    expect(markDetailScroll([], PLAIN, 10, BOTH)).toEqual([]);
-    expect(markDetailScroll(["one"], PLAIN, 1, BOTH)).toEqual(["one"]);
-    expect(
-      markDetailScroll(["one", "two"], PLAIN, 10, {
-        above: false,
-        below: false,
-      }),
-    ).toEqual(["one", "two"]);
   });
 });
 

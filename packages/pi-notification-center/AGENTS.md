@@ -30,8 +30,7 @@ The conventions below are the ones the linter cannot enforce.
   drift from what is on disk. Pi session entries are the only durable
   history store; module memory is never authoritative.
 - Resolve invalid input to a documented default and return a warning
-  string. Throw only for programmer errors, such as a width below the two
-  columns a border needs.
+  string. Throw only for programmer errors.
 - Keep pure formatting separate from rendering. An exported function
   returns `string[]` for a given viewport and state; a thin component
   holds state and routes those lines. Tests assert on the function and
@@ -78,9 +77,10 @@ both.
 Prose in notifications, warnings, overlay bodies, and empty states uses
 complete sentences with terminal periods. Single-line labels do not carry
 one. Overlay and pane titles use Title Case without a colon, and a pane
-title may carry a position suffix, as in `Detail 7-18/63`. Footer hints
-pair a key with a Title Case action and join the pairs with ` · `, as in
-`↑/↓ Select · Esc Close`. Key names match what the terminal prints.
+title may carry a position suffix, as in `Detail 7-18/63`. The
+repository's `AGENTS.md` "TUI" section governs the browser's frame, key
+hints (such as `↑/↓ Move · Esc Close`), keys, lists, and selection
+markers.
 
 `Pi` is the product, `pi` the binary, and Pi command names stay literal:
 `/notifications`, `/reload`.

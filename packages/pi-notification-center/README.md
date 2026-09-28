@@ -59,13 +59,17 @@ date, time, severity, and complete message.
 Severities are colored to match your theme: `ERROR` red, `WARN` amber,
 `INFO` accent.
 
+Moving past the last notification wraps around to the first. Picking a
+different notification scrolls the detail pane back to the top. The
+footer shows the keys that work, and offers `PgUp` / `PgDn` only when the
+selected message is too long to fit.
+
 | Key             | Action                 |
 | :-------------- | :--------------------- |
 | `↑` / `↓`       | Move the selection     |
 | `PgUp` / `PgDn` | Scroll the detail pane |
 | `Esc`           | Close                  |
 
-Picking a different notification scrolls the detail pane back to the top.
 If you have remapped Pi's keys, the browser follows your bindings.
 
 ## Configuration
