@@ -35,7 +35,7 @@ export function makeScopeRow(host: EditorRowHost): EditorRow {
         host.clearFieldDiagnosticsFor("scope");
       }
     },
-    renderLines() {
+    renderLines(width) {
       return withFieldDiagnostic(
         host,
         "scope",
@@ -45,6 +45,7 @@ export function makeScopeRow(host: EditorRowHost): EditorRow {
           [formatScopeName("user"), formatScopeName("project")],
           formatScopeName(host.getState().scope),
           host.currentRow() === "scope",
+          width,
         ),
       );
     },

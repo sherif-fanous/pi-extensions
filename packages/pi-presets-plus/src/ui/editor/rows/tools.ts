@@ -5,9 +5,13 @@
  */
 import { TOOLS_LABEL } from "../../labels.js";
 import { selectToolsMode, toggleSelectedTool } from "../draft.js";
-import { renderValueRow } from "../row-render.js";
+import { packTokens, renderChoiceRow } from "../row-render.js";
 import type { EditorRow, EditorRowHost } from "../row.js";
 import { Key, matchesKey } from "@earendil-works/pi-tui";
+import { matchSelectAction } from "@sherif-fanous/pi-extensions-core";
+
+/** Indent of the lines below the tools row. */
+const DETAIL_INDENT = "    ";
 
 /** Build the tools row. */
 export function makeToolsRow(host: EditorRowHost): EditorRow {
@@ -58,7 +62,10 @@ export function makeToolsRow(host: EditorRowHost): EditorRow {
             selectToolsMode(state, "session", host.initialActiveTools),
           );
         }
-      } else if (matchesKey(input, Key.enter) && state.toolsMode === "preset") {
+      } else if (
+        matchSelectAction(host.keybindings, input) === "confirm" &&
+        state.toolsMode === "preset"
+      ) {
         const tool = host.allTools[toolIndex];
 
         if (!tool) return;
@@ -66,20 +73,29 @@ export function makeToolsRow(host: EditorRowHost): EditorRow {
         host.setState(toggleSelectedTool(state, tool));
       }
     },
-    renderLines() {
+    renderLines(width) {
       const state = host.getState();
       const focused = host.currentRow() === "tools";
-      const sessionMarker = state.toolsMode === "session" ? "●" : "○";
-      const presetMarker = state.toolsMode === "preset" ? "●" : "○";
-      const mode = `${sessionMarker} session   ${presetMarker} preset`;
-      const lines = [renderValueRow(host.theme, TOOLS_LABEL, mode, focused)];
+      const lines = renderChoiceRow(
+        host.theme,
+        TOOLS_LABEL,
+        ["session", "preset"],
+        state.toolsMode,
+        focused,
+        width,
+      );
 
       if (state.toolsMode === "session") {
         lines.push(
-          host.theme.fg("dim", "    Session: inherits the active tool set."),
+          host.theme.fg(
+            "dim",
+            `${DETAIL_INDENT}Session: inherits the active tool set.`,
+          ),
         );
       } else if (host.allTools.length === 0) {
-        lines.push(host.theme.fg("dim", "    No tools available"));
+        lines.push(
+          host.theme.fg("muted", `${DETAIL_INDENT}No tools available.`),
+        );
       } else {
         const selected = new Set(state.selectedTools);
         const renderedTools = host.allTools.map((tool, index) => {
@@ -91,7 +107,11 @@ export function makeToolsRow(host: EditorRowHost): EditorRow {
             : text;
         });
 
-        lines.push(`    ${renderedTools.join("  ")}`);
+        lines.push(
+          ...packTokens(renderedTools, width - DETAIL_INDENT.length).map(
+            (line) => `${DETAIL_INDENT}${line}`,
+          ),
+        );
       }
 
       const diagnostic = host.getFieldDiagnostic("tools");

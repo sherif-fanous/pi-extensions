@@ -74,29 +74,40 @@ describe("picker state", () => {
   it("wraps vertical movement at list boundaries", () => {
     const presets = [makePreset("a"), makePreset("b"), makePreset("c")];
     const state = initialPickerState();
+    const last = moveSelection(state, presets, "", "up", 4);
 
+    expect(selectedPreset(last, presets, "")?.name).toBe("c");
     expect(
-      selectedPreset(moveSelection(state, presets, "", -1, 4), presets, "")
+      selectedPreset(moveSelection(last, presets, "", "down", 4), presets, "")
         ?.name,
-    ).toBe("c");
-
-    const last = moveSelection(state, presets, "", 2, 4, { wrap: false });
-
-    expect(
-      selectedPreset(moveSelection(last, presets, "", 1, 4), presets, "")?.name,
     ).toBe("a");
   });
 
-  it("bounds page movement without wrapping", () => {
-    const presets = [makePreset("a"), makePreset("b"), makePreset("c")];
+  it("stops page movement at the first and last preset", () => {
+    const presets = [
+      makePreset("a"),
+      makePreset("b"),
+      makePreset("c"),
+      makePreset("d"),
+      makePreset("e"),
+    ];
     const state = initialPickerState();
-    const bottom = moveSelection(state, presets, "", 10, 2, { wrap: false });
-
-    expect(selectedPreset(bottom, presets, "")?.name).toBe("c");
-
-    const top = moveSelection(bottom, presets, "", -10, 2, { wrap: false });
+    const top = moveSelection(state, presets, "", "pageUp", 2);
 
     expect(selectedPreset(top, presets, "")?.name).toBe("a");
+
+    const middle = moveSelection(top, presets, "", "pageDown", 2);
+    const bottom = moveSelection(
+      moveSelection(middle, presets, "", "pageDown", 2),
+      presets,
+      "",
+      "pageDown",
+      2,
+    );
+
+    expect(selectedPreset(middle, presets, "")?.name).toBe("c");
+    expect(selectedPreset(bottom, presets, "")?.name).toBe("e");
+    expect(bottom.scrollOffset).toBe(3);
   });
 
   it("cycles scope and preserves selection when still visible", () => {
@@ -108,7 +119,7 @@ describe("picker state", () => {
       initialPickerState(),
       presets,
       "",
-      1,
+      "down",
       4,
     );
     const projectOnly = cycleScope(
@@ -129,7 +140,7 @@ describe("picker state", () => {
       makePreset("other", "user"),
       makePreset("project", "project"),
     ];
-    const onProject = moveSelection(initialPickerState(), presets, "", 2, 4);
+    const onProject = moveSelection(initialPickerState(), presets, "", "up", 4);
 
     expect(selectedPreset(onProject, presets, "")?.name).toBe("project");
 
@@ -142,9 +153,7 @@ describe("picker state", () => {
 
   it("resets selection and scroll when filtering leaves no matches", () => {
     const presets = [makePreset("a"), makePreset("b"), makePreset("c")];
-    const scrolled = moveSelection(initialPickerState(), presets, "", 2, 1, {
-      wrap: false,
-    });
+    const scrolled = moveSelection(initialPickerState(), presets, "", "up", 1);
     const next = preserveSelectionOrFirst(
       scrolled,
       presets,

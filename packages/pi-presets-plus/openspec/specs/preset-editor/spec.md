@@ -3,12 +3,12 @@
 ## Purpose
 
 Define the interactive editor UI that creates, edits, and temporarily tests a
-single preset; the picker CRUD action keys (`n`/`e`/`d`/`x`/`c` and `⌃↑`/`⌃↓`)
-that route through the editor and storage primitives; the hotkey input field
-with format / conflict / pi-builtin validation (capture-only until
-`preset-hotkeys` lands); and the load-time `clampWarning` flag with its picker
-indicator. All preset CRUD flows through the picker dialog — `/presets` does not
-expose `save`, `edit`, or `rm` subcommands.
+single preset; the picker CRUD action keys (`n`/`e`/`d`/`x`/`c` and
+`Ctrl+↑`/`Ctrl+↓`) that route through the editor and storage primitives; the
+hotkey input field with format / conflict / pi-builtin validation (capture-only
+until `preset-hotkeys` lands); and the load-time `clampWarning` flag with its
+picker indicator. All preset CRUD flows through the picker dialog — `/presets`
+does not expose `save`, `edit`, or `rm` subcommands.
 
 ## Requirements
 
@@ -91,17 +91,31 @@ confirm a nonexistent result.
 
 #### Scenario: No matching entries
 
-- **WHEN** the query matches no entries, or the selector has no options
-- **THEN** the selector displays an empty-state message and remains cancellable
+- **WHEN** the query matches no entries
+- **THEN** the selector displays `No options match this search.` in the muted
+  color and remains cancellable
 - **AND** Enter leaves the selector open without changing the draft
+
+#### Scenario: No options at all
+
+- **WHEN** the selector has no options
+- **THEN** the selector displays `No options to choose from.` in the muted color
+  and remains cancellable
 
 ### Requirement: Selector confirmation and cancellation
 
-Up/down SHALL move the highlight through results while typed text and backspace
-edit the query. The highlighted result SHALL remain visible in a bounded
-viewport. Enter SHALL confirm the highlighted result and return to the form
-focused on the originating row. Escape SHALL cancel only the selector and return
-to that row.
+Up/down SHALL move the highlight through results, wrapping around the ends, and
+PgUp/PgDn SHALL move it one page and stop at the first or last result, while
+typed text and backspace edit the query. The highlighted result SHALL carry an
+accent `→ ` marker and remain visible in a bounded viewport that keeps it
+centered; when not every result fits, the muted `(n/m)` position SHALL sit at
+the right of the top border. Enter SHALL confirm the highlighted result and
+return to the form focused on the originating row. Escape SHALL cancel only the
+selector and return to that row.
+
+The selector SHALL open as a nested overlay, with the title `Select Provider` or
+`Select "<provider>" Model` in its top border and the footer
+`↑/↓ Move · PgUp/PgDn Page · Enter Select · Esc Cancel`.
 
 Browsing, filtering, opening, and cancellation SHALL NOT change draft values or
 diagnostics. Editor Save, Test, and form-navigation shortcuts SHALL NOT act on
@@ -218,19 +232,20 @@ In `duplicate` mode the editor SHALL seed the name row with the next available
 `uniqueCopyName(...)` and SHALL clear the hotkey so a Save with no further edits
 does not collide.
 
-The editor window title SHALL be derived from `mode`: `New preset` in `new`
-mode, `Edit '<name>'` in `edit` mode (where `<name>` is the target preset's
-name), and `Duplicate '<name>'` in `duplicate` mode (where `<name>` is the
-source preset's name).
+The editor window title SHALL be derived from `mode`: `New Preset` in `new`
+mode, `Edit "<name>"` in `edit` mode (where `<name>` is the target preset's
+name), and `Duplicate "<name>"` in `duplicate` mode (where `<name>` is the
+source preset's name). The title SHALL sit in the top border of the editor's
+frame, and the editor SHALL open as a main overlay.
 
 #### Scenario: Editor title reflects mode
 
 - **WHEN** the editor is opened in `new` mode
-- **THEN** the title SHALL read `New preset`
+- **THEN** the title SHALL read `New Preset`
 - **WHEN** the editor is opened in `edit` mode targeting preset `plan`
-- **THEN** the title SHALL read `Edit 'plan'`
+- **THEN** the title SHALL read `Edit "plan"`
 - **WHEN** the editor is opened in `duplicate` mode seeded from preset `plan`
-- **THEN** the title SHALL read `Duplicate 'plan'`
+- **THEN** the title SHALL read `Duplicate "plan"`
 
 #### Scenario: Duplicate mode seeds from source but persists as new
 
@@ -238,7 +253,7 @@ source preset's name).
 - **THEN** all form rows SHALL be pre-populated from `plan`
 - **AND** the name row SHALL be pre-filled with `plan-copy` (or the next
   available `plan-copy-N`) and the hotkey SHALL be cleared
-- **AND** the title SHALL read `Duplicate 'plan'`
+- **AND** the title SHALL read `Duplicate "plan"`
 - **AND** a Save SHALL persist via `addPreset` and SHALL NOT call `updatePreset`
   or the move flow
 
@@ -516,8 +531,8 @@ one of:
   cancellation.
 
 The delegate SHALL pass `initialText` as the built-in editor prefill. It SHALL
-pass a title of the form `Edit prompt: <presetName>` when `presetName` is
-defined and non-empty, or `Edit prompt` otherwise. Text-editing mechanics,
+pass a title of the form `Edit Prompt for "<presetName>"` when `presetName` is
+defined and non-empty, or `Edit Prompt` otherwise. Text-editing mechanics,
 keybindings, paste behavior, and rendering belong to Pi's built-in editor.
 
 #### Scenario: Overlay opens with the supplied initial text
@@ -538,13 +553,13 @@ keybindings, paste behavior, and rendering belong to Pi's built-in editor.
 #### Scenario: Header reflects the preset name when supplied
 
 - **WHEN** the overlay is opened with `presetName = "plan"`
-- **THEN** the overlay header SHALL read `Edit prompt: plan`
+- **THEN** the overlay header SHALL read `Edit Prompt for "plan"`
 
 #### Scenario: Header omits the preset name when absent
 
 - **WHEN** the overlay is opened with `presetName = undefined` (e.g. a new
   preset whose name has not been entered yet)
-- **THEN** the overlay header SHALL read `Edit prompt`
+- **THEN** the overlay header SHALL read `Edit Prompt`
 
 ### Requirement: Hotkey input field with validation and warnings
 
@@ -851,9 +866,9 @@ flow events.
 
 ### Requirement: Picker CRUD action keys are functional
 
-The picker's `n`, `e`, `d`, `x`, `c`, `⌃↑`, and `⌃↓` keys SHALL perform real
-actions: new (open editor with sensible defaults for a new preset), edit (open
-editor for selected), duplicate (open the editor in `duplicate` mode
+The picker's `n`, `e`, `d`, `x`, `c`, `Ctrl+↑`, and `Ctrl+↓` keys SHALL perform
+real actions: new (open editor with sensible defaults for a new preset), edit
+(open editor for selected), duplicate (open the editor in `duplicate` mode
 pre-populated from the selected preset with a unique copy name and cleared
 hotkey; the copy persists only on Save), delete (with confirmation), clear
 active preset (with confirmation), and reorder up/down within the selected
@@ -927,13 +942,13 @@ preset had no runtime-baseline hotkey, no reload prompt SHALL appear.
 
 #### Scenario: Reorder up
 
-- **WHEN** the user presses `⌃↑` on a selected preset
+- **WHEN** the user presses `Ctrl+↑` on a selected preset
 - **THEN** the preset SHALL swap positions with the preset above it within the
   same scope and the file SHALL be persisted
 
 #### Scenario: Reorder boundary
 
-- **WHEN** the user presses `⌃↑` on the topmost preset of its scope
+- **WHEN** the user presses `Ctrl+↑` on the topmost preset of its scope
 - **THEN** the operation SHALL be a no-op (no file write)
 
 ### Requirement: Preset CRUD is exposed through the picker, not subcommands
@@ -1190,21 +1205,31 @@ replacement.
 
 ### Requirement: Footer hint surfaces the editor shortcuts
 
-The editor's footer SHALL include a single dim hint line listing both the
-navigation keys and the global keyboard shortcuts. The hint line SHALL contain
-at minimum the tokens `⇥/↑/↓ Move`, `←/→ Change`, `Space Toggle`,
-`Enter Action`, `^S Save`, and `Esc Cancel`. When the editor was opened with a
-test callback, the line SHALL also contain `^T Test`. When no test callback is
-wired, the line SHALL NOT contain `^T Test` (matching the rule that the Test
-button is not rendered in that case).
+The editor's footer SHALL list the keys that work on the focused row, in this
+order: `Tab/↑/↓ Move`; the row's own keys; `F1 Help`; `Ctrl+S Save`;
+`Ctrl+T Test` when the editor was opened with a test callback; and `Esc Cancel`.
+When no test callback is wired, the footer SHALL NOT contain `Ctrl+T Test`
+(matching the rule that the Test button is not rendered in that case).
 
-The token for the Tab key SHALL be the symbol `⇥` (U+21E5 RIGHTWARDS ARROW TO
-BAR), matching the arrow-symbol convention already used by the up/down and
-left/right movement tokens.
+The row's own keys SHALL be:
 
-The footer SHALL render the hint as a single line when it fits the editor's
-width. When it does not fit, the footer SHALL wrap onto as many lines as needed,
-breaking only between tokens, so no token is cut off.
+- Name and Hotkey: none.
+- Scope and Thinking level: `←/→ Change`.
+- Provider and Model: `←/→ Change` and `Enter Search`.
+- Tools: `←/→ Change`, `Enter Toggle` while the preset list is shown, and
+  `Space Switch`.
+- Prompt: `Enter Edit`.
+- Actions: `←/→ Change` and `Enter/Space Select`.
+
+The `↑`, `↓`, `Enter`, and `Esc` keys in these hints SHALL name the key the user
+has bound to `tui.select.up`, `tui.select.down`, `tui.select.confirm`, and
+`tui.select.cancel`, so a remap shows up in the footer.
+
+The footer SHALL render the hints as a single line when they fit the editor's
+width. When they do not fit, the footer SHALL wrap onto as many lines as needed,
+breaking only between hints, so no hint is cut off. While a Save or a Test runs,
+the footer SHALL show the dim busy line `Saving the preset…` or
+`Testing the preset…` in place of the hints.
 
 The editor SHALL lay itself out for the height its overlay requests. When the
 form is taller, the Actions row, any form messages above it, and the footer
@@ -1212,48 +1237,54 @@ SHALL stay visible, and the value rows above them SHALL scroll to keep the
 focused row in view, with `↑` and `↓` markers at the right edge when rows are
 hidden above or below.
 
+A row whose options do not fit the editor's width (Scope, Thinking level, Tools,
+and Actions) SHALL wrap its options onto more lines, breaking only between
+options, so an option the cursor can reach is never cut off at the right edge.
+Every rendered line SHALL fit the width the editor is given.
+
 The on-screen Save / Cancel / Test buttons remain reachable via Tab-cycling
 regardless of the footer hint; the shortcuts and the buttons are independent
 paths to the same actions.
 
-#### Scenario: Footer renders navigation hints
+#### Scenario: Footer lists the focused row's keys
 
-- **WHEN** the editor is rendered
-- **THEN** the footer hint line SHALL contain the tokens `⇥/↑/↓ Move`,
-  `←/→ Change`, `Space Toggle`, and `Enter Action`
-
-#### Scenario: Footer renders shortcut hints with Save and Cancel
-
-- **WHEN** the editor is rendered
-- **THEN** the footer hint line SHALL contain `^S Save` and `Esc Cancel`
+- **WHEN** the editor is rendered with the Provider row focused
+- **THEN** the footer SHALL read
+  `Tab/↑/↓ Move · ←/→ Change · Enter Search · F1 Help · Ctrl+S Save · Esc Cancel`
 
 #### Scenario: Footer renders Test shortcut when wired
 
 - **GIVEN** the editor was opened with a test callback
 - **WHEN** the editor is rendered
-- **THEN** the footer hint line SHALL contain `^T Test`
+- **THEN** the footer SHALL contain `Ctrl+S Save · Ctrl+T Test · Esc Cancel`
 
 #### Scenario: Footer omits Test shortcut when unwired
 
 - **GIVEN** the editor was opened without a test callback
 - **WHEN** the editor is rendered
-- **THEN** the footer hint line SHALL NOT contain `^T Test`
+- **THEN** the footer SHALL NOT contain `Ctrl+T Test`
 
-#### Scenario: Footer renders on a single line
+#### Scenario: Footer wraps between hints when narrow
 
-- **GIVEN** the editor was opened with a test callback and is wide enough to
-  hold every footer token on one line
-- **WHEN** the editor is rendered
-- **THEN** the footer SHALL emit one framed line containing every token
-- **AND** the footer SHALL NOT split the navigation tokens and the shortcut
-  tokens onto separate framed lines
-
-#### Scenario: Footer wraps between tokens when narrow
-
-- **GIVEN** the editor was opened with a test callback at 72 columns
+- **GIVEN** the editor was opened with a test callback at 40 columns
 - **WHEN** the editor is rendered
 - **THEN** the footer SHALL span more than one framed line
-- **AND** every token, including `^T Test` and `Esc Cancel`, SHALL appear whole
+- **AND** every hint, including `Ctrl+T Test` and `Esc Cancel`, SHALL appear
+  whole
+
+#### Scenario: Remapped keys
+
+- **GIVEN** the user bound `tui.select.confirm` to `Ctrl+O`
+- **WHEN** the Prompt row is focused
+- **THEN** the footer SHALL contain `Ctrl+O Edit`
+- **AND** `Ctrl+O` SHALL open the prompt editor while `Enter` SHALL NOT
+
+#### Scenario: Tools wrap at a narrow width
+
+- **GIVEN** more tools than fit on one line
+- **WHEN** the editor shows the preset's tool list
+- **THEN** the tools SHALL wrap onto more lines and every tool SHALL be visible
+  whole
 
 #### Scenario: Form taller than the overlay
 
@@ -1387,9 +1418,8 @@ The editor's footer hint line SHALL include the token `F1 Help`. The token SHALL
 be present unconditionally — it does not gate on the test callback, on focus
 state, or on any row condition.
 
-The token SHALL be placed in the footer hint line between the navigation/action
-tokens and the save/cancel shortcut tokens, serving as a visual divider between
-the two groups.
+The token SHALL be placed in the footer hint line after the focused row's own
+keys and before `Ctrl+S Save`.
 
 #### Scenario: Footer hint includes F1 Help
 
@@ -1398,7 +1428,7 @@ the two groups.
 
 #### Scenario: F1 Help token survives the test-callback gate
 
-- **GIVEN** the editor was opened without a test callback (so the `^T Test`
+- **GIVEN** the editor was opened without a test callback (so the `Ctrl+T Test`
   token is omitted)
 - **WHEN** the editor is rendered
 - **THEN** the footer hint line SHALL still contain `F1 Help`

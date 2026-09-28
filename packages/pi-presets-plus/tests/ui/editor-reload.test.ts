@@ -8,7 +8,10 @@ import { analyzeHotkeys, HotkeyRegistry } from "../../src/hotkey-registry.js";
 import type { LoadedPreset } from "../../src/types.js";
 import type { EditorFormState } from "../../src/ui/editor.js";
 import type { Component } from "@earendil-works/pi-tui";
-import { createFakeCustom } from "@sherif-fanous/pi-extensions-testing";
+import {
+  createFakeCustom,
+  createPiKeybindings,
+} from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const addPreset = vi.fn();
@@ -54,6 +57,7 @@ function makeCtx(mutate: (editor: EditorHarness) => void) {
     reload,
     ui: {
       custom: createFakeCustom({
+        keybindings: createPiKeybindings(),
         onMount: async (mounted, done) => {
           const editor = mounted as EditorHarness;
 

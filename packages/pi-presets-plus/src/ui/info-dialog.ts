@@ -1,81 +1,79 @@
 /**
- * Read-only overlay that frames multi-line output, colors it by tone,
- * scrolls a body taller than the overlay, and dismisses on confirm or
- * cancel.
+ * Read-only overlay that frames multi-line output, scrolls a body taller
+ * than the overlay, and closes on confirm or cancel.
  */
-import { renderDialogFrame, resolveOverlayHeight, wrapBody } from "./frame.js";
-import { matchesSelectKey } from "./select-keys.js";
+import { CLOSE_LABEL, PAGE_LABEL, SCROLL_LABEL } from "./labels.js";
 import type {
   ExtensionCommandContext,
   Theme,
 } from "@earendil-works/pi-coding-agent";
-import type {
-  Component,
-  Focusable,
-  KeybindingsManager,
-  Terminal,
+import {
+  wrapTextWithAnsi,
+  type Component,
+  type Focusable,
+  type KeybindingsManager,
+  type Terminal,
 } from "@earendil-works/pi-tui";
+import {
+  frameBodyRows,
+  frameBodyWidth,
+  keyHint,
+  matchSelectAction,
+  overlayMaxHeight,
+  overlayOptions,
+  renderFrame,
+  scrollLines,
+  wrapKeyHints,
+} from "@sherif-fanous/pi-extensions-core";
 
-/** Title, body, and optional tone for one informational overlay. */
+/**
+ * Title and body for one informational overlay. The body may carry its own
+ * styling; a failure or warning colors its first line to say so.
+ */
 export interface InfoDialogOptions {
   readonly body: string;
   readonly title: string;
-  readonly tone?: InfoDialogTone;
 }
-
-/** Severity that picks the title color and the footer hint wording. */
-export type InfoDialogTone = "info" | "warning" | "error";
-
-/** Dialog options after the default tone is filled in. */
-type ResolvedInfoDialogOptions = InfoDialogOptions & { tone: InfoDialogTone };
-
-/** Share of the terminal height the dialog may use, in percent. */
-const INFO_DIALOG_MAX_HEIGHT_PERCENT = 90;
-/** Rows kept free above and below the dialog. */
-const INFO_DIALOG_MARGIN = 2;
 
 class InfoDialogComponent implements Component, Focusable {
   private resolved = false;
-  private _focused = false;
+  focused = false;
   private scrollOffset = 0;
   private pageRows = 1;
 
   constructor(
-    private readonly options: ResolvedInfoDialogOptions,
+    private readonly options: InfoDialogOptions,
     private readonly theme: Theme,
     private readonly keybindings: KeybindingsManager,
     private readonly terminal: Pick<Terminal, "rows">,
     private readonly done: () => void,
   ) {}
 
-  get focused(): boolean {
-    return this._focused;
-  }
-
-  set focused(value: boolean) {
-    this._focused = value;
-  }
-
   handleInput(input: string): void {
-    const { keybindings } = this;
+    switch (matchSelectAction(this.keybindings, input)) {
+      case "cancel":
+      case "confirm":
+        this.finish();
 
-    if (
-      matchesSelectKey(keybindings, input, "confirm") ||
-      matchesSelectKey(keybindings, input, "cancel")
-    ) {
-      this.finish();
+        break;
+      case "up":
+        this.scrollBy(-1);
 
-      return;
-    }
+        break;
+      case "down":
+        this.scrollBy(1);
 
-    if (matchesSelectKey(keybindings, input, "up")) {
-      this.scrollBy(-1);
-    } else if (matchesSelectKey(keybindings, input, "down")) {
-      this.scrollBy(1);
-    } else if (matchesSelectKey(keybindings, input, "pageUp")) {
-      this.scrollBy(-this.pageRows);
-    } else if (matchesSelectKey(keybindings, input, "pageDown")) {
-      this.scrollBy(this.pageRows);
+        break;
+      case "pageUp":
+        this.scrollBy(-this.pageRows);
+
+        break;
+      case "pageDown":
+        this.scrollBy(this.pageRows);
+
+        break;
+      case undefined:
+        break;
     }
   }
 
@@ -84,30 +82,57 @@ class InfoDialogComponent implements Component, Focusable {
   }
 
   render(width: number): string[] {
-    const frameWidth = Math.max(2, width);
-    const bodyWidth = Math.max(1, frameWidth - 2);
-    const titleColor = toneTitleColor(this.options.tone);
-    const frame = renderDialogFrame({
-      bodyLines: wrapBody(this.options.body, bodyWidth - 4).map(
-        (line) => `  ${line}`,
-      ),
-      footerHints: [footerHint(this.options.tone)],
-      maxHeight: resolveOverlayHeight(
-        this.terminal.rows,
-        INFO_DIALOG_MAX_HEIGHT_PERCENT,
-        INFO_DIALOG_MARGIN,
-      ),
-      pinnedLines: [""],
-      scrollOffset: this.scrollOffset,
+    const bodyWidth = frameBodyWidth(width);
+    const height = overlayMaxHeight(this.terminal.rows);
+    const bodyLines = wrapTextWithAnsi(
+      this.options.body,
+      Math.max(1, bodyWidth),
+    );
+    const closeHint = keyHint(
+      this.keybindings,
+      ["tui.select.confirm", "tui.select.cancel"],
+      CLOSE_LABEL,
+    );
+    let footer = wrapKeyHints([closeHint], bodyWidth);
+
+    if (bodyLines.length > frameBodyRows(height, footer.length)) {
+      footer = wrapKeyHints(
+        [
+          keyHint(
+            this.keybindings,
+            ["tui.select.up", "tui.select.down"],
+            SCROLL_LABEL,
+          ),
+          keyHint(
+            this.keybindings,
+            ["tui.select.pageUp", "tui.select.pageDown"],
+            PAGE_LABEL,
+          ),
+          closeHint,
+        ],
+        bodyWidth,
+      );
+    }
+
+    const rows = Math.max(1, frameBodyRows(height, footer.length));
+    const body = scrollLines(
+      bodyLines,
+      rows,
+      this.scrollOffset,
+      bodyWidth,
+      this.theme,
+    );
+
+    this.scrollOffset = body.offset;
+    this.pageRows = rows;
+
+    return renderFrame({
+      body: body.lines,
+      footer,
       theme: this.theme,
-      title: this.theme.fg(titleColor, this.theme.bold(this.options.title)),
-      width: frameWidth,
+      title: this.options.title,
+      width,
     });
-
-    this.scrollOffset = frame.scrollOffset;
-    this.pageRows = Math.max(1, frame.bodyRows);
-
-    return frame.lines;
   }
 
   private finish(): void {
@@ -122,43 +147,14 @@ class InfoDialogComponent implements Component, Focusable {
   }
 }
 
-/** Open the overlay and resolve once the user dismisses it. */
+/** Open the overlay and resolve once the user closes it. */
 export async function openInfoDialog(
   ctx: Pick<ExtensionCommandContext, "ui">,
   options: InfoDialogOptions,
 ): Promise<void> {
   await ctx.ui.custom<void>(
     (tui, theme, keybindings, done) =>
-      new InfoDialogComponent(
-        { ...options, tone: options.tone ?? "info" },
-        theme,
-        keybindings,
-        tui.terminal,
-        done,
-      ),
-    {
-      overlay: true,
-      overlayOptions: {
-        anchor: "center",
-        margin: INFO_DIALOG_MARGIN,
-        maxHeight: `${INFO_DIALOG_MAX_HEIGHT_PERCENT}%`,
-        minWidth: 48,
-        width: "90%",
-      },
-    },
+      new InfoDialogComponent(options, theme, keybindings, tui.terminal, done),
+    { overlay: true, overlayOptions: overlayOptions("nested") },
   );
-}
-
-function footerHint(tone: InfoDialogTone): string {
-  if (tone === "error") return "Press Enter or Esc to dismiss error";
-  if (tone === "warning") return "Press Enter or Esc to dismiss warning";
-
-  return "Press Enter or Esc to dismiss";
-}
-
-function toneTitleColor(tone: InfoDialogTone): Parameters<Theme["fg"]>[0] {
-  if (tone === "error") return "error";
-  if (tone === "warning") return "warning";
-
-  return "accent";
 }

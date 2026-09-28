@@ -2,6 +2,7 @@
  * Budgets terminal height for variable-height picker cards, packing the
  * visible range and correcting the scroll offset around the selection.
  */
+import { overlayMaxHeight } from "@sherif-fanous/pi-extensions-core";
 
 /** Average card height used until the picker has measured a rendered page. */
 const FALLBACK_AVERAGE_CARD_LINES = 7;
@@ -12,7 +13,7 @@ const MINIMUM_PAGE_SIZE = 1;
 /** Blank line drawn between two cards. */
 const SEPARATOR_LINES = 1;
 
-/** Logical card range, with indices wrapping modulo the item count. */
+/** Card range to draw, from `startIndex` to the exclusive `endIndex`. */
 export type PickerViewportLayout = {
   readonly endIndex: number;
   readonly pageSize: number;
@@ -25,10 +26,11 @@ export type PickerViewportLayout = {
  *
  * Card heights are read lazily, because rendering every preset just to find
  * the visible range would make each picker render scale with the full list.
- * When `balanced` is set, the viewport instead places the selected card's
+ * The range never runs past either end of the list, and a range that
+ * reaches the last card starts early enough to fill the budget. When
+ * `balanced` is set, the viewport instead places the selected card's
  * rendered midpoint as close to the middle of the budget as the list allows,
- * clamped to the list bounds, never wrapping, and always keeping one later
- * card visible when one fits.
+ * always keeping one later card visible when one fits.
  */
 export function layoutPickerViewport(
   itemCount: number,
@@ -44,45 +46,43 @@ export function layoutPickerViewport(
 
   const lastIndex = itemCount - 1;
   const selection = Math.max(0, Math.min(selectedIndex, lastIndex));
-  const heightAt = (index: number): number =>
-    cardHeightAt(((index % itemCount) + itemCount) % itemCount);
 
   if (balanced) {
     return balancedViewportForSelection(
       itemCount,
       selection,
       lineBudget,
-      heightAt,
+      cardHeightAt,
     );
   }
 
-  const stopIndex = scrollOffset + itemCount;
-  let startIndex = scrollOffset;
-  let endIndex = packEndIndex(stopIndex, startIndex, lineBudget, heightAt);
+  let startIndex = Math.max(0, Math.min(scrollOffset, lastIndex));
 
   if (selection < startIndex) {
     startIndex = selection;
-    endIndex = packEndIndex(
-      startIndex + itemCount,
-      startIndex,
-      lineBudget,
-      heightAt,
-    );
-  } else if (selection >= endIndex) {
-    startIndex = scrollOffsetForSelection(
-      selection,
-      itemCount,
-      lineBudget,
-      heightAt,
-    );
+  } else if (
+    selection >= packEndIndex(itemCount, startIndex, lineBudget, cardHeightAt)
+  ) {
+    startIndex = scrollOffsetForSelection(selection, lineBudget, cardHeightAt);
+  }
 
-    endIndex = packEndIndex(
-      startIndex + itemCount,
+  // A range that reaches the last card pulls earlier cards into the space
+  // left below it.
+  if (
+    packEndIndex(itemCount, startIndex, lineBudget, cardHeightAt) === itemCount
+  ) {
+    startIndex = Math.min(
       startIndex,
-      lineBudget,
-      heightAt,
+      scrollOffsetForSelection(lastIndex, lineBudget, cardHeightAt),
     );
   }
+
+  const endIndex = packEndIndex(
+    itemCount,
+    startIndex,
+    lineBudget,
+    cardHeightAt,
+  );
 
   return {
     endIndex,
@@ -103,8 +103,8 @@ export function pickerFallbackPageSize(terminalRows: number): number {
 }
 
 /**
- * Return the card-line budget inside the picker's 80% height overlay once
- * the chrome and `footerLineCount` wrapped footer lines are reserved.
+ * Return the card-line budget inside the picker's overlay once the chrome
+ * and `footerLineCount` wrapped footer lines are reserved.
  */
 export function pickerListLineBudget(
   terminalRows: number,
@@ -112,7 +112,7 @@ export function pickerListLineBudget(
 ): number {
   return Math.max(
     MINIMUM_PAGE_SIZE,
-    Math.floor(terminalRows * 0.8) - PICKER_CHROME_LINES - footerLineCount,
+    overlayMaxHeight(terminalRows) - PICKER_CHROME_LINES - footerLineCount,
   );
 }
 
@@ -208,16 +208,19 @@ function packEndIndex(
   return endIndex;
 }
 
+/**
+ * The first card of the range that ends at `selectedIndex` and holds as
+ * many earlier cards as the budget allows.
+ */
 function scrollOffsetForSelection(
   selectedIndex: number,
-  itemCount: number,
   lineBudget: number,
   cardHeightAt: (index: number) => number,
 ): number {
   let scrollOffset = selectedIndex;
   let usedLines = cardLines(selectedIndex, cardHeightAt);
 
-  while (scrollOffset > selectedIndex - itemCount + 1) {
+  while (scrollOffset > 0) {
     const previousIndex = scrollOffset - 1;
     const previousLines =
       SEPARATOR_LINES + cardLines(previousIndex, cardHeightAt);

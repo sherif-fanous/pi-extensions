@@ -44,7 +44,43 @@ pi remove npm:@sherif-fanous/pi-presets-plus
    defaults.
 
 The picker can also filter by name, switch scopes, reorder presets, make copies,
-and delete them. Its footer shows the available keys.
+and delete them. Its footer lists the keys that work at that moment.
+
+| Key                 | Action                              |
+| :------------------ | :---------------------------------- |
+| `↑` / `↓`           | Move the selection                  |
+| `PgUp` / `PgDn`     | Move one page                       |
+| `←` / `→`           | Switch the scope filter             |
+| `Enter`             | Activate the selected preset        |
+| `n`                 | Create a preset                     |
+| `e`                 | Edit the selected preset            |
+| `d`                 | Duplicate the selected preset       |
+| `x`                 | Delete the selected preset          |
+| `c`                 | Clear the active preset             |
+| `s`                 | Show the active preset's status     |
+| `Ctrl+↑` / `Ctrl+↓` | Move the selected preset up or down |
+| `/`                 | Filter by name                      |
+| `Esc`               | Close                               |
+
+While you type a filter, `↑` / `↓` and `PgUp` / `PgDn` still move the selection,
+and `Enter` or `Esc` goes back to the list. If you have remapped Pi's keys, the
+picker follows your bindings.
+
+The preset editor opens from the picker. Its footer lists the keys for the
+focused row.
+
+| Key                             | Action                                                  |
+| :------------------------------ | :------------------------------------------------------ |
+| `Tab` / `Shift+Tab` / `↑` / `↓` | Move between rows                                       |
+| `←` / `→`                       | Change the value, or move between tools                 |
+| `Enter`                         | Search, edit the prompt, toggle a tool, or run a button |
+| `Space`                         | Switch the tools mode, or run the selected button       |
+| `F1`                            | Show help for the focused row                           |
+| `Ctrl+S`                        | Save                                                    |
+| `Ctrl+T`                        | Test the preset without saving                          |
+| `Esc`                           | Cancel                                                  |
+
+If you have remapped Pi's keys, the editor follows your bindings.
 
 ## Configuration
 
@@ -136,9 +172,11 @@ presets, the first one wins, with user presets ahead of project presets. The
 automatic default.
 
 When a command, picker action, flag, or hotkey targets a prohibited preset, Pi
-asks whether to Override or Cancel. Session restore does not run this check.
-Invalid policy patterns are skipped with a warning, so they do not block
-activation. Run `/presets policy` to inspect the effective policy.
+asks whether to Override or Cancel. In RPC mode the client answers that
+question; in print and JSON mode nobody can, so the preset is not activated.
+Session restore does not run this check. Invalid policy patterns are skipped
+with a warning, so they do not block activation. Run `/presets policy` to
+inspect the effective policy.
 
 ### When directory defaults apply
 

@@ -5,10 +5,12 @@
 import {
   EMPTY_INPUT_PLACEHOLDER,
   renderValueRow,
+  valueWidth,
   withFieldDiagnostic,
 } from "../row-render.js";
 import type { EditorRow, EditorRowHost } from "../row.js";
-import { Key, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
+import { truncateToWidth } from "@earendil-works/pi-tui";
+import { matchSelectAction } from "@sherif-fanous/pi-extensions-core";
 
 /** Build the prompt row. */
 export function makeInstructionsRow(host: EditorRowHost): EditorRow {
@@ -18,12 +20,12 @@ export function makeInstructionsRow(host: EditorRowHost): EditorRow {
       body: [
         "This text is added to Pi's system prompt while the preset is active. It does not replace Pi's existing prompt.",
         "Use it for project conventions, your preferred tone, or rules Pi should follow.",
-        "Press Enter on the Prompt row to open the multi-line editor, then Ctrl-S to confirm or Esc to cancel.",
+        "Press Enter on the Prompt row to open the multi-line editor, then Ctrl+S to confirm or Esc to cancel.",
       ],
       title: "Prompt",
     },
     handleInput(input) {
-      if (!matchesKey(input, Key.enter)) return;
+      if (matchSelectAction(host.keybindings, input) !== "confirm") return;
 
       void host.runAsync(() => host.openPromptEditor());
     },
@@ -40,8 +42,8 @@ export function makeInstructionsRow(host: EditorRowHost): EditorRow {
         "instructions",
         renderValueRow(
           host.theme,
-          focused ? "Prompt (Enter to edit)" : "Prompt",
-          truncateToWidth(preview, Math.max(1, width - 16), "…"),
+          "Prompt",
+          truncateToWidth(preview, valueWidth(width), "…"),
           focused,
         ),
       );

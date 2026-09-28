@@ -1,7 +1,8 @@
 /**
  * Covers the interactive preset editor driven through `openEditor`: how
  * text rows render focused and unfocused, inline validation of name and
- * hotkey, the save, test, and help shortcuts, and the footer hints.
+ * hotkey, the save, test, and help shortcuts, and the footer hints each
+ * row shows.
  */
 import { ActivePresetSession } from "../../src/activation/session.js";
 import type { LoadedPreset, Preset } from "../../src/types.js";
@@ -13,6 +14,7 @@ import {
 } from "@earendil-works/pi-tui";
 import {
   createFakeCustom,
+  createPiKeybindings,
   createPlainTheme,
 } from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -120,6 +122,7 @@ function makeCtx(
     },
     ui: {
       custom: createFakeCustom({
+        keybindings: createPiKeybindings(),
         handle: overlayHandle,
         onMount: (editor) => capture(editor as EditorHarness),
         theme,
@@ -469,7 +472,7 @@ describe("preset editor input UX", () => {
       presets: [source],
     });
 
-    expect(renderText(editor)).toContain("Duplicate 'plan'");
+    expect(renderText(editor)).toContain('Duplicate "plan"');
     expect(lineContaining(editor, "Name")).toContain("plan-copy");
     expect(lineContaining(editor, "Hotkey")).toContain("(empty)");
 
@@ -700,28 +703,46 @@ describe("preset editor input UX", () => {
     );
   });
 
-  it("renders shortcut-aware footer hints on one line", async () => {
+  it.each([
+    [0, "Tab/↑/↓ Move · F1 Help · Ctrl+S Save · Esc Cancel"],
+    [1, "Tab/↑/↓ Move · ←/→ Change · F1 Help · Ctrl+S Save · Esc Cancel"],
+    [
+      2,
+      "Tab/↑/↓ Move · ←/→ Change · Enter Search · F1 Help · Ctrl+S Save · Esc Cancel",
+    ],
+    [
+      3,
+      "Tab/↑/↓ Move · ←/→ Change · Enter Search · F1 Help · Ctrl+S Save · Esc Cancel",
+    ],
+    [4, "Tab/↑/↓ Move · ←/→ Change · F1 Help · Ctrl+S Save · Esc Cancel"],
+    [
+      5,
+      "Tab/↑/↓ Move · ←/→ Change · Space Switch · F1 Help · Ctrl+S Save · Esc Cancel",
+    ],
+    [6, "Tab/↑/↓ Move · Enter Edit · F1 Help · Ctrl+S Save · Esc Cancel"],
+    [7, "Tab/↑/↓ Move · F1 Help · Ctrl+S Save · Esc Cancel"],
+    [
+      8,
+      "Tab/↑/↓ Move · ←/→ Change · Enter/Space Select · F1 Help · Ctrl+S Save · Esc Cancel",
+    ],
+  ])("lists the keys that work on row %i in the footer", async (row, hints) => {
+    const { editor } = await openHarness({ initial: preset() });
+
+    moveFocus(editor, row);
+
+    expect(renderText(editor)).toContain(hints);
+  });
+
+  it("adds Ctrl+T Test only when a test callback is wired", async () => {
     const withoutTest = await openHarness({ initial: preset() });
     const withTest = await openHarness({
       initial: preset(),
       onTest: vi.fn().mockResolvedValue({ ok: false }),
     });
-    const footerWithoutTestCallback = lineContaining(
-      withoutTest.editor,
-      "⇥/↑/↓ Move",
-    );
-    const footerWithTestCallback = lineContaining(
-      withTest.editor,
-      "⇥/↑/↓ Move",
-    );
 
-    expect(footerWithoutTestCallback).toContain(
-      "⇥/↑/↓ Move · ←/→ Change · Space Toggle · Enter Action · F1 Help · ^S Save · Esc Cancel",
-    );
-    expect(footerWithoutTestCallback).not.toContain("^T Test");
-    expect(footerWithoutTestCallback).not.toContain("Tab/↑/↓ Move");
-    expect(footerWithTestCallback).toContain(
-      "⇥/↑/↓ Move · ←/→ Change · Space Toggle · Enter Action · F1 Help · ^S Save · ^T Test · Esc Cancel",
+    expect(renderText(withoutTest.editor)).not.toContain("Ctrl+T Test");
+    expect(renderText(withTest.editor)).toContain(
+      "Ctrl+S Save · Ctrl+T Test · Esc Cancel",
     );
   });
 

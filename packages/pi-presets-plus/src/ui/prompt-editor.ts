@@ -2,7 +2,7 @@
  * Opens Pi's built-in text editor on a preset's instructions, giving it a
  * preset-specific title.
  */
-import { PROMPT_EDITOR_TITLE, PROMPT_EDITOR_TITLE_PREFIX } from "./labels.js";
+import { PROMPT_EDITOR_TITLE } from "./labels.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
 /** Starting text and the preset name that titles the editor. */
@@ -28,11 +28,11 @@ export async function openPromptEditor(
   return text === undefined ? { confirmed: false } : { confirmed: true, text };
 }
 
-/** Title the editor with the preset name once the form has one. */
+/** Title the editor with the preset name, in double quotes, once the form has one. */
 export function promptEditorTitle(
   options: Pick<PromptEditorOptions, "presetName">,
 ): string {
   const name = options.presetName?.trim();
 
-  return name ? `${PROMPT_EDITOR_TITLE_PREFIX}${name}` : PROMPT_EDITOR_TITLE;
+  return name ? `${PROMPT_EDITOR_TITLE} for "${name}"` : PROMPT_EDITOR_TITLE;
 }

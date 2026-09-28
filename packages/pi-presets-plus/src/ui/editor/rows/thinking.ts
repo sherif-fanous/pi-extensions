@@ -6,7 +6,7 @@ import { validThinkingLevels } from "../../../activation/thinking.js";
 import { THINKING_LEVELS } from "../../../types.js";
 import type { EditorFormState } from "../../editor-types.js";
 import { THINKING_LABEL } from "../../labels.js";
-import { renderValueRow } from "../row-render.js";
+import { renderWrappedValueRow } from "../row-render.js";
 import type { EditorRow, EditorRowHost } from "../row.js";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { Theme } from "@earendil-works/pi-coding-agent";
@@ -42,12 +42,13 @@ export function makeThinkingRow(host: EditorRowHost): EditorRow {
 
       if (next) host.setState({ ...state, thinkingLevel: next });
     },
-    renderLines() {
+    renderLines(width) {
       const lines = renderThinkingRowsForState(
         host.theme,
         host.getState(),
         host.currentModel(),
         host.currentRow() === "thinking",
+        width,
       );
       const diagnostic = host.getFieldDiagnostic("thinking");
 
@@ -69,6 +70,7 @@ export function renderThinkingRowsForState(
   state: EditorFormState,
   model: Model<Api> | undefined,
   focused: boolean,
+  width: number,
 ): string[] {
   const valid = validThinkingLevels(model);
   // Unsupported levels carry no suffix, only dim color, so the legend
@@ -79,9 +81,13 @@ export function renderThinkingRowsForState(
 
     return state.thinkingLevel === level ? `● ${rendered}` : `○ ${rendered}`;
   });
-  const lines = [
-    renderValueRow(theme, THINKING_LABEL, options.join("  "), focused),
-  ];
+  const lines = renderWrappedValueRow(
+    theme,
+    THINKING_LABEL,
+    options,
+    focused,
+    width,
+  );
 
   if (valid.length < THINKING_LEVELS.length) {
     // An undefined model reports every level as valid, so reaching here

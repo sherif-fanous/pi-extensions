@@ -7,13 +7,14 @@ import { ActivePresetSession } from "../../src/activation/session.js";
 import { HotkeyRegistry } from "../../src/hotkey-registry.js";
 import type { LoadedPreset } from "../../src/types.js";
 import type { openPicker as openPickerType } from "../../src/ui/picker.js";
-import { stripAnsi } from "./ansi.js";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
 import {
   createFakeCustom,
   createFakeTui,
+  createPiKeybindings,
   createPlainTheme,
+  stripAnsi,
 } from "@sherif-fanous/pi-extensions-testing";
 import { vi, type Mock } from "vitest";
 
@@ -66,6 +67,7 @@ export function pickerMounter(
       getActiveTools: () => [],
       ui: {
         custom: createFakeCustom({
+          keybindings: createPiKeybindings(),
           // Hand the picker back without closing it, so tests keep driving it.
           onMount: (mounted, done) => {
             component = mounted;

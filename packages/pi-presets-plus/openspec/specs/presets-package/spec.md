@@ -402,14 +402,14 @@ shared module SHALL include at minimum:
   - `Presets Plus Cleared` (picker `c` action's info-dialog and prompt-invoked
     clear's report heading — same string sourced once).
   - `Presets Plus Policy` (`/presets policy` report heading).
-  - `Activation failed` (picker error info-dialog from
+  - `Activation Failed` (picker error info-dialog from
     `surface-picker-activation-errors-in-overlay`).
   - `Reload Pi?` (post-Save and post-Delete confirm overlay from
     `prompt-reload-on-hotkey-mutation`).
-  - `Move preset?`, `Hotkey shadows pi`, `Hotkey conflict` (existing editor
+  - `Move Preset?`, `Hotkey shadows pi`, `Hotkey conflict` (existing editor
     confirm overlays).
 - Footer action labels used by the picker (`Activate`, `Filter`, `Status`,
-  `Quit`).
+  `Close`).
 
 The shared module's name and exact location are an implementation choice; the
 requirement is that no two surfaces hold their own copy of the same string.
@@ -460,7 +460,7 @@ requirement is that no two surfaces hold their own copy of the same string.
 
 - **WHEN** the picker (or any overlay) renders its footer hint row
 - **THEN** action labels SHALL be Title-Case (`Activate`, `Filter`, `Status`,
-  `Quit`)
+  `Close`)
 
 #### Scenario: Notify-surfaced messages from non-overlay paths follow the convention
 
@@ -896,10 +896,12 @@ the keybindings manager Pi passes to `ctx.ui.custom`, using `tui.select.up`,
 `tui.select.down`, `tui.select.pageUp`, `tui.select.pageDown`,
 `tui.select.confirm`, and `tui.select.cancel`. A key the user binds to one of
 these actions SHALL perform it, and Pi's default `Ctrl+C` cancel SHALL close or
-cancel like `Esc`. The built-in `↑`, `↓`, `PgUp`, `PgDn`, `Enter`, and `Esc`
-keys SHALL keep working as well, because no overlay uses them for anything else.
-Keys the package owns (`Tab`, `←/→`, `Space`, `y`/`n`, `Ctrl+S`, `Ctrl+T`, `F1`,
-`Ctrl+↑/↓`, and the picker's action letters) SHALL stay as they are.
+cancel like `Esc`. A key the user binds SHALL replace the default key: once
+`tui.select.confirm` is bound to another key, `Enter` SHALL no longer confirm,
+and likewise for the other actions. Footer hints SHALL name the key the user has
+bound. Keys the package owns (`Tab`, `←/→`, `Space`, `y`/`n`, `Ctrl+S`,
+`Ctrl+T`, `F1`, `Ctrl+↑/↓`, and the picker's action letters) SHALL stay as they
+are.
 
 #### Scenario: Ctrl+C cancels an overlay
 
@@ -913,15 +915,30 @@ Keys the package owns (`Tab`, `←/→`, `Space`, `y`/`n`, `Ctrl+S`, `Ctrl+T`, `
 - **WHEN** the user presses that key in one of these overlays
 - **THEN** the overlay SHALL close as if the user pressed `Esc`
 
+#### Scenario: Remapped keys replace the defaults
+
+- **GIVEN** the user bound `tui.select.confirm` to `Ctrl+O` and
+  `tui.select.cancel` to `Ctrl+G`
+- **WHEN** a confirmation dialog is open and the user presses `Enter` or `Esc`
+- **THEN** the dialog SHALL stay open
+- **AND** its footer SHALL show `Ctrl+O Confirm` and `Ctrl+G Cancel`
+
 ### Requirement: Dialogs fit their overlay height
 
-The confirmation and info dialogs SHALL lay themselves out for the maximum
-height their overlay requests. When the body does not fit, the body SHALL scroll
-with `↑`/`↓` and `PgUp`/`PgDn`, the right edge of the first and last visible
-body rows SHALL show `↑` and `↓` markers when content is hidden that way, and
-the footer SHALL add `↑/↓ Scroll` and `PgUp/PgDn Page` hints. The title, the
+The confirmation and info dialogs SHALL open as nested overlays and lay
+themselves out for the maximum height their overlay requests. Their title SHALL
+sit in the top border. When the body does not fit, the body SHALL scroll with
+`↑`/`↓` and `PgUp`/`PgDn`, the right edge of the first and last visible body
+rows SHALL show `↑` and `↓` markers when content is hidden that way, and the
+footer SHALL start with `↑/↓ Scroll` and `PgUp/PgDn Page` hints. The title, the
 confirmation choices, the footer, and the bottom border SHALL always stay
-visible. Footer hints SHALL wrap between hints rather than being cut off.
+visible. Footer hints SHALL wrap between hints rather than being cut off, and
+every line SHALL fit the width the dialog is given.
+
+The confirmation dialog's footer SHALL read
+`←/→ Choose · Enter Confirm · y <Yes> · n <No> · Esc Cancel`, where `<Yes>` and
+`<No>` are its two choices. The info dialog's footer SHALL read
+`Enter/Esc Close`.
 
 #### Scenario: Long prompt in the info dialog
 

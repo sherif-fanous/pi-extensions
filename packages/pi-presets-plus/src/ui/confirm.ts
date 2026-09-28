@@ -1,13 +1,7 @@
 /**
  * Yes/no confirmation overlay shared by the preset TUI surfaces.
  */
-import {
-  centerText,
-  renderDialogFrame,
-  resolveOverlayHeight,
-  wrapBody,
-} from "./frame.js";
-import { matchesSelectKey } from "./select-keys.js";
+import { CANCEL_LABEL, PAGE_LABEL, SCROLL_LABEL } from "./labels.js";
 import type {
   ExtensionCommandContext,
   Theme,
@@ -15,16 +9,24 @@ import type {
 import {
   Key,
   matchesKey,
+  visibleWidth,
+  wrapTextWithAnsi,
   type Component,
   type Focusable,
   type KeybindingsManager,
   type Terminal,
 } from "@earendil-works/pi-tui";
-
-/** Share of the terminal height the dialog may use, in percent. */
-const CONFIRM_MAX_HEIGHT_PERCENT = 50;
-/** Rows kept free above and below the dialog. */
-const CONFIRM_MARGIN = 2;
+import {
+  frameBodyRows,
+  frameBodyWidth,
+  keyHint,
+  matchSelectAction,
+  overlayMaxHeight,
+  overlayOptions,
+  renderFrame,
+  scrollLines,
+  wrapKeyHints,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** Button text for the two choices, defaulting to `Yes` and `No`. */
 interface ConfirmLabels {
@@ -32,10 +34,13 @@ interface ConfirmLabels {
   readonly yes: string;
 }
 
+/** Body rows the choices take below the message: a blank row and the buttons. */
+const CHOICE_ROWS = 2;
+
 class ConfirmComponent implements Component, Focusable {
   private selected: "no" | "yes" = "no";
   private resolved = false;
-  private _focused = false;
+  focused = false;
   private scrollOffset = 0;
   private pageRows = 1;
 
@@ -49,66 +54,43 @@ class ConfirmComponent implements Component, Focusable {
     private readonly labels: ConfirmLabels,
   ) {}
 
-  get focused(): boolean {
-    return this._focused;
-  }
-
-  set focused(value: boolean) {
-    this._focused = value;
-  }
-
   handleInput(input: string): void {
-    const { keybindings } = this;
+    switch (matchSelectAction(this.keybindings, input)) {
+      case "cancel":
+        this.finish(false);
 
-    if (matchesSelectKey(keybindings, input, "cancel")) {
-      this.finish(false);
+        return;
+      case "confirm":
+        this.finish(this.selected === "yes");
 
-      return;
+        return;
+      case "up":
+        this.scrollOffset = Math.max(0, this.scrollOffset - 1);
+
+        return;
+      case "down":
+        this.scrollOffset += 1;
+
+        return;
+      case "pageUp":
+        this.scrollOffset = Math.max(0, this.scrollOffset - this.pageRows);
+
+        return;
+      case "pageDown":
+        this.scrollOffset += this.pageRows;
+
+        return;
+      case undefined:
+        break;
     }
 
-    if (matchesSelectKey(keybindings, input, "confirm") || input === " ") {
+    if (input === " ") {
       this.finish(this.selected === "yes");
-
-      return;
-    }
-
-    if (matchesSelectKey(keybindings, input, "up")) {
-      this.scrollOffset = Math.max(0, this.scrollOffset - 1);
-
-      return;
-    }
-
-    if (matchesSelectKey(keybindings, input, "down")) {
-      this.scrollOffset += 1;
-
-      return;
-    }
-
-    if (matchesSelectKey(keybindings, input, "pageUp")) {
-      this.scrollOffset = Math.max(0, this.scrollOffset - this.pageRows);
-
-      return;
-    }
-
-    if (matchesSelectKey(keybindings, input, "pageDown")) {
-      this.scrollOffset += this.pageRows;
-
-      return;
-    }
-
-    if (matchesKey(input, Key.left) || matchesKey(input, Key.right)) {
+    } else if (matchesKey(input, Key.left) || matchesKey(input, Key.right)) {
       this.selected = this.selected === "yes" ? "no" : "yes";
-
-      return;
-    }
-
-    if (input.toLowerCase() === "y") {
+    } else if (input.toLowerCase() === "y") {
       this.finish(true);
-
-      return;
-    }
-
-    if (input.toLowerCase() === "n") {
+    } else if (input.toLowerCase() === "n") {
       this.finish(false);
     }
   }
@@ -118,33 +100,65 @@ class ConfirmComponent implements Component, Focusable {
   }
 
   render(width: number): string[] {
-    const frameWidth = Math.max(2, width);
-    const bodyWidth = Math.max(1, frameWidth - 2);
-    const messageLines = wrapBody(this.message, bodyWidth - 4);
+    const bodyWidth = frameBodyWidth(width);
+    const height = overlayMaxHeight(this.terminal.rows);
+    const messageLines = wrapTextWithAnsi(this.message, Math.max(1, bodyWidth));
+    const choiceHints = [
+      `←/→ Choose`,
+      keyHint(this.keybindings, "tui.select.confirm", "Confirm"),
+      `y ${this.labels.yes}`,
+      `n ${this.labels.no}`,
+      keyHint(this.keybindings, "tui.select.cancel", CANCEL_LABEL),
+    ];
+    const messageRowsFor = (footerLineCount: number): number =>
+      Math.max(1, frameBodyRows(height, footerLineCount) - CHOICE_ROWS);
+    let footer = wrapKeyHints(choiceHints, bodyWidth);
+
+    if (messageLines.length > messageRowsFor(footer.length)) {
+      footer = wrapKeyHints(
+        [
+          keyHint(
+            this.keybindings,
+            ["tui.select.up", "tui.select.down"],
+            SCROLL_LABEL,
+          ),
+          keyHint(
+            this.keybindings,
+            ["tui.select.pageUp", "tui.select.pageDown"],
+            PAGE_LABEL,
+          ),
+          ...choiceHints,
+        ],
+        bodyWidth,
+      );
+    }
+
+    const messageRows = messageRowsFor(footer.length);
+    const message = scrollLines(
+      messageLines,
+      messageRows,
+      this.scrollOffset,
+      bodyWidth,
+      this.theme,
+    );
     const buttons = [
       this.renderButton("yes", this.labels.yes),
       this.renderButton("no", this.labels.no),
     ].join("   ");
+    const buttonIndent = " ".repeat(
+      Math.max(0, Math.floor((bodyWidth - visibleWidth(buttons)) / 2)),
+    );
 
-    const frame = renderDialogFrame({
-      bodyLines: messageLines.map((line) => `  ${line}`),
-      footerHints: ["←/→ choose", "Enter confirm", "Esc cancel"],
-      maxHeight: resolveOverlayHeight(
-        this.terminal.rows,
-        CONFIRM_MAX_HEIGHT_PERCENT,
-        CONFIRM_MARGIN,
-      ),
-      pinnedLines: ["", centerText(buttons, bodyWidth)],
-      scrollOffset: this.scrollOffset,
+    this.scrollOffset = message.offset;
+    this.pageRows = messageRows;
+
+    return renderFrame({
+      body: [...message.lines, "", `${buttonIndent}${buttons}`],
+      footer,
       theme: this.theme,
-      title: this.theme.fg("accent", this.theme.bold(this.title)),
-      width: frameWidth,
+      title: this.title,
+      width,
     });
-
-    this.scrollOffset = frame.scrollOffset;
-    this.pageRows = Math.max(1, frame.bodyRows);
-
-    return frame.lines;
   }
 
   private finish(result: boolean): void {
@@ -178,15 +192,6 @@ export async function openConfirm(
         done,
         labels,
       ),
-    {
-      overlay: true,
-      overlayOptions: {
-        anchor: "center",
-        margin: CONFIRM_MARGIN,
-        maxHeight: `${CONFIRM_MAX_HEIGHT_PERCENT}%`,
-        minWidth: 48,
-        width: "50%",
-      },
-    },
+    { overlay: true, overlayOptions: overlayOptions("nested") },
   );
 }

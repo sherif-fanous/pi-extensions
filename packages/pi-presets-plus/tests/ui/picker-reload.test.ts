@@ -9,6 +9,7 @@ import type { LoadedPreset } from "../../src/types.js";
 import {
   createFakeCustom,
   createFakeTui,
+  createPiKeybindings,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -45,6 +46,7 @@ function makeCtx() {
     reload,
     ui: {
       custom: createFakeCustom({
+        keybindings: createPiKeybindings(),
         keys: ["x"],
         onMount: (_picker, done) => {
           setTimeout(() => done(undefined), 10);

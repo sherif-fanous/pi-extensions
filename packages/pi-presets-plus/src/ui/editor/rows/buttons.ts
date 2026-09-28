@@ -7,6 +7,7 @@ import { CANCEL_LABEL, SAVE_LABEL, TEST_LABEL } from "../../labels.js";
 import { renderChoiceRow, wrapIndex } from "../row-render.js";
 import type { EditorRow, EditorRowHost } from "../row.js";
 import { Key, matchesKey } from "@earendil-works/pi-tui";
+import { matchSelectAction } from "@sherif-fanous/pi-extensions-core";
 
 /** Buttons in the order the row cycles through them. */
 const ALL_BUTTONS: readonly ButtonAction[] = ["save", "cancel", "test"];
@@ -41,20 +42,22 @@ export function makeButtonsRow(host: EditorRowHost): EditorRow {
         moveButton(-1);
       } else if (matchesKey(input, Key.right)) {
         moveButton(1);
-      } else if (matchesKey(input, Key.enter) || input === " ") {
+      } else if (
+        matchSelectAction(host.keybindings, input) === "confirm" ||
+        input === " "
+      ) {
         host.activateButton(buttonAction);
       }
     },
-    renderLines() {
-      return [
-        renderChoiceRow(
-          host.theme,
-          "Actions",
-          buttonOrder.map(formatButton),
-          formatButton(buttonAction),
-          host.currentRow() === "buttons",
-        ),
-      ];
+    renderLines(width) {
+      return renderChoiceRow(
+        host.theme,
+        "Actions",
+        buttonOrder.map(formatButton),
+        formatButton(buttonAction),
+        host.currentRow() === "buttons",
+        width,
+      );
     },
   };
 }

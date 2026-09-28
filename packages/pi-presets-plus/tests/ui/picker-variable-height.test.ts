@@ -112,7 +112,7 @@ describe("picker variable-height navigation", () => {
   });
 
   it.each([false, true])(
-    "scrolls across both ends in filter mode %s",
+    "wraps to the other end without showing cards past it in filter mode %s",
     async (filterMode) => {
       const component = await mountPicker(makePresets(18));
 
@@ -125,10 +125,9 @@ describe("picker variable-height navigation", () => {
         .render(120)
         .filter((line) => line.includes("preset-"));
 
-      expect(upward[0]).toContain(presetName(17));
-      expect(upward[0]).toContain("▌");
-      expect(upward[1]).toContain(presetName(0));
-      expect(upward[2]).toContain(presetName(1));
+      expect(upward.at(-1)).toContain(presetName(17));
+      expect(upward.at(-1)).toContain("▌");
+      expect(upward.join("\n")).not.toContain(presetName(0));
 
       component.handleInput?.(KEY_BYTES[Key.down]);
 
@@ -136,38 +135,32 @@ describe("picker variable-height navigation", () => {
         .render(120)
         .filter((line) => line.includes("preset-"));
 
-      expect(downward[0]).toContain(presetName(17));
-      expect(downward[1]).toContain(presetName(0));
-      expect(downward[1]).toContain("▌");
+      expect(downward[0]).toContain(presetName(0));
+      expect(downward[0]).toContain("▌");
+      expect(downward.join("\n")).not.toContain(presetName(17));
     },
   );
 
   it.each([false, true])(
-    "wraps page navigation in filter mode %s",
+    "stops page navigation at the first and last preset in filter mode %s",
     async (filterMode) => {
       const component = await mountPicker(makePresets(18));
-      const pageSize = component
-        .render(120)
-        .filter((line) => line.includes("preset-")).length;
+      const selectedLine = (): string | undefined =>
+        component.render(120).find((line) => line.includes("▌"));
 
+      component.render(120);
       if (filterMode) component.handleInput?.("/");
 
       component.handleInput?.(KEY_BYTES[Key.pageUp]);
 
-      const upward = component.render(120);
+      expect(selectedLine()).toContain(presetName(0));
 
-      expect(upward.find((line) => line.includes("▌"))).toContain(
-        presetName(18 - pageSize),
-      );
+      for (let press = 0; press < 10; press++) {
+        component.handleInput?.(KEY_BYTES[Key.pageDown]);
+        component.render(120);
+      }
 
-      const nextPageSize = upward.filter((line) =>
-        line.includes("preset-"),
-      ).length;
-
-      component.handleInput?.(KEY_BYTES[Key.pageDown]);
-      expect(
-        component.render(120).find((line) => line.includes("▌")),
-      ).toContain(presetName((18 - pageSize + nextPageSize) % 18));
+      expect(selectedLine()).toContain(presetName(17));
     },
   );
 

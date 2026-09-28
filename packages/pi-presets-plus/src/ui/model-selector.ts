@@ -1,19 +1,35 @@
 /** Searches provider and model options and opens a keyboard-driven selection overlay. */
-import { frameLine, frameSegment, wrapKeyHints } from "./frame.js";
-import { matchesSelectKey } from "./select-keys.js";
+import {
+  CANCEL_LABEL,
+  MOVE_LABEL,
+  PAGE_LABEL,
+  SELECT_LABEL,
+} from "./labels.js";
 import type {
   ExtensionCommandContext,
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import {
   Input,
-  SelectList,
   truncateToWidth,
   type Component,
   type Focusable,
   type KeybindingsManager,
   type Terminal,
 } from "@earendil-works/pi-tui";
+import {
+  emptyStateLines,
+  frameBodyRows,
+  frameBodyWidth,
+  keyHint,
+  listWindow,
+  matchSelectAction,
+  moveListSelection,
+  overlayMaxHeight,
+  overlayOptions,
+  renderFrame,
+  wrapKeyHints,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** One selectable identifier with optional searchable name and availability hint. */
 export interface ModelSelectorItem {
@@ -29,13 +45,16 @@ export interface ModelSelectorOptions {
   readonly items: readonly ModelSelectorItem[];
 }
 
+/** Label of the search field above the list. */
+const SEARCH_LABEL = "Search: ";
+
 class ModelSelectorComponent implements Component, Focusable {
   private readonly input = new Input();
   private results: ModelSelectorItem[];
-  private list: SelectList;
+  private selectedIndex: number;
   private resolved = false;
-  /** Footer lines from the last render, which the list height leaves room for. */
-  private footerLineCount = 1;
+  /** List rows from the last render, the page PgUp and PgDn move by. */
+  private pageRows = 1;
 
   constructor(
     private readonly options: ModelSelectorOptions,
@@ -46,7 +65,7 @@ class ModelSelectorComponent implements Component, Focusable {
     private readonly requestRender: () => void,
   ) {
     this.results = [...options.items];
-    this.list = this.buildList(options.current);
+    this.selectedIndex = this.indexOf(options.current);
   }
 
   get focused(): boolean {
@@ -63,124 +82,160 @@ class ModelSelectorComponent implements Component, Focusable {
   handleInput(data: string): void {
     if (this.resolved) return;
 
-    const { keybindings } = this;
-    const up = matchesSelectKey(keybindings, data, "up");
-    const down = !up && matchesSelectKey(keybindings, data, "down");
+    const action = matchSelectAction(this.keybindings, data);
 
-    if (matchesSelectKey(keybindings, data, "cancel")) this.finish(undefined);
-    else if (matchesSelectKey(keybindings, data, "confirm")) {
-      const selected = this.list.getSelectedItem();
+    switch (action) {
+      case "cancel":
+        this.finish(undefined);
 
-      if (selected) this.finish(selected.value);
-    } else if (up || down) {
-      const count = this.results.length;
+        break;
 
-      if (count > 0) {
-        const current = this.results.findIndex(
-          (item) => item.id === this.list.getSelectedItem()?.value,
-        );
-        const direction = down ? 1 : -1;
+      case "confirm": {
+        const selected = this.results[this.selectedIndex];
 
-        this.list.setSelectedIndex((current + direction + count) % count);
+        if (selected) this.finish(selected.id);
+
+        break;
       }
-    } else {
-      const previous = this.input.getValue();
 
-      this.input.handleInput(data);
-
-      if (previous !== this.input.getValue()) {
-        this.results = rankModelSelectorItems(
-          this.options.items,
-          this.input.getValue(),
+      case "down":
+      case "pageDown":
+      case "pageUp":
+      case "up":
+        this.selectedIndex = moveListSelection(
+          this.selectedIndex,
+          this.results.length,
+          action,
+          this.pageRows,
         );
 
-        this.list = this.buildList(
-          normalize(this.input.getValue()) ? undefined : this.options.current,
-        );
-      }
+        break;
+      case undefined:
+        this.filter(data);
+
+        break;
     }
 
     this.requestRender();
   }
 
   render(width: number): string[] {
-    const height = Math.max(1, this.terminal.rows - 2);
-    const bodyWidth = Math.max(1, width - 2);
-    const footerLines = wrapKeyHints(
-      ["Type to Filter", "↑/↓ Move", "Enter Select", "Esc Cancel"],
+    const height = overlayMaxHeight(this.terminal.rows);
+    const bodyWidth = frameBodyWidth(width);
+    const footer = wrapKeyHints(
+      [
+        keyHint(
+          this.keybindings,
+          ["tui.select.up", "tui.select.down"],
+          MOVE_LABEL,
+        ),
+        keyHint(
+          this.keybindings,
+          ["tui.select.pageUp", "tui.select.pageDown"],
+          PAGE_LABEL,
+        ),
+        keyHint(this.keybindings, "tui.select.confirm", SELECT_LABEL),
+        keyHint(this.keybindings, "tui.select.cancel", CANCEL_LABEL),
+      ],
       bodyWidth,
     );
+    // The search row sits above the list inside the frame.
+    const framedRows = frameBodyRows(height, footer.length) - 1;
+    const search = `${this.theme.fg("muted", SEARCH_LABEL)}${this.input.render(Math.max(1, bodyWidth - SEARCH_LABEL.length))[0] ?? ""}`;
 
-    this.footerLineCount = footerLines.length;
-    this.list = this.buildList(this.list.getSelectedItem()?.value);
+    // A terminal too short for the frame keeps its rows for the list.
+    if (framedRows < 1) {
+      const rows = this.renderList(height, width);
 
-    const results =
-      this.results.length > 0
-        ? this.list.render(bodyWidth)
-        : [this.theme.fg("dim", "No matching options.")];
-    const search = `${this.theme.fg("muted", "Search: ")}${this.input.render(Math.max(1, bodyWidth - 8))[0] ?? ""}`;
-    const body = [
-      this.theme.fg("accent", this.theme.bold(this.options.title)),
-      search,
-      ...results,
-      // The rows above the footer start at the border, so the hints do too.
-      ...footerLines.map((line) => this.theme.fg("dim", line.trimStart())),
-    ];
-    // Very short terminals reserve their remaining lines for the selection.
-    const lines = this.isCompact(height)
-      ? [...(height > results.length ? [search] : []), ...results].slice(
-          0,
-          height,
-        )
-      : [
-          frameSegment("┌", "─", "┐", width),
-          ...body.map((line) => frameLine(line, width)),
-          frameSegment("└", "─", "┘", width),
-        ];
+      return [...(height > rows.lines.length ? [search] : []), ...rows.lines]
+        .slice(0, height)
+        .map((line) => truncateToWidth(line, Math.max(0, width), "…"));
+    }
 
-    return lines.map((line) => truncateToWidth(line, Math.max(0, width), ""));
+    const list = this.renderList(framedRows, bodyWidth);
+
+    return renderFrame({
+      body: [search, ...list.lines],
+      footer,
+      theme: this.theme,
+      title: this.options.title,
+      ...(list.position === undefined
+        ? {}
+        : { titleRight: this.theme.fg("muted", list.position) }),
+      width,
+    });
   }
 
-  private buildList(current?: string): SelectList {
-    const height = Math.max(1, this.terminal.rows - 2);
-    // Borders, title, search, and the list's scroll line surround the rows.
-    const maxVisible = Math.max(
-      1,
-      height - (this.isCompact(height) ? 2 : 5 + this.footerLineCount),
-    );
-    const list = new SelectList(
-      this.results.map((item) => ({
-        value: item.id,
-        label: item.available === false ? `${item.id} (no key)` : item.id,
-      })),
-      maxVisible,
-      {
-        selectedPrefix: (text) => this.theme.fg("accent", text),
-        selectedText: (text) => this.theme.fg("accent", text),
-        description: (text) => this.theme.fg("muted", text),
-        scrollInfo: (text) => this.theme.fg("dim", text),
-        noMatch: (text) => this.theme.fg("dim", text),
-      },
+  private filter(data: string): void {
+    const previous = this.input.getValue();
+
+    this.input.handleInput(data);
+
+    if (previous === this.input.getValue()) return;
+
+    this.results = rankModelSelectorItems(
+      this.options.items,
+      this.input.getValue(),
     );
 
-    list.setSelectedIndex(
-      Math.max(
-        0,
-        this.results.findIndex((item) => item.id === current),
-      ),
-    );
-
-    return list;
-  }
-
-  /** Whether `height` is too short for the framed layout with one list row. */
-  private isCompact(height: number): boolean {
-    return height < 6 + this.footerLineCount;
+    this.selectedIndex = normalize(this.input.getValue())
+      ? 0
+      : this.indexOf(this.options.current);
   }
 
   private finish(result: string | undefined): void {
     this.resolved = true;
     this.done(result);
+  }
+
+  /** Index of `id` in the current results, or the first result. */
+  private indexOf(id: string): number {
+    return Math.max(
+      0,
+      this.results.findIndex((item) => item.id === id),
+    );
+  }
+
+  /**
+   * The visible list rows, `→ ` before the selected one, and the `(n/m)`
+   * position when not every result fits in `rows`.
+   */
+  private renderList(
+    rows: number,
+    width: number,
+  ): { lines: string[]; position: string | undefined } {
+    this.pageRows = Math.max(1, rows);
+
+    if (this.results.length === 0) {
+      const message =
+        this.options.items.length === 0
+          ? "No options to choose from."
+          : "No options match this search.";
+
+      return {
+        lines: emptyStateLines(message, width, this.theme),
+        position: undefined,
+      };
+    }
+
+    const window = listWindow(
+      this.selectedIndex,
+      this.results.length,
+      Math.max(1, rows),
+    );
+    const lines = this.results
+      .slice(window.start, window.end)
+      .map((item, offset) => {
+        const selected = window.start + offset === this.selectedIndex;
+        const suffix =
+          item.available === false ? this.theme.fg("muted", " (no key)") : "";
+
+        return selected
+          ? `${this.theme.fg("accent", `→ ${item.id}`)}${suffix}`
+          : `  ${item.id}${suffix}`;
+      });
+
+    return { lines, position: window.position };
   }
 }
 
@@ -199,10 +254,7 @@ export async function openModelSelector(
         done,
         () => tui.requestRender(),
       ),
-    {
-      overlay: true,
-      overlayOptions: { anchor: "center", margin: 1, width: "90%" },
-    },
+    { overlay: true, overlayOptions: overlayOptions("nested") },
   );
 }
 

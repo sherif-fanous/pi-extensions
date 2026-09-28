@@ -4,17 +4,31 @@
  */
 import type { LoadedPreset } from "../types.js";
 import { openConfirm } from "./confirm.js";
-import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { isInteractiveTui } from "@sherif-fanous/pi-extensions-core";
 
-/** Ask whether a policy-discouraged activation should proceed. */
+/** Title of the override confirmation. */
+const POLICY_OVERRIDE_TITLE = "Preset Doesn't Match Policy";
+
+/**
+ * Ask whether a policy-discouraged activation should proceed.
+ *
+ * Outside the TUI no overlay can open, so the question goes through Pi's
+ * own confirm prompt: an RPC client answers it, and print and JSON mode
+ * decline it.
+ */
 export async function openPolicyOverride(
-  ctx: Pick<ExtensionCommandContext, "ui">,
+  ctx: Pick<ExtensionContext, "mode" | "ui">,
   preset: Pick<LoadedPreset, "name">,
 ): Promise<boolean> {
-  return openConfirm(
-    ctx,
-    "Preset Doesn't Match Policy",
-    `The access policy for this directory does not permit preset "${preset.name}". Activate it anyway?`,
-    { no: "Cancel", yes: "Override" },
-  );
+  const message = `The access policy for this directory does not permit preset "${preset.name}". Activate it anyway?`;
+
+  if (!isInteractiveTui(ctx)) {
+    return ctx.ui.confirm(POLICY_OVERRIDE_TITLE, message);
+  }
+
+  return openConfirm(ctx, POLICY_OVERRIDE_TITLE, message, {
+    no: "Cancel",
+    yes: "Override",
+  });
 }

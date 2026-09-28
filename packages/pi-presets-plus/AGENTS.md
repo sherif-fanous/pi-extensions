@@ -78,7 +78,9 @@ trailing colon, as in `Preset:`, `Scope:`, `Baseline model:`, and
 `Thinking level:`. Editor form rows use the same text without the colon,
 because their layout is not a key/value row. Button and footer
 action labels use Title Case, as in `Save`, `Cancel`,
-`Test (apply temporarily)`, `Activate`, `Filter`, `Status`, and `Quit`.
+`Test (apply temporarily)`, `Activate`, `Filter`, `Status`, and `Close`.
+Frames, footer hints, keys, lists, and overlay sizes follow the "TUI"
+section of the repository's `AGENTS.md`.
 
 `Pi` is the product, `pi` the binary, and Pi command names stay literal:
 `/presets`, `/presets clear`, `/reload`, `/model`.

@@ -35,28 +35,22 @@ import { makeScopeRow } from "./editor/rows/scope.js";
 import { makeThinkingRow } from "./editor/rows/thinking.js";
 import { makeToolsRow } from "./editor/rows/tools.js";
 import {
-  centerText,
-  frameLine,
-  frameSegment,
-  padToWidth,
-  resolveOverlayHeight,
-  scrollBody,
-  scrollOffsetShowing,
-  wrapKeyHints,
-} from "./frame.js";
-import {
   findConflictingPreset,
   isPiBuiltin,
   parseHotkey,
 } from "./hotkey-input.js";
 import { openInfoDialog } from "./info-dialog.js";
-import { isHelpKey } from "./key-fallbacks.js";
-import { MOVE_LABEL, MOVE_PRESET_TITLE } from "./labels.js";
+import {
+  CANCEL_LABEL,
+  MOVE_LABEL,
+  MOVE_PRESET_TITLE,
+  SAVE_LABEL,
+  SELECT_LABEL,
+} from "./labels.js";
 import { openModelSelector } from "./model-selector.js";
 import { withHiddenOverlay } from "./overlay-host.js";
 import { openPromptEditor } from "./prompt-editor.js";
 import { confirmReload, reloadAfterOverlayClose } from "./reload-prompt.js";
-import { matchesSelectKey } from "./select-keys.js";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
@@ -67,13 +61,26 @@ import {
   Input,
   Key,
   matchesKey,
-  truncateToWidth,
   type Component,
   type Focusable,
   type KeybindingsManager,
   type OverlayHandle,
   type Terminal,
 } from "@earendil-works/pi-tui";
+import {
+  frameBodyRows,
+  frameBodyWidth,
+  keyHint,
+  keyText,
+  matchesHelpKey,
+  matchSelectAction,
+  overlayMaxHeight,
+  overlayOptions,
+  padToWidth,
+  renderFrame,
+  scrollLines,
+  wrapKeyHints,
+} from "@sherif-fanous/pi-extensions-core";
 
 export { EDITOR_ROWS };
 export type { EditorFormState };
@@ -135,14 +142,20 @@ type ValidationResult =
       ok: false;
     };
 
-/** Share of the terminal height the editor may use, in percent. */
-const EDITOR_MAX_HEIGHT_PERCENT = 90;
-/** Rows kept free above and below the editor. */
-const EDITOR_MARGIN = 1;
+/** Busy line the footer shows while each action button runs. */
+const BUTTON_BUSY_MESSAGES: Readonly<
+  Record<"cancel" | "save" | "test", string | undefined>
+> = {
+  cancel: undefined,
+  save: "Saving the preset…",
+  test: "Testing the preset…",
+};
 
 /** Interactive overlay component that edits a single preset. */
 class PresetEditorComponent implements Component, Focusable, EditorRowHost {
   private actionInFlight = false;
+  /** Busy line shown in place of the footer hints while an action runs. */
+  private busyMessage: string | undefined;
   private fieldDiagnostics: Map<EditorRowId, FieldDiagnostic> = new Map();
   private flowError: string | undefined;
   private focusedRowIndex = 0;
@@ -182,7 +195,7 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
     readonly allTools: readonly string[],
     private readonly openOptions: EditorOpenOptions,
     private readonly options: EditorOptions,
-    private readonly keybindings: KeybindingsManager,
+    readonly keybindings: KeybindingsManager,
     private readonly terminal: Pick<Terminal, "rows">,
     private readonly done: (result: EditorResult | undefined) => void,
     private readonly requestRender: () => void,
@@ -218,7 +231,9 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
   handleInput(input: string): void {
     if (this.actionInFlight) return;
 
-    if (matchesSelectKey(this.keybindings, input, "cancel")) {
+    const selectAction = matchSelectAction(this.keybindings, input);
+
+    if (selectAction === "cancel") {
       this.finish(undefined);
 
       return;
@@ -226,7 +241,7 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
 
     // No row handler binds F1, Ctrl+S, or Ctrl+T, so these shortcuts are
     // safe to claim before input reaches the focused row.
-    if (isHelpKey(input)) {
+    if (matchesHelpKey(input)) {
       void this.runAsync(() => this.openHelpForFocusedRow());
 
       return;
@@ -244,19 +259,13 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
       return;
     }
 
-    if (
-      matchesKey(input, Key.tab) ||
-      matchesSelectKey(this.keybindings, input, "down")
-    ) {
+    if (matchesKey(input, Key.tab) || selectAction === "down") {
       this.moveFocus(1);
 
       return;
     }
 
-    if (
-      matchesKey(input, Key.shift(Key.tab)) ||
-      matchesSelectKey(this.keybindings, input, "up")
-    ) {
+    if (matchesKey(input, Key.shift(Key.tab)) || selectAction === "up") {
       this.moveFocus(-1);
 
       return;
@@ -272,37 +281,23 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
   }
 
   render(width: number): string[] {
-    const frameWidth = Math.max(2, width);
-    const bodyWidth = Math.max(1, frameWidth - 2);
-    const title = editorTitle(this.openOptions);
-    const footerLines = wrapKeyHints(this.footerHints(), bodyWidth);
-    // Top border, title, blank, blank above the footer, and bottom border.
-    const bodyHeight =
-      resolveOverlayHeight(
-        this.terminal.rows,
-        EDITOR_MAX_HEIGHT_PERCENT,
-        EDITOR_MARGIN,
-      ) -
-      5 -
-      footerLines.length;
-    const lines = [
-      frameSegment("┌", "─", "┐", frameWidth),
-      frameLine(
-        centerText(this.theme.fg("accent", this.theme.bold(title)), bodyWidth),
-        frameWidth,
-      ),
-      frameLine("", frameWidth),
-      ...this.renderBody(bodyWidth, bodyHeight).map((line) =>
-        frameLine(line, frameWidth),
-      ),
-      frameLine("", frameWidth),
-      ...footerLines.map((line) =>
-        frameLine(this.theme.fg("dim", line), frameWidth),
-      ),
-      frameSegment("└", "─", "┘", frameWidth),
-    ];
+    const bodyWidth = frameBodyWidth(width);
+    const footer =
+      this.busyMessage === undefined
+        ? wrapKeyHints(this.footerHints(), bodyWidth)
+        : [this.busyMessage];
+    const bodyRows = frameBodyRows(
+      overlayMaxHeight(this.terminal.rows),
+      footer.length,
+    );
 
-    return lines.map((line) => truncateToWidth(line, frameWidth, ""));
+    return renderFrame({
+      body: this.renderBody(bodyWidth, bodyRows),
+      footer,
+      theme: this.theme,
+      title: editorTitle(this.openOptions),
+      width,
+    });
   }
 
   private async confirm(title: string, message: string): Promise<boolean> {
@@ -401,8 +396,8 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
       openModelSelector(this.ctx, {
         title:
           row === "provider"
-            ? "Select provider"
-            : `Select model: ${state.provider}`,
+            ? "Select Provider"
+            : `Select "${state.provider}" Model`,
         current: state[row],
         items,
       }),
@@ -425,7 +420,10 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
   }
 
   activateButton(action: "cancel" | "save" | "test"): void {
-    void this.runAsync(() => this.executeButton(action));
+    void this.runAsync(
+      () => this.executeButton(action),
+      BUTTON_BUSY_MESSAGES[action],
+    );
   }
 
   private async executeButton(
@@ -466,25 +464,48 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
     return [...new Set(this.models.map((item) => item.provider))];
   }
 
-  private footerHints(): string[] {
-    const tokens = [
-      `⇥/↑/↓ ${MOVE_LABEL}`,
-      "←/→ Change",
-      "Space Toggle",
-      this.currentRow() === "instructions"
-        ? "Enter to edit"
-        : this.currentRow() === "provider" || this.currentRow() === "model"
-          ? "Enter Search"
-          : "Enter Action",
+  /**
+   * Key hints for the focused row, in footer order: the keys that move
+   * between rows, the row's own keys, then the form-wide keys.
+   */
+  private footerHints(): (string | undefined)[] {
+    const { keybindings } = this;
+    const row = this.currentRow();
+    const rowMoveKeys = [
+      "Tab",
+      keyText(keybindings, "tui.select.up"),
+      keyText(keybindings, "tui.select.down"),
+    ].filter((key) => key !== undefined);
+    const confirmHint = (action: string): string | undefined =>
+      keyHint(keybindings, "tui.select.confirm", action);
+    const rowHints: Record<EditorRowId, (string | undefined)[]> = {
+      buttons: [
+        "←/→ Change",
+        `${[keyText(keybindings, "tui.select.confirm"), "Space"]
+          .filter((key) => key !== undefined)
+          .join("/")} ${SELECT_LABEL}`,
+      ],
+      hotkey: [],
+      instructions: [confirmHint("Edit")],
+      model: ["←/→ Change", confirmHint("Search")],
+      name: [],
+      provider: ["←/→ Change", confirmHint("Search")],
+      scope: ["←/→ Change"],
+      thinking: ["←/→ Change"],
+      tools:
+        this.state.toolsMode === "preset"
+          ? ["←/→ Change", confirmHint("Toggle"), "Space Switch"]
+          : ["←/→ Change", "Space Switch"],
+    };
+
+    return [
+      `${rowMoveKeys.join("/")} ${MOVE_LABEL}`,
+      ...rowHints[row],
       "F1 Help",
-      "^S Save",
+      `Ctrl+S ${SAVE_LABEL}`,
+      this.options.onTest === undefined ? undefined : "Ctrl+T Test",
+      keyHint(keybindings, "tui.select.cancel", CANCEL_LABEL),
     ];
-
-    if (this.options.onTest !== undefined) tokens.push("^T Test");
-
-    tokens.push("Esc Cancel");
-
-    return tokens;
   }
 
   /**
@@ -529,15 +550,15 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
         );
       }
 
-      const scrolled = scrollBody(
+      const scrolled = scrollLines(
         valueLines.map((line) => padToWidth(line, width)),
         valueRows,
         this.scrollOffset,
         width,
-        (marker) => this.theme.fg("dim", marker),
+        this.theme,
       );
 
-      this.scrollOffset = scrolled.scrollOffset;
+      this.scrollOffset = scrolled.offset;
       visibleValueLines = scrolled.lines;
     } else {
       this.scrollOffset = 0;
@@ -586,8 +607,10 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
     return lines;
   }
 
-  async runAsync(fn: () => Promise<void>): Promise<void> {
+  async runAsync(fn: () => Promise<void>, busy?: string): Promise<void> {
     this.actionInFlight = true;
+    this.busyMessage = busy;
+    this.requestRender();
 
     try {
       await fn();
@@ -595,6 +618,7 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
       this.flowError = formatActionError(error);
     } finally {
       this.actionInFlight = false;
+      this.busyMessage = undefined;
       this.requestRender();
     }
   }
@@ -939,15 +963,26 @@ export async function openEditor(
     {
       onHandle: (handle) => currentEditor?.setOverlayHandle(handle),
       overlay: true,
-      overlayOptions: {
-        anchor: "center",
-        margin: EDITOR_MARGIN,
-        maxHeight: `${EDITOR_MAX_HEIGHT_PERCENT}%`,
-        minWidth: 72,
-        width: "90%",
-      },
+      overlayOptions: overlayOptions("main"),
     },
   );
+}
+
+/**
+ * Return the scroll offset closest to `scrollOffset` that shows the lines
+ * from `start` to the exclusive `end` in a window of `rows` lines. A range
+ * taller than the window shows its first line.
+ */
+export function scrollOffsetShowing(
+  scrollOffset: number,
+  rows: number,
+  start: number,
+  end: number,
+): number {
+  if (start < scrollOffset || end - start > rows) return start;
+  if (end > scrollOffset + rows) return end - rows;
+
+  return scrollOffset;
 }
 
 /**
@@ -957,11 +992,11 @@ export async function openEditor(
 function editorTitle(openOptions: EditorOpenOptions): string {
   switch (openOptions.mode) {
     case "new":
-      return "New preset";
+      return "New Preset";
     case "edit":
-      return `Edit '${openOptions.target.name}'`;
+      return `Edit "${openOptions.target.name}"`;
     case "duplicate":
-      return `Duplicate '${openOptions.source.name}'`;
+      return `Duplicate "${openOptions.source.name}"`;
 
     default: {
       const exhaustive: never = openOptions;

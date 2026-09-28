@@ -37,8 +37,12 @@ import { styleReport } from "@sherif-fanous/pi-extensions-core";
 
 /** One action key, its footer label, and the command it runs. */
 export interface PickerAction {
+  /** Busy line the footer shows while the command runs. */
+  readonly busy: string;
   readonly key: string;
   readonly label: string;
+  /** Whether the command acts on the selected preset. */
+  readonly needsSelection: boolean;
   run(commands: PickerCommands): Promise<void>;
 }
 
@@ -77,33 +81,45 @@ export interface PickerCommandHost {
  */
 export const PICKER_ACTIONS: readonly PickerAction[] = [
   {
+    busy: "Opening the editor…",
     key: "n",
     label: NEW_LABEL,
+    needsSelection: false,
     run: (commands) => commands.openEditorForNew(),
   },
   {
+    busy: "Opening the editor…",
     key: "e",
     label: EDIT_LABEL,
+    needsSelection: true,
     run: (commands) => commands.openEditorForSelection(),
   },
   {
+    busy: "Opening the editor…",
     key: "d",
     label: DUPLICATE_LABEL,
+    needsSelection: true,
     run: (commands) => commands.duplicate(),
   },
   {
+    busy: "Deleting the preset…",
     key: "x",
     label: DELETE_LABEL,
+    needsSelection: true,
     run: (commands) => commands.delete(),
   },
   {
+    busy: "Clearing the active preset…",
     key: "c",
     label: CLEAR_LABEL,
+    needsSelection: false,
     run: (commands) => commands.clearActive(),
   },
   {
+    busy: "Loading the status…",
     key: "s",
     label: STATUS_ACTION_LABEL,
+    needsSelection: false,
     run: (commands) => commands.showStatus(),
   },
 ];
@@ -127,9 +143,6 @@ export class PickerCommands {
         openInfoDialog(ctx, {
           body: "No preset is active.",
           title: "Clear Unavailable",
-          // Informational tone because having no active preset is a normal
-          // state rather than a failure.
-          tone: "info",
         }),
       );
 
@@ -139,7 +152,7 @@ export class PickerCommands {
     const confirmed = await this.host.runWithHiddenOverlay(() =>
       openConfirm(
         ctx,
-        "Clear active preset?",
+        "Clear Active Preset?",
         "Clear the active preset and restore managed settings?",
       ),
     );
@@ -151,18 +164,18 @@ export class PickerCommands {
     if (result) {
       await this.host.runWithHiddenOverlay(() =>
         openInfoDialog(ctx, {
-          body: styleReport(
+          body: reportDialogBody(
             renderClearSummary(result.name, result.parts),
             theme,
+            result.parts.some(
+              (part) =>
+                part.action === "restore-failed" ||
+                part.action === "restored-partial",
+            )
+              ? "warning"
+              : "info",
           ),
           title: CLEAR_DIALOG_TITLE,
-          tone: result.parts.some(
-            (part) =>
-              part.action === "restore-failed" ||
-              part.action === "restored-partial",
-          )
-            ? "warning"
-            : "info",
         }),
       );
     }
@@ -174,7 +187,7 @@ export class PickerCommands {
   async delete(): Promise<void> {
     await this.confirmAndActOnSelection(
       (preset) => ({
-        title: `Delete '${preset.name}'?`,
+        title: `Delete "${preset.name}"?`,
         message: `Remove preset "${preset.name}" from ${preset.scope} scope?`,
       }),
       async (preset) => {
@@ -306,12 +319,12 @@ export class PickerCommands {
 
     await this.host.runWithHiddenOverlay(() =>
       openInfoDialog(ctx, {
-        body: styleReport(
+        body: reportDialogBody(
           appendReportWarnings(result.body, result.warnings),
           this.host.theme,
+          result.severity,
         ),
         title: STATUS_DIALOG_TITLE,
-        tone: result.severity,
       }),
     );
   }
@@ -379,10 +392,40 @@ export class PickerCommands {
   private async showUnavailableDialog(title: string): Promise<void> {
     await this.host.runWithHiddenOverlay(() =>
       openInfoDialog(this.host.ctx, {
-        body: "Pi did not provide the API needed for this action.",
+        body: this.host.theme.fg(
+          "warning",
+          "Pi did not provide the API needed for this action.",
+        ),
         title,
-        tone: "warning",
       }),
     );
   }
+}
+
+/**
+ * A command report as an info-dialog body: styled like the transcript
+ * report, without the heading line the dialog title already shows, and
+ * dedented to the frame's padding. A `warning` report colors its first
+ * line, so the problem shows without the heading.
+ */
+function reportDialogBody(
+  report: string,
+  theme: Pick<Theme, "bold" | "fg">,
+  severity: "info" | "warning",
+): string {
+  const lines = styleReport(report, theme).split("\n").slice(1);
+  const indent = Math.min(
+    ...lines
+      .filter((line) => line.trim().length > 0)
+      .map((line) => line.length - line.trimStart().length),
+  );
+  const body = lines.map((line) =>
+    line.slice(Number.isFinite(indent) ? indent : 0),
+  );
+
+  if (severity === "warning" && body[0] !== undefined) {
+    body[0] = theme.fg("warning", body[0]);
+  }
+
+  return body.join("\n");
 }

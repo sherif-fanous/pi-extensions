@@ -34,8 +34,9 @@ function context() {
   return {
     ctx: {
       cwd: "/work/project",
+      mode: "tui",
       ui: { notify },
-    } as unknown as Pick<ExtensionContext, "cwd" | "ui">,
+    } as unknown as Pick<ExtensionContext, "cwd" | "mode" | "ui">,
     notify,
   };
 }

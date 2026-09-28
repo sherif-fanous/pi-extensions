@@ -5,27 +5,81 @@
 import type { EditorRowId } from "../editor-types.js";
 import type { EditorRowHost } from "./row.js";
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import type { Input } from "@earendil-works/pi-tui";
+import {
+  visibleWidth,
+  wrapTextWithAnsi,
+  type Input,
+} from "@earendil-works/pi-tui";
 
-/** Column the value text starts at, in characters. */
+/** Columns the label takes, padded, in characters. */
 const EDITOR_LABEL_WIDTH = 15;
+/** Column the value starts at: the focus marker, a space, and the label. */
+const EDITOR_VALUE_COLUMN = EDITOR_LABEL_WIDTH + 2;
+
+/** Space between two options or tools on a line. */
+const TOKEN_SEPARATOR = "  ";
 
 /** Stand-in text shown for an empty value. */
 export const EMPTY_INPUT_PLACEHOLDER = "(empty)";
 
-/** Render a row whose value is one option out of a small set. */
+/**
+ * Lay `tokens` out on as many lines of `width` columns as they need,
+ * breaking only between two tokens, so the cursor never moves onto an
+ * option cut off at the right edge. A token wider than a whole line wraps
+ * onto lines of its own.
+ */
+export function packTokens(tokens: readonly string[], width: number): string[] {
+  const lineWidth = Math.max(1, width);
+  const lines: string[] = [];
+  let current = "";
+
+  for (const token of tokens) {
+    if (visibleWidth(token) > lineWidth) {
+      if (current.length > 0) lines.push(current);
+      lines.push(...wrapTextWithAnsi(token, lineWidth));
+      current = "";
+
+      continue;
+    }
+
+    const joined =
+      current.length === 0 ? token : `${current}${TOKEN_SEPARATOR}${token}`;
+
+    if (current.length > 0 && visibleWidth(joined) > lineWidth) {
+      lines.push(current);
+      current = token;
+    } else {
+      current = joined;
+    }
+  }
+
+  if (current.length > 0) lines.push(current);
+
+  return lines;
+}
+
+/**
+ * Render a row whose value is one option out of a small set, `●` before
+ * the chosen option and `○` before the others, wrapped onto more lines
+ * when the options do not fit `width`.
+ */
 export function renderChoiceRow(
   theme: Pick<Theme, "fg">,
   label: string,
   options: readonly string[],
   selected: string,
   focused: boolean,
-): string {
-  const rendered = options
-    .map((option) => (option === selected ? `● ${option}` : `○ ${option}`))
-    .join("  ");
-
-  return renderValueRow(theme, label, rendered, focused);
+  width: number,
+): string[] {
+  return renderWrappedValueRow(
+    theme,
+    label,
+    options.map((option) =>
+      option === selected ? `● ${option}` : `○ ${option}`,
+    ),
+    focused,
+    width,
+  );
 }
 
 /**
@@ -49,7 +103,7 @@ export function renderTextInputRow(
       renderValueRow(
         host.theme,
         label,
-        input.render(Math.max(1, width - 16))[0] ?? "",
+        input.render(valueWidth(width))[0] ?? "",
         true,
       ),
     );
@@ -81,17 +135,43 @@ export function renderValueRow(
 }
 
 /**
- * Append the row's diagnostic message beneath `line` when the host holds
- * one for it.
+ * Render a row whose value is a list of `tokens`, wrapped between tokens
+ * onto lines that start at the value column.
+ */
+export function renderWrappedValueRow(
+  theme: Pick<Theme, "fg">,
+  label: string,
+  tokens: readonly string[],
+  focused: boolean,
+  width: number,
+): string[] {
+  const indent = " ".repeat(EDITOR_VALUE_COLUMN);
+
+  return packTokens(tokens, valueWidth(width)).map((line, index) => {
+    if (index === 0) return renderValueRow(theme, label, line, focused);
+
+    return `${indent}${focused ? theme.fg("accent", line) : line}`;
+  });
+}
+
+/** Columns left for a row's value in a row `width` columns wide. */
+export function valueWidth(width: number): number {
+  return Math.max(1, width - EDITOR_VALUE_COLUMN);
+}
+
+/**
+ * Append the row's diagnostic message beneath `line` or its lines when
+ * the host holds one for it.
  */
 export function withFieldDiagnostic(
   host: EditorRowHost,
   row: EditorRowId,
-  line: string,
+  line: string | readonly string[],
 ): string[] {
+  const lines = typeof line === "string" ? [line] : [...line];
   const diagnostic = renderFieldDiagnostic(host, row);
 
-  return diagnostic ? [line, diagnostic] : [line];
+  return diagnostic ? [...lines, diagnostic] : lines;
 }
 
 /**

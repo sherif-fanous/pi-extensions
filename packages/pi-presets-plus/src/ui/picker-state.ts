@@ -4,6 +4,10 @@
  */
 import type { LoadedPreset } from "../types.js";
 import { applyScopeFilter, rankPresets, type ScopeFilter } from "./filter.js";
+import {
+  moveListSelection,
+  type ListMove,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** Focus, scope filter, selection, and scroll position of the picker. */
 export interface PickerState {
@@ -65,34 +69,34 @@ export function loadedPresetKey(
   return `${preset.scope}:${preset.name}`;
 }
 
-/** Move the selection by `delta` and scroll it back into view. */
+/**
+ * Apply one list move to the selection and scroll it back into view: ↑/↓
+ * wrap around the ends, and PgUp/PgDn move `pageSize` presets and stop at
+ * the first or last one.
+ */
 export function moveSelection(
   state: PickerState,
   allPresets: readonly LoadedPreset[],
   query: string,
-  delta: number,
+  move: ListMove,
   pageSize: number,
-  options: { wrap: boolean } = { wrap: true },
 ): PickerState {
   const visibleCount = visiblePresets(state, allPresets, query).length;
 
   if (visibleCount === 0) return state;
 
-  const nextIndex = state.selectedIndex + delta;
-  const selectedIndex = options.wrap
-    ? ((nextIndex % visibleCount) + visibleCount) % visibleCount
-    : Math.max(0, Math.min(nextIndex, visibleCount - 1));
-
-  const moved = ensureSelectionVisible(
-    { ...state, selectedIndex: options.wrap ? nextIndex : selectedIndex },
+  return ensureSelectionVisible(
+    {
+      ...state,
+      selectedIndex: moveListSelection(
+        state.selectedIndex,
+        visibleCount,
+        move,
+        pageSize,
+      ),
+    },
     pageSize,
   );
-
-  return {
-    ...moved,
-    selectedIndex,
-    scrollOffset: moved.scrollOffset + selectedIndex - moved.selectedIndex,
-  };
 }
 
 /**

@@ -19,7 +19,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
  */
 export async function gateActivation(
   preset: LoadedPreset,
-  ctx: Pick<ExtensionContext, "cwd" | "ui">,
+  ctx: Pick<ExtensionContext, "cwd" | "mode" | "ui">,
   warnings?: string[],
 ): Promise<boolean> {
   const { rules, warnings: policyWarnings } = await loadPolicy();

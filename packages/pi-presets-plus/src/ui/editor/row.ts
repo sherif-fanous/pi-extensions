@@ -16,7 +16,7 @@ import type {
   ExtensionCommandContext,
   Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { Input } from "@earendil-works/pi-tui";
+import type { Input, KeybindingsManager } from "@earendil-works/pi-tui";
 
 /**
  * One editor row: its help content, its keyboard handling, and its
@@ -36,6 +36,8 @@ export interface EditorRow {
  */
 export interface EditorRowHost {
   readonly ctx: ExtensionCommandContext;
+  /** Pi's keybindings, which decide the key that confirms a row action. */
+  readonly keybindings: Pick<KeybindingsManager, "matches">;
   readonly theme: Pick<Theme, "fg" | "bold">;
   readonly models: readonly ModelItem[];
   readonly allTools: readonly string[];
@@ -63,8 +65,12 @@ export interface EditorRowHost {
 
   /** Run the Save, Cancel, or Test action. */
   activateButton(action: "cancel" | "save" | "test"): void;
-  /** Run an async row action, ignoring further input until it settles. */
-  runAsync(fn: () => Promise<void>): Promise<void>;
+  /**
+   * Run an async row action, ignoring further input until it settles. A
+   * `busy` line replaces the footer hints meanwhile; leave it out for an
+   * action that hides the editor behind a nested dialog.
+   */
+  runAsync(fn: () => Promise<void>, busy?: string): Promise<void>;
   /** Open the searchable provider or model selector. */
   openModelSelector(row: "provider" | "model"): Promise<void>;
   /** Open the multi-line prompt editor for the instructions row. */

@@ -12,6 +12,8 @@ import type { Component, OverlayHandle } from "@earendil-works/pi-tui";
 import {
   createFakeCustom,
   createFakeTui,
+  createMarkerTheme,
+  createPiKeybindings,
   createPlainTheme,
 } from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -112,6 +114,7 @@ function makeCtx(
     getActiveTools: () => [],
     ui: {
       custom: createFakeCustom({
+        keybindings: createPiKeybindings(),
         handle,
         keys: [input],
         onDone: (result) => {
@@ -121,6 +124,7 @@ function makeCtx(
           picker = mounted;
           setTimeout(() => finish(release), 10);
         },
+        theme: createMarkerTheme(),
         tui: createFakeTui(120, 24).tui,
       }),
       notify,
@@ -179,22 +183,27 @@ async function runPicker(
   return ctx;
 }
 
+/** A status report as `formatStatusBody` returns it, heading first. */
+const STATUS_REPORT = "Presets Plus Status\n  Preset: plan\n  Scope:  User";
+
 beforeEach(() => {
   vi.resetAllMocks();
   vi.useFakeTimers();
   formatStatusBody.mockResolvedValue({
-    body: "status body",
+    body: STATUS_REPORT,
     severity: "info",
     warnings: [],
   });
   openConfirm.mockResolvedValue(true);
   openInfoDialog.mockResolvedValue(undefined);
   clearReturning.mockResolvedValue({ name: "plan", parts: [] });
-  renderClearSummary.mockReturnValue("clear body");
+  renderClearSummary.mockReturnValue(
+    "Presets Plus Cleared\nYour settings already matched the saved baseline.\n  Preset: plan",
+  );
 });
 
 describe("openPicker info actions", () => {
-  it("opens activation refusals in an error info-dialog", async () => {
+  it("opens activation refusals in an info-dialog whose body is error colored", async () => {
     const ctx = await runPicker("\r", {
       onActivate: () =>
         Promise.resolve({
@@ -206,9 +215,8 @@ describe("openPicker info actions", () => {
     });
 
     expect(openInfoDialog).toHaveBeenCalledWith(ctx, {
-      body: 'Preset "plan" is unavailable: missing API key. Activation skipped.',
-      title: "Activation failed",
-      tone: "error",
+      body: '<error>Preset "plan" is unavailable: missing API key. Activation skipped.</error>',
+      title: "Activation Failed",
     });
     expect(ctx.notify).not.toHaveBeenCalled();
     expect(ctx.setHidden).toHaveBeenCalledWith(true);
@@ -219,10 +227,10 @@ describe("openPicker info actions", () => {
   it("opens status in an info-dialog and restores picker focus", async () => {
     const ctx = await runPicker("s");
 
+    // The dialog title replaces the report heading.
     expect(openInfoDialog).toHaveBeenCalledWith(ctx, {
-      body: "status body",
+      body: "<muted>Preset:</muted> plan\n<muted>Scope:</muted>  User",
       title: "Presets Plus Status",
-      tone: "info",
     });
     expect(ctx.setHidden).toHaveBeenCalledWith(true);
     expect(ctx.setHidden).toHaveBeenCalledWith(false);
@@ -231,7 +239,7 @@ describe("openPicker info actions", () => {
 
   it("prepends load warnings to picker status dialog output", async () => {
     formatStatusBody.mockResolvedValue({
-      body: "status body",
+      body: STATUS_REPORT,
       severity: "info",
       warnings: ["failed to read user presets"],
     });
@@ -239,9 +247,29 @@ describe("openPicker info actions", () => {
     await runPicker("s");
 
     expect(openInfoDialog).toHaveBeenCalledWith(expect.anything(), {
-      body: "status body\n\nWarnings:\n- failed to read user presets",
+      body: [
+        "  <muted>Preset:</muted> plan",
+        "  <muted>Scope:</muted>  User",
+        "",
+        "<warning>Warnings:</warning>",
+        "<warning>- failed to read user presets</warning>",
+      ].join("\n"),
       title: "Presets Plus Status",
-      tone: "info",
+    });
+  });
+
+  it("colors the first line of a warning status report", async () => {
+    formatStatusBody.mockResolvedValue({
+      body: 'Presets Plus Status\n  Active preset "plan" is no longer loaded.',
+      severity: "warning",
+      warnings: [],
+    });
+
+    await runPicker("s");
+
+    expect(openInfoDialog).toHaveBeenCalledWith(expect.anything(), {
+      body: '<warning>Active preset "plan" is no longer loaded.</warning>',
+      title: "Presets Plus Status",
     });
   });
 
@@ -249,9 +277,8 @@ describe("openPicker info actions", () => {
     await runPicker("s", { withPi: false });
 
     expect(openInfoDialog).toHaveBeenCalledWith(expect.anything(), {
-      body: "Pi did not provide the API needed for this action.",
+      body: "<warning>Pi did not provide the API needed for this action.</warning>",
       title: "Status Unavailable",
-      tone: "warning",
     });
   });
 
@@ -263,7 +290,6 @@ describe("openPicker info actions", () => {
     expect(openInfoDialog).toHaveBeenCalledWith(ctx, {
       body: "No preset is active.",
       title: "Clear Unavailable",
-      tone: "info",
     });
     expect(ctx.setHidden).toHaveBeenCalledWith(true);
     expect(ctx.setHidden).toHaveBeenCalledWith(false);
@@ -277,20 +303,18 @@ describe("openPicker info actions", () => {
     expect(openConfirm).toHaveBeenCalledOnce();
     expect(clearReturning).toHaveBeenCalledOnce();
     expect(openInfoDialog).toHaveBeenCalledWith(ctx, {
-      body: "clear body",
+      body: "Your settings already matched the saved baseline.\n  <muted>Preset:</muted> plan",
       title: "Presets Plus Cleared",
-      tone: "info",
     });
-    expect(ctx.notify).not.toHaveBeenCalledWith("clear body", "info");
+    expect(ctx.notify).not.toHaveBeenCalled();
   });
 
   it("explains clear unavailability when pi is not provided", async () => {
     await runPicker("c", { withPi: false });
 
     expect(openInfoDialog).toHaveBeenCalledWith(expect.anything(), {
-      body: "Pi did not provide the API needed for this action.",
+      body: "<warning>Pi did not provide the API needed for this action.</warning>",
       title: "Clear Unavailable",
-      tone: "warning",
     });
   });
 

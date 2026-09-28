@@ -1,7 +1,7 @@
 /**
  * Covers the picker viewport layout: the line budget left for the list,
- * packing cards of mixed height into it, and keeping the selected card
- * visible as the viewport scrolls.
+ * packing cards of mixed height into it without running past either end,
+ * and keeping the selected card visible as the viewport scrolls.
  */
 import {
   layoutPickerViewport,
@@ -44,6 +44,15 @@ describe("picker layout", () => {
     expect(layoutPickerViewport(5, 1, 3, 5, heights([2, 2, 2, 2, 2]))).toEqual({
       endIndex: 3,
       pageSize: 2,
+      scrollOffset: 1,
+      startIndex: 1,
+    });
+  });
+
+  it("never packs past the last card and fills the space from earlier cards", () => {
+    expect(layoutPickerViewport(4, 3, 3, 10, heights([2, 2, 2, 2]))).toEqual({
+      endIndex: 4,
+      pageSize: 3,
       scrollOffset: 1,
       startIndex: 1,
     });

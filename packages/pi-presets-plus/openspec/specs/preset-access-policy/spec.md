@@ -163,8 +163,11 @@ SHALL name the preset, summarize why it is discouraged here, and offer two
 outcomes: override (proceed with activation) and cancel (abort activation).
 Activation SHALL proceed only on an explicit override; on cancel the package
 SHALL NOT change model, thinking, or tools and SHALL NOT attach the preset. The
-overlay SHALL reuse the extension's existing custom-overlay confirmation
-pattern.
+overlay SHALL reuse the extension's existing custom-overlay confirmation pattern
+in Pi's interactive terminal UI. Outside the TUI, where no overlay can open, the
+package SHALL ask the same question through Pi's own confirm prompt: an RPC
+client answers it, and print and JSON mode decline it, which cancels the
+activation.
 
 The gate SHALL apply to all NEW activations: the `--preset` flag, manual
 `/presets <name>` selection, picker activation, and per-preset hotkey
@@ -178,6 +181,13 @@ gate because it is drawn only from the permitted set.
 - **WHEN** a new activation targets a non-permitted preset and the user chooses
   override
 - **THEN** the preset SHALL be applied through the standard apply flow
+
+#### Scenario: Override confirmed by an RPC client
+
+- **WHEN** a new activation in RPC mode targets a non-permitted preset
+- **THEN** the package SHALL ask through Pi's confirm prompt with the title
+  `Preset Doesn't Match Policy`
+- **AND** the preset SHALL be applied only when the client confirms
 
 #### Scenario: Cancel aborts activation
 

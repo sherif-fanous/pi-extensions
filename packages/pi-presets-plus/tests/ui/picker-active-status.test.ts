@@ -4,7 +4,6 @@
  * names while the filter, scope, and focus change around it.
  */
 import type { ActivePresetState, LoadedPreset } from "../../src/types.js";
-import { stripAnsi } from "../helpers/ansi.js";
 import {
   makeLoadedPreset,
   pickerMounter,
@@ -12,7 +11,10 @@ import {
 } from "../helpers/picker.js";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { Key, type Component } from "@earendil-works/pi-tui";
-import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
+import {
+  createPlainTheme,
+  stripAnsi,
+} from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const loadAll = vi.fn();
@@ -183,7 +185,7 @@ describe("picker active-preset status row", () => {
     const rendered = renderText(component);
 
     expect(rendered).toContain("Active: plan");
-    expect(rendered).toContain("No matching presets");
+    expect(rendered).toContain("No presets match this filter.");
   });
 
   it("keeps the active name visible when scope excludes it", async () => {
@@ -245,7 +247,7 @@ describe("picker active-preset status row", () => {
 
     const rendered = stripAnsi(renderText(component, 42));
 
-    expect(rendered).toContain("Active: ifanous-anth…de-opus-4-8 (User)");
+    expect(rendered).toContain("Active: ifanous-ant…de-opus-4-8 (User)");
     expect(rendered).toContain("●");
   });
 
@@ -258,7 +260,7 @@ describe("picker active-preset status row", () => {
 
     const rendered = stripAnsi(renderText(component, 42));
 
-    expect(rendered).toContain("Active: abcdefghijkl…👨‍👩‍👧‍👦-東京-end (User)");
+    expect(rendered).toContain("Active: abcdefghijk…👨‍👩‍👧‍👦-東京-end (User)");
   });
 
   it("computes width from visible columns when the theme adds ANSI", async () => {
@@ -272,6 +274,6 @@ describe("picker active-preset status row", () => {
 
     // The escapes the theme injects do not count as visible columns, so
     // the ellipsis lands where the plain theme puts it.
-    expect(rendered).toContain("Active: ifanous-anth…de-opus-4-8 (User)");
+    expect(rendered).toContain("Active: ifanous-ant…de-opus-4-8 (User)");
   });
 });

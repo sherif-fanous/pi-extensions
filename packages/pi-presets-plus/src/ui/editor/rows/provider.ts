@@ -10,6 +10,7 @@ import {
 } from "../row-render.js";
 import type { EditorRow, EditorRowHost } from "../row.js";
 import { Key, matchesKey } from "@earendil-works/pi-tui";
+import { matchSelectAction } from "@sherif-fanous/pi-extensions-core";
 
 /** Build the provider row. */
 export function makeProviderRow(host: EditorRowHost): EditorRow {
@@ -24,7 +25,7 @@ export function makeProviderRow(host: EditorRowHost): EditorRow {
       title: "Provider",
     },
     handleInput(input) {
-      if (matchesKey(input, Key.enter)) {
+      if (matchSelectAction(host.keybindings, input) === "confirm") {
         void host.runAsync(() => host.openModelSelector("provider"));
 
         return;

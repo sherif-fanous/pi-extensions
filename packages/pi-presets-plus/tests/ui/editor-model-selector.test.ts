@@ -2,10 +2,10 @@
 import { ActivePresetSession } from "../../src/activation/session.js";
 import type { LoadedPreset } from "../../src/types.js";
 import { openEditor } from "../../src/ui/editor.js";
-import { piKeybindings } from "../helpers/keybindings.js";
 import type { Component, Focusable } from "@earendil-works/pi-tui";
 import {
   createFakeTui,
+  createPiKeybindings,
   createPlainTheme,
 } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it, vi } from "vitest";
@@ -48,7 +48,7 @@ async function harness(initial: LoadedPreset | null = seed) {
         const component = factory(
           createFakeTui(120, 24).tui,
           createPlainTheme(),
-          piKeybindings(),
+          createPiKeybindings(),
           resolve,
         );
 
@@ -261,8 +261,8 @@ describe("editor model selector", () => {
     send(test.editor, "\u001b[C");
     expect(text(test.editor)).toMatch(/Provider\s+other/);
     expect(text(test.editor)).toContain("←/→ Change");
-    expect(text(test.editor)).toContain("^S Save");
-    expect(text(test.editor)).toContain("^T Test");
+    expect(text(test.editor)).toContain("Ctrl+S Save");
+    expect(text(test.editor)).toContain("Ctrl+T Test");
     focus(test.editor, 1);
     send(test.editor, "\u001b[C");
     expect(text(test.editor)).toMatch(/Model\s+a-second/);

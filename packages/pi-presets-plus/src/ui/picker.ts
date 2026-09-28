@@ -12,21 +12,14 @@ import { loadAll } from "../store/api.js";
 import type { LoadedPreset } from "../types.js";
 import { formatActionError } from "./action-error.js";
 import type { ScopeFilter } from "./filter.js";
-import {
-  centerText,
-  frameLine,
-  frameSegment,
-  padToWidth,
-  wrapKeyHints,
-} from "./frame.js";
 import { openInfoDialog } from "./info-dialog.js";
 import {
   ACTIVATE_LABEL,
   ACTIVATION_FAILED_TITLE,
+  BACK_LABEL,
   CLOSE_LABEL,
   CURSOR_LABEL,
   FILTER_LABEL,
-  LIST_LABEL,
   MOVE_LABEL,
   PAGE_LABEL,
   REORDER_LABEL,
@@ -56,7 +49,6 @@ import {
   type PickerFocusMode,
   type PickerState,
 } from "./picker-state.js";
-import { matchesSelectKey } from "./select-keys.js";
 import { formatScopeName, presetCard } from "./widgets.js";
 import type {
   ExtensionAPI,
@@ -78,7 +70,21 @@ import {
   type OverlayHandle,
   type Terminal,
 } from "@earendil-works/pi-tui";
-import { notifyWarnings } from "@sherif-fanous/pi-extensions-core";
+import {
+  emptyStateLines,
+  frameBodyWidth,
+  frameLine,
+  frameSegment,
+  frameTop,
+  keyHint,
+  listPosition,
+  matchSelectAction,
+  notifyWarnings,
+  overlayOptions,
+  padToWidth,
+  wrapKeyHints,
+  type ListMove,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** Everything the picker needs from its caller to open. */
 export interface PickerOptions {
@@ -103,6 +109,8 @@ export interface PickerResult {
 interface RenderListResult {
   readonly lines: string[];
   readonly pageSize: number;
+  /** `(n/m)` when not every visible preset fits, else `undefined`. */
+  readonly position: string | undefined;
   readonly scrollOffset: number;
 }
 
@@ -115,7 +123,8 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
   private balanceOpeningViewport = false;
   private renderedPageSize: number | undefined;
   private resolved = false;
-  private actionInFlight = false;
+  /** Busy line shown in place of the footer hints while an action runs. */
+  private busyMessage: string | undefined;
   private readonly commands: PickerCommands = new PickerCommands(this);
   /**
    * Memoized drift reasons for the currently-active preset.
@@ -167,7 +176,7 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
   }
 
   handleInput(input: string): void {
-    if (this.actionInFlight) return;
+    if (this.busyMessage !== undefined) return;
 
     this.dispatchInput(input);
     // One render request per key dispatch shows the result of every
@@ -188,28 +197,45 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
       return;
     }
 
-    const { keybindings } = this;
+    const selectAction = matchSelectAction(this.keybindings, input);
 
-    if (matchesSelectKey(keybindings, input, "up")) {
-      this.moveSelection(-1);
-    } else if (matchesSelectKey(keybindings, input, "down")) {
-      this.moveSelection(1);
-    } else if (matchesSelectKey(keybindings, input, "pageUp")) {
-      this.moveSelection(-this.pageSize);
-    } else if (matchesSelectKey(keybindings, input, "pageDown")) {
-      this.moveSelection(this.pageSize);
-    } else if (matchesKey(input, Key.left)) {
+    switch (selectAction) {
+      case "cancel":
+        this.finish(undefined);
+
+        return;
+
+      case "confirm": {
+        const preset = this.currentSelection();
+
+        if (preset) {
+          this.runAction(`Activating "${preset.name}"…`, () =>
+            this.activateSelection(),
+          );
+        }
+
+        return;
+      }
+
+      case "down":
+      case "pageDown":
+      case "pageUp":
+      case "up":
+        this.moveSelection(selectAction);
+
+        return;
+      case undefined:
+        break;
+    }
+
+    if (matchesKey(input, Key.left)) {
       this.cycleScope(-1);
     } else if (matchesKey(input, Key.right)) {
       this.cycleScope(1);
-    } else if (matchesSelectKey(keybindings, input, "confirm")) {
-      this.runAction(() => this.activateSelection());
-    } else if (matchesSelectKey(keybindings, input, "cancel")) {
-      this.finish(undefined);
     } else if (matchesKey(input, Key.ctrl(Key.up))) {
-      this.runAction(() => this.commands.reorder(-1));
+      this.runAction("Reordering presets…", () => this.commands.reorder(-1));
     } else if (matchesKey(input, Key.ctrl(Key.down))) {
-      this.runAction(() => this.commands.reorder(1));
+      this.runAction("Reordering presets…", () => this.commands.reorder(1));
     } else if (normalized === "/") {
       this.setFocusMode("filter");
     } else {
@@ -219,12 +245,16 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
         (candidate) => candidate.key === normalized,
       );
 
-      if (action) this.runAction(() => action.run(this.commands));
+      if (action) this.runAction(action.busy, () => action.run(this.commands));
     }
   }
 
-  private runAction(action: () => Promise<void>): void {
-    this.actionInFlight = true;
+  /**
+   * Run an async action, ignoring input and showing `busy` in the footer
+   * until it settles.
+   */
+  private runAction(busy: string, action: () => Promise<void>): void {
+    this.busyMessage = busy;
 
     void (async () => {
       try {
@@ -232,7 +262,7 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
       } catch (error) {
         this.ui.notify(formatActionError(error), "error");
       } finally {
-        this.actionInFlight = false;
+        this.busyMessage = undefined;
         this.requestRender();
       }
     })();
@@ -245,10 +275,16 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
   }
 
   render(width: number): string[] {
-    const frameWidth = Math.max(2, width);
-
-    const footerLines = wrapKeyHints(this.footerHints(), frameWidth - 2);
-    const list = this.renderList(frameWidth, footerLines.length);
+    const bodyWidth = frameBodyWidth(width);
+    const footerLines =
+      this.busyMessage === undefined
+        ? wrapKeyHints(this.footerHints(), bodyWidth)
+        : [this.busyMessage];
+    const list = this.renderList(bodyWidth, footerLines.length);
+    const row = (content: string): string =>
+      frameLine(` ${padToWidth(content, bodyWidth)} `, width, this.theme);
+    const rule = frameSegment("├", "┤", width, this.theme);
+    const scope = `Scope: ${formatScopeFilter(this.state.scopeFilter)}`;
 
     this.renderedPageSize = list.pageSize > 0 ? list.pageSize : undefined;
 
@@ -257,16 +293,22 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
     }
 
     return [
-      this.renderTopBorder(frameWidth),
-      frameLine(this.renderActiveStatusContent(frameWidth), frameWidth),
-      frameLine(this.renderFilterContent(frameWidth), frameWidth),
-      this.renderRule(frameWidth),
-      ...list.lines,
-      this.renderRule(frameWidth),
-      ...footerLines.map((line) =>
-        frameLine(this.theme.fg("dim", line), frameWidth),
+      frameTop(
+        EXTENSION_NAME,
+        width,
+        this.theme,
+        this.theme.fg(
+          "muted",
+          list.position === undefined ? scope : `${scope} · ${list.position}`,
+        ),
       ),
-      this.renderBottomBorder(frameWidth),
+      row(this.renderActiveStatusContent(bodyWidth)),
+      row(this.renderFilterContent(bodyWidth)),
+      rule,
+      ...list.lines.map(row),
+      rule,
+      ...footerLines.map((line) => row(this.theme.fg("dim", line))),
+      frameSegment("└", "┘", width, this.theme),
     ];
   }
 
@@ -284,9 +326,8 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
 
       if (!activationResult.ok && activationResult.kind !== "cancelled") {
         await openInfoDialog(this.ctx, {
-          body: activationResult.reason,
+          body: this.theme.fg("error", activationResult.reason),
           title: ACTIVATION_FAILED_TITLE,
-          tone: "error",
         });
       }
 
@@ -387,41 +428,25 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
   }
 
   private handleFilterInput(input: string): void {
-    const { keybindings } = this;
+    const selectAction = matchSelectAction(this.keybindings, input);
 
-    if (
-      matchesSelectKey(keybindings, input, "cancel") ||
-      matchesSelectKey(keybindings, input, "confirm")
-    ) {
-      this.setFocusMode("list");
+    switch (selectAction) {
+      case "cancel":
+      case "confirm":
+        this.setFocusMode("list");
 
-      return;
-    }
+        return;
+      // Navigation keys stay live in filter mode so the user can type and
+      // then move without going back to the list first.
+      case "down":
+      case "pageDown":
+      case "pageUp":
+      case "up":
+        this.moveSelection(selectAction);
 
-    // Navigation keys stay live in filter mode so the user can type and
-    // then arrow without escaping back to the list first.
-    if (matchesSelectKey(keybindings, input, "up")) {
-      this.moveSelection(-1);
-
-      return;
-    }
-
-    if (matchesSelectKey(keybindings, input, "down")) {
-      this.moveSelection(1);
-
-      return;
-    }
-
-    if (matchesSelectKey(keybindings, input, "pageUp")) {
-      this.moveSelection(-this.pageSize);
-
-      return;
-    }
-
-    if (matchesSelectKey(keybindings, input, "pageDown")) {
-      this.moveSelection(this.pageSize);
-
-      return;
+        return;
+      case undefined:
+        break;
     }
 
     const previousQuery = this.filterInput.getValue();
@@ -449,17 +474,13 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
     this.cachedVisible = undefined;
   }
 
-  private moveSelection(
-    delta: number,
-    options: { wrap: boolean } = { wrap: true },
-  ): void {
+  private moveSelection(move: ListMove): void {
     this.state = movePickerSelection(
       this.state,
       this.allPresets,
       this.filterInput.getValue(),
-      delta,
+      move,
       this.pageSize,
-      options,
     );
   }
 
@@ -471,12 +492,8 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
     return this.renderedPageSize ?? pickerFallbackPageSize(this.terminal.rows);
   }
 
-  private renderBottomBorder(width: number): string {
-    return frameSegment("└", "─", "┘", width);
-  }
-
   private renderFilterContent(width: number): string {
-    const label = this.theme.fg("muted", " Filter: ");
+    const label = this.theme.fg("muted", "Filter: ");
     const inputWidth = labelledContentWidth(width, label);
     const query = this.filterInput.getValue();
 
@@ -490,7 +507,7 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
   }
 
   private renderActiveStatusContent(width: number): string {
-    const label = this.theme.fg("muted", " Active: ");
+    const label = this.theme.fg("muted", "Active: ");
     const contentWidth = labelledContentWidth(width, label);
     const active = this.session.current();
 
@@ -514,32 +531,52 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
     return `${label}${name}${this.theme.fg("dim", scopeSuffix)}`;
   }
 
-  /** Key hints for the current focus mode, in footer order. */
-  private footerHints(): string[] {
-    const noMatches = this.visiblePresets().length === 0;
-    const activateHint = noMatches
-      ? `⏎ ${ACTIVATE_LABEL} (no matches)`
-      : `⏎ ${ACTIVATE_LABEL}`;
+  /**
+   * Key hints for the current focus mode, in footer order. Keys that need
+   * a selected preset are left out while no preset is visible.
+   */
+  private footerHints(): (string | undefined)[] {
+    const { keybindings } = this;
+    const hasSelection = this.visiblePresets().length > 0;
+    const movement = hasSelection
+      ? [
+          keyHint(
+            keybindings,
+            ["tui.select.up", "tui.select.down"],
+            MOVE_LABEL,
+          ),
+          keyHint(
+            keybindings,
+            ["tui.select.pageUp", "tui.select.pageDown"],
+            PAGE_LABEL,
+          ),
+        ]
+      : [];
 
     if (this.state.focusMode === "filter") {
       return [
-        activateHint,
-        `Esc ${LIST_LABEL}`,
+        ...movement,
         `←/→ ${CURSOR_LABEL}`,
-        `↑/↓ ${MOVE_LABEL}`,
-        "PgUp/PgDn",
+        keyHint(
+          keybindings,
+          ["tui.select.confirm", "tui.select.cancel"],
+          BACK_LABEL,
+        ),
       ];
     }
 
     return [
-      activateHint,
-      ...PICKER_ACTIONS.map((action) => `${action.key} ${action.label}`),
-      `↑/↓ ${MOVE_LABEL}`,
-      `PgUp/PgDn ${PAGE_LABEL}`,
+      ...movement,
       `←/→ ${SCOPE_LABEL}`,
-      `Ctrl+↑/↓ ${REORDER_LABEL}`,
+      ...(hasSelection
+        ? [keyHint(keybindings, "tui.select.confirm", ACTIVATE_LABEL)]
+        : []),
+      ...PICKER_ACTIONS.filter(
+        (action) => hasSelection || !action.needsSelection,
+      ).map((action) => `${action.key} ${action.label}`),
+      ...(hasSelection ? [`Ctrl+↑/↓ ${REORDER_LABEL}`] : []),
       `/ ${FILTER_LABEL}`,
-      `Esc ${CLOSE_LABEL}`,
+      keyHint(keybindings, "tui.select.cancel", CLOSE_LABEL),
     ];
   }
 
@@ -552,19 +589,15 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
     this.balanceOpeningViewport = false;
 
     if (visiblePresets.length === 0) {
+      const message =
+        this.allPresets.length === 0
+          ? "No presets yet. Press n to create one."
+          : "No presets match this filter.";
+
       return {
-        lines: [
-          frameLine("", width),
-          frameLine(
-            centerText(
-              this.theme.fg("warning", "No matching presets."),
-              width - 2,
-            ),
-            width,
-          ),
-          frameLine("", width),
-        ],
+        lines: emptyStateLines(message, width, this.theme),
         pageSize: 0,
+        position: undefined,
         scrollOffset: this.state.scrollOffset,
       };
     }
@@ -593,7 +626,7 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
         selected: absoluteIndex === this.state.selectedIndex,
         showShadowed: this.state.scopeFilter === "all",
       });
-      const cardLines = card.render(width - 2);
+      const cardLines = card.render(width);
 
       cardLinesByIndex.set(absoluteIndex, cardLines);
 
@@ -610,54 +643,21 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
 
     const lines: string[] = [];
 
-    for (
-      let absoluteIndex = layout.startIndex;
-      absoluteIndex < layout.endIndex;
-      absoluteIndex++
-    ) {
-      if (absoluteIndex > layout.startIndex) lines.push(frameLine("", width));
+    for (let index = layout.startIndex; index < layout.endIndex; index++) {
+      if (index > layout.startIndex) lines.push("");
 
-      const cardLines =
-        cardLinesByIndex.get(
-          ((absoluteIndex % visiblePresets.length) + visiblePresets.length) %
-            visiblePresets.length,
-        ) ?? [];
-
-      for (const cardLine of cardLines) {
-        lines.push(frameLine(cardLine, width));
-      }
+      lines.push(...(cardLinesByIndex.get(index) ?? []));
     }
 
     return {
       lines,
       pageSize: layout.pageSize,
+      position:
+        layout.pageSize < visiblePresets.length
+          ? listPosition(this.state.selectedIndex, visiblePresets.length)
+          : undefined,
       scrollOffset: layout.scrollOffset,
     };
-  }
-
-  private renderRule(width: number): string {
-    return frameSegment("├", "─", "┤", width);
-  }
-
-  private renderTopBorder(width: number): string {
-    if (width <= 2) return truncateToWidth("┌┐", width, "");
-
-    const title = this.theme.fg("accent", this.theme.bold(EXTENSION_NAME));
-    const scope = this.theme.fg(
-      "muted",
-      `Scope: ${formatScopeFilter(this.state.scopeFilter)}`,
-    );
-    const left = `─ ${title} `;
-    const right = ` ${scope} ─`;
-    const fillWidth = Math.max(
-      0,
-      width - 2 - visibleWidth(left) - visibleWidth(right),
-    );
-    const content = `${left}${"─".repeat(fillWidth)}${right}`;
-
-    // Use `─` as the truncation suffix so the top border stays clean even
-    // when the terminal is narrower than the title + scope label.
-    return `┌${padToWidth(content, width - 2, "─", "─")}┐`;
   }
 
   private setFocusMode(focusMode: PickerFocusMode): void {
@@ -726,13 +726,7 @@ export async function openPicker(
     {
       onHandle: (handle) => currentPicker?.setOverlayHandle(handle),
       overlay: true,
-      overlayOptions: {
-        anchor: "center",
-        margin: 1,
-        maxHeight: "80%",
-        minWidth: 64,
-        width: "80%",
-      },
+      overlayOptions: overlayOptions("main"),
     },
   );
 }
@@ -750,16 +744,16 @@ function formatScopeFilter(scopeFilter: ScopeFilter): string {
 
 /**
  * Visible columns left for a labelled chrome row's value once the label
- * and the two border columns are reserved.
+ * is reserved from the `width` of the frame body.
  *
  * `visibleWidth` strips ANSI, so callers pass the already-themed label,
  * the same string the rendered row concatenates, to keep this measurement
- * aligned with what `frameLine` later pads against. The result is clamped
+ * aligned with what the frame later pads against. The result is clamped
  * to 1 so an over-wide label degrades to a single value column instead of
  * a negative budget.
  */
 function labelledContentWidth(width: number, label: string): number {
-  return Math.max(1, width - 2 - visibleWidth(label));
+  return Math.max(1, width - visibleWidth(label));
 }
 
 /**

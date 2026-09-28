@@ -144,7 +144,6 @@ export async function runShowPrompt(
   await openInfoDialog(ctx, {
     body: notification.body,
     title: PROMPT_DIALOG_TITLE,
-    tone: notification.severity,
   });
 }
 

@@ -11,11 +11,13 @@ import { describe, expect, it } from "vitest";
 
 describe("prompt editor helpers", () => {
   it("builds a named prompt title", () => {
-    expect(promptEditorTitle({ presetName: "plan" })).toBe("Edit prompt: plan");
+    expect(promptEditorTitle({ presetName: "plan" })).toBe(
+      'Edit Prompt for "plan"',
+    );
   });
 
   it("builds an unnamed prompt title", () => {
-    expect(promptEditorTitle({ presetName: undefined })).toBe("Edit prompt");
+    expect(promptEditorTitle({ presetName: undefined })).toBe("Edit Prompt");
   });
 
   it("delegates to Pi's built-in editor with title and initial text", async () => {
@@ -36,7 +38,7 @@ describe("prompt editor helpers", () => {
         presetName: "plan",
       }),
     ).resolves.toEqual({ confirmed: true, text: "updated" });
-    expect(editorCalls).toEqual([["Edit prompt: plan", "initial"]]);
+    expect(editorCalls).toEqual([['Edit Prompt for "plan"', "initial"]]);
   });
 
   it("maps built-in editor cancellation to the cancelled result", async () => {

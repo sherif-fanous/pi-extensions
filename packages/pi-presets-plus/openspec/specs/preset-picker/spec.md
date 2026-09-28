@@ -114,10 +114,15 @@ before the broader availability condition.
 
 ### Requirement: Picker renders inside a full bordered dialog
 
-The picker SHALL render inside a full bordered dialog that includes top, bottom,
-left, and right borders. The dialog SHALL include a header row with the
-user-facing title `Presets Plus` and the current scope filter, a filter row, a
-scrollable card list, and a footer hint row.
+The picker SHALL open as a main overlay and render inside a full bordered dialog
+that includes top, bottom, left, and right borders in the theme's border color.
+The top border SHALL carry the title `Presets Plus` in bold accent at its left
+and the current scope filter in muted text at its right. When not every visible
+preset fits, the right of the top border SHALL also show the muted `(n/m)`
+position of the selected preset, as in `Scope: All · (3/12)`. Below the top
+border the dialog SHALL show the active-preset row, the filter row, a rule, the
+scrollable card list, a rule, and the dim footer hints. Every row SHALL be
+padded one space inside the borders.
 
 #### Scenario: Full border visible
 
@@ -125,11 +130,21 @@ scrollable card list, and a footer hint row.
 - **THEN** the picker SHALL show left and right borders on every row in addition
   to top and bottom borders
 
+#### Scenario: Position shown when the list scrolls
+
+- **WHEN** the picker holds more presets than its card list shows at once
+- **THEN** the top border SHALL end with `Scope: <scope> · (<n>/<m>)`, where
+  `<n>` is the selected preset's position and `<m>` the number of visible
+  presets
+- **AND** when every visible preset fits, the top border SHALL show only the
+  scope
+
 #### Scenario: Lines fit dialog width
 
-- **WHEN** card fields are longer than the dialog width
-- **THEN** rendered lines SHALL be truncated or otherwise fit within the
-  bordered dialog without overflowing past the right border
+- **WHEN** card fields are longer than the dialog width, including at a width of
+  40 columns or less
+- **THEN** every rendered line SHALL fit within the bordered dialog without
+  overflowing past the right border
 
 ### Requirement: Filter input with literal-substring-first ranking
 
@@ -149,8 +164,15 @@ Within each group the input order SHALL be preserved.
 
 #### Scenario: No matches
 
-- **WHEN** the filter has no matches in either group
-- **THEN** the picker SHALL render a "no matches" notice and disable activation
+- **WHEN** the filter or scope leaves no preset visible while presets exist
+- **THEN** the picker SHALL render the muted notice
+  `No presets match this filter.` and disable activation
+
+#### Scenario: No presets yet
+
+- **WHEN** neither scope holds a preset
+- **THEN** the picker SHALL render the muted notice
+  `No presets yet. Press n to create one.`
 
 #### Scenario: Empty filter
 
@@ -166,14 +188,14 @@ Within each group the input order SHALL be preserved.
 
 #### Scenario: Filter focus returns to list
 
-- **WHEN** the filter input is focused and the user presses `Esc`
+- **WHEN** the filter input is focused and the user presses `Esc` or `Enter`
 - **THEN** focus SHALL return to the list and the picker SHALL remain open
 
 ### Requirement: Scope filter toggle in the header
 
-The picker SHALL show the current scope filter in the header (`Scope: All`,
-`Scope: User only`, or `Scope: Project only`) and SHALL allow cycling between
-the three states with `←` / `→`. The default scope is `All`.
+The picker SHALL show the current scope filter at the right of its top border
+(`Scope: All`, `Scope: User only`, or `Scope: Project only`) and SHALL allow
+cycling between the three states with `←` / `→`. The default scope is `All`.
 
 #### Scenario: User-only filter
 
@@ -200,11 +222,11 @@ existing apply flow for that preset.
 On `apply()` returning `{ ok: true }`, the picker SHALL close.
 
 On `apply()` returning `{ ok: false, reason }`, the picker SHALL stay open and
-SHALL render the `reason` in a shared info-dialog overlay (tone = `"error"`,
-title = `"Activation failed"`). The picker SHALL hide itself behind the dialog
-while the dialog is open and SHALL restore focus to the same selected row when
-the user dismisses the dialog with `Enter` or `Esc`. The picker SHALL NOT close
-as a side effect of the failure.
+SHALL render the `reason` in a shared info-dialog overlay titled
+`"Activation Failed"`, with the reason in the `error` color. The picker SHALL
+hide itself behind the dialog while the dialog is open and SHALL restore focus
+to the same selected row when the user dismisses the dialog with `Enter` or
+`Esc`. The picker SHALL NOT close as a side effect of the failure.
 
 The picker SHALL NOT call `ctx.ui.notify` to surface activation refusals — the
 info-dialog is the sole surface for picker-driven activation refusals.
@@ -224,8 +246,8 @@ the command surface; picker selection is the activation path.
   `Enter`
 - **AND** `apply()` returns `{ ok: false, reason: <text>, kind: "no-key" }`
 - **THEN** the picker SHALL remain open
-- **AND** an info-dialog overlay SHALL appear with tone `error`, title
-  `"Activation failed"`, and body equal to `reason`
+- **AND** an info-dialog overlay SHALL appear with the title
+  `"Activation Failed"` and a body of `reason` in the `error` color
 - **AND** `ctx.ui.notify` SHALL NOT be called for the refusal
 - **AND** dismissing the dialog with `Enter` or `Esc` SHALL return focus to the
   picker without closing it
@@ -343,7 +365,7 @@ correction rules.
 #### Scenario: Pressing Enter immediately reconfirms the active preset
 
 - **GIVEN** a preset is active
-- **WHEN** the user opens the picker and presses `⏎` without moving the
+- **WHEN** the user opens the picker and presses `Enter` without moving the
   selection
 - **THEN** the activation SHALL target the active preset rather than the first
   preset in the list
@@ -352,31 +374,68 @@ correction rules.
 
 The picker SHALL treat vertical navigation as cyclic. Pressing down from the
 last visible preset SHALL select the first visible preset, and pressing up from
-the first visible preset SHALL select the last visible preset.
+the first visible preset SHALL select the last visible preset. The card list
+SHALL then scroll to the new selection; it SHALL NOT show cards past either end
+of the list. Page Up and Page Down SHALL move one page and stop at the first or
+last visible preset. The same keys SHALL work while the filter input is focused.
+
+The picker SHALL read these keys, and Enter and Esc, from Pi's `tui.select.*`
+keybindings. A key the user binds SHALL replace the default key rather than add
+to it.
 
 #### Scenario: Down wraps to first preset
 
 - **WHEN** the final visible preset is selected
 - **AND** the user presses `↓`
 - **THEN** the first visible preset SHALL become selected
+- **AND** the card list SHALL start at the first visible preset
 
 #### Scenario: Up wraps to final preset
 
 - **WHEN** the first visible preset is selected
 - **AND** the user presses `↑`
 - **THEN** the final visible preset SHALL become selected
+- **AND** the card list SHALL end at the final visible preset, with no card from
+  the start of the list below it
+
+#### Scenario: Page movement stops at the ends
+
+- **WHEN** the first visible preset is selected and the user presses `PgUp`
+- **THEN** the selection SHALL stay on the first visible preset
+- **AND** repeated `PgDn` presses SHALL stop on the final visible preset
+
+#### Scenario: Remapped keys replace the defaults
+
+- **GIVEN** the user bound `tui.select.down` to `Ctrl+N` and
+  `tui.select.confirm` to `Ctrl+O`
+- **WHEN** the user presses `↓` or `Enter`
+- **THEN** nothing SHALL happen
+- **AND** `Ctrl+N` SHALL move the selection and `Ctrl+O` SHALL activate the
+  selected preset
 
 ### Requirement: Footer keybinding hints
 
-The picker SHALL render a footer hint row using readable title-case action
-labels and showing at minimum: activate (`⏎`), filter (`/`), movement (`↑/↓`),
-page movement (`PgUp/PgDn`), scope cycle (`←/→`), status (`s`), and exit
-(`Esc`).
+The picker SHALL render dim footer hints as `<Key> <Action>` pairs joined by
+`·`. In list focus the footer SHALL list, in this order: `↑/↓ Move`,
+`PgUp/PgDn Page`, `←/→ Scope`, `Enter Activate`, `n New`, `e Edit`,
+`d Duplicate`, `x Delete`, `c Clear`, `s Status`, `Ctrl+↑/↓ Reorder`,
+`/ Filter`, and `Esc Close`. While no preset is visible, the hints for keys that
+need a selected preset (`↑/↓`, `PgUp/PgDn`, `Enter`, `e`, `d`, `x`, and
+`Ctrl+↑/↓`) SHALL be left out. In filter focus the footer SHALL read
+`↑/↓ Move · PgUp/PgDn Page · ←/→ Cursor · Enter/Esc Back`, because Enter and Esc
+both return to the list there.
+
+The `↑`, `↓`, `PgUp`, `PgDn`, `Enter`, and `Esc` keys in the hints SHALL name
+the key the user has bound to the matching `tui.select.*` keybinding.
 
 When the hints do not fit the picker's width on one line, the footer SHALL wrap
 onto as many lines as needed, breaking only between hints, so no hint is cut
 off. The card list SHALL give up the lines the wrapped footer takes, so the
 picker stays within its overlay's maximum height.
+
+While an action runs, the footer SHALL show one dim busy line in place of the
+hints, such as `Activating "plan"…`, `Reordering presets…`, or
+`Deleting the preset…`, and the picker SHALL ignore input until it finishes.
 
 #### Scenario: Footer present
 
@@ -395,6 +454,17 @@ picker stays within its overlay's maximum height.
 - **WHEN** the picker is open
 - **THEN** the footer hint row SHALL include the `Status` entry bound to the `s`
   key
+
+#### Scenario: Filter focus names what Enter does
+
+- **WHEN** the filter input is focused
+- **THEN** the footer SHALL contain `Enter/Esc Back`
+- **AND** it SHALL NOT contain `Activate`
+
+#### Scenario: Busy line during a reorder
+
+- **WHEN** the user presses `Ctrl+↓` and the reorder is still being written
+- **THEN** the footer SHALL read `Reordering presets…`
 
 ### Requirement: Picker exposes a Status action
 
@@ -417,19 +487,22 @@ picker SHALL remain open with list focus restored.
 
 - **WHEN** the user opens the picker, no preset is active, and the user presses
   `s`
-- **THEN** an info-dialog overlay SHALL appear with the same body that
-  `/presets status` emits: the `Presets Plus Status` heading followed by
-  `No preset is active.` on its own line, indented two spaces
+- **THEN** an info-dialog overlay titled `Presets Plus Status` SHALL appear with
+  the body `No preset is active.`
 - **AND** dismissing the dialog SHALL return list focus to the picker
 
 ### Requirement: Picker routes Clear and Status output through an info-dialog overlay
 
 When the picker triggers `clear` (via the `c` action) or `status` (via the `s`
 action), the package SHALL render the resulting payload in a shared info-dialog
-overlay rather than via `ctx.ui.notify`. The dialog SHALL display a title, the
-rendered body verbatim, and a dismissal hint, and SHALL resolve on `Enter` or
-`Esc`. The dialog SHALL anchor center, max height ≤ the surrounding overlay
-viewport, and width ≤ 90 % of the viewport.
+overlay rather than via `ctx.ui.notify`. The dialog SHALL show the report's
+heading as its title in the top border and the rest of the report as its body,
+without repeating the heading. A report that describes a problem, such as a
+status whose active preset is no longer loaded or a clear that could not restore
+every setting, SHALL color its first body line in the `warning` color. The
+footer SHALL read `Enter/Esc Close`, and the dialog SHALL resolve on `Enter` or
+`Esc`. The dialog SHALL open as a nested overlay and lay itself out for its
+height.
 
 #### Scenario: Clear from picker shows summary in dialog
 
@@ -463,7 +536,7 @@ viewport, and width ≤ 90 % of the viewport.
 ### Requirement: Picker clear short-circuits when no preset is active
 
 When the user presses `c` (clear) inside the picker and no preset is currently
-active, the package SHALL NOT open the "Clear active preset?" confirm dialog.
+active, the package SHALL NOT open the "Clear Active Preset?" confirm dialog.
 Instead, the package SHALL open an info-dialog overlay (using the same shared
 overlay surface as the existing clear-summary and status dialogs) with the title
 "Clear Unavailable" and the body "No preset is active.", then return to the
@@ -483,7 +556,7 @@ preset files or otherwise reach beyond the already-loaded session state.
 - **WHEN** the user presses `c`
 - **THEN** an info-dialog SHALL appear with the title "Clear Unavailable" and
   the body "No preset is active."
-- **AND** the "Clear active preset?" confirm dialog SHALL NOT be opened
+- **AND** the "Clear Active Preset?" confirm dialog SHALL NOT be opened
 - **AND** the underlying clear engine SHALL NOT be invoked
 - **AND** dismissing the info-dialog with `Enter` or `Esc` SHALL return focus to
   the picker without closing the picker
@@ -493,7 +566,7 @@ preset files or otherwise reach beyond the already-loaded session state.
 - **GIVEN** the picker is open and a preset is currently active
   (`session.current()` returns an attachment)
 - **WHEN** the user presses `c`
-- **THEN** the "Clear active preset?" confirm dialog SHALL open as today
+- **THEN** the "Clear Active Preset?" confirm dialog SHALL open as today
 - **AND** the existing confirm-then-clear-then-summary flow SHALL run unchanged
 
 ### Requirement: CRUD action keys are reserved with hints
@@ -579,7 +652,9 @@ alone exceeds the budget.
 If the selection is above the current viewport, the picker SHALL anchor the
 viewport at the selected card. If the selection is below the packed range, the
 picker SHALL move the viewport backward from the selected card to include as
-many preceding cards as the line budget permits. The resulting scroll offset and
+many preceding cards as the line budget permits. The viewport SHALL never run
+past the last card; when the packed range reaches the last card with lines to
+spare, it SHALL start earlier to fill them. The resulting scroll offset and
 measured page size SHALL update picker state before the next user input.
 
 Card heights SHALL be measured only as needed to determine the visible range. An
@@ -603,8 +678,17 @@ empty preset list SHALL produce an empty viewport without measuring any card.
 #### Scenario: Selection moves above the current viewport
 
 - **WHEN** the selected index is above the current scroll offset
-- **THEN** the picker SHALL set the selected card as the first visible card
+- **THEN** the picker SHALL set the selected card as the first visible card,
+  unless the cards from it to the end of the list leave lines to spare
 - **AND** the rendered output SHALL include the selected card
+
+#### Scenario: Viewport stops at the last card
+
+- **WHEN** the cards from the scroll offset to the last card fit with lines to
+  spare
+- **THEN** the picker SHALL start the viewport at an earlier card so the list
+  fills the budget
+- **AND** no card SHALL appear after the last card
 
 #### Scenario: Selected card exceeds the line budget
 

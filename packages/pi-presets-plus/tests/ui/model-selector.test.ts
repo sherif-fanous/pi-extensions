@@ -1,18 +1,24 @@
-/** Covers selector ranking, keyboard selection, and bounded rendering. */
+/**
+ * Covers selector ranking, keyboard selection through Pi's keybindings,
+ * the empty states, and bounded rendering.
+ */
 import {
   openModelSelector,
   rankModelSelectorItems,
   type ModelSelectorItem,
 } from "../../src/ui/model-selector.js";
-import { piKeybindings } from "../helpers/keybindings.js";
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import {
-  visibleWidth,
-  type Component,
-  type Focusable,
-  type KeybindingsManager,
+import type {
+  Component,
+  Focusable,
+  KeybindingsManager,
 } from "@earendil-works/pi-tui";
-import { createPlainTheme } from "@sherif-fanous/pi-extensions-testing";
+import { overlayOptions } from "@sherif-fanous/pi-extensions-core";
+import {
+  createPiKeybindings,
+  createPlainTheme,
+  findOverflowingLines,
+} from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it, vi } from "vitest";
 
 const theme = createPlainTheme();
@@ -28,9 +34,10 @@ const items: ModelSelectorItem[] = [
 function harness(
   options = { title: "Select model", current: "internal", items },
   rows = 24,
-  keybindings: KeybindingsManager = piKeybindings(),
+  keybindings: KeybindingsManager = createPiKeybindings(),
 ) {
   let component: (Component & Focusable) | undefined;
+  let customOptions: unknown;
   const terminal = { rows };
   const requestRender = vi.fn();
   const ctx = {
@@ -42,8 +49,10 @@ function harness(
           keys: unknown,
           done: (value: string | undefined) => void,
         ) => Component & Focusable,
+        opened: unknown,
       ) =>
         new Promise<string | undefined>((resolve) => {
+          customOptions = opened;
           component = factory(
             { terminal, requestRender },
             theme,
@@ -58,7 +67,7 @@ function harness(
 
   if (!component) throw new Error("Selector was not opened.");
 
-  return { component, result, terminal, requestRender };
+  return { component, customOptions, result, terminal, requestRender };
 }
 
 function type(component: Component, text: string): void {
@@ -97,6 +106,13 @@ describe("rankModelSelectorItems", () => {
 });
 
 describe("openModelSelector", () => {
+  it("opens as a nested overlay", () => {
+    expect(harness().customOptions).toEqual({
+      overlay: true,
+      overlayOptions: overlayOptions("nested"),
+    });
+  });
+
   it("starts focused with the current value and confirms only once", async () => {
     const { component, result } = harness();
 
@@ -111,7 +127,9 @@ describe("openModelSelector", () => {
     const { component, result, requestRender } = harness();
 
     type(component, "opus 5x");
-    expect(component.render(80).join("\n")).toContain("No matching options.");
+    expect(component.render(80).join("\n")).toContain(
+      "No options match this search.",
+    );
     component.handleInput?.("\u007f");
     expect(component.render(80).join("\n")).toContain("→ OPUS_5");
     component.handleInput?.("\u001b[B");
@@ -121,13 +139,14 @@ describe("openModelSelector", () => {
     expect(requestRender).toHaveBeenCalled();
   });
 
-  it("follows remapped list bindings and keeps arrows and Enter working", async () => {
+  it("follows remapped list bindings instead of the default keys", async () => {
     const { component, result } = harness(
       undefined,
       24,
-      piKeybindings({
-        "tui.select.up": "ctrl+p",
+      createPiKeybindings({
+        "tui.select.confirm": "ctrl+o",
         "tui.select.down": "ctrl+n",
+        "tui.select.up": "ctrl+p",
       }),
     );
 
@@ -136,11 +155,44 @@ describe("openModelSelector", () => {
     component.handleInput?.("\u0010");
     expect(component.render(80).join("\n")).toContain("→ internal");
     component.handleInput?.("\u001b[B");
-    expect(component.render(80).join("\n")).toContain("→ claude-5-opus");
-    component.handleInput?.("\u001b[A");
-    component.handleInput?.("\u001b[A");
     component.handleInput?.("\r");
-    await expect(result).resolves.toBe("opus-50");
+    expect(component.render(80).join("\n")).toContain("→ internal");
+    expect(component.render(80).join("\n")).toContain("Ctrl+P/Ctrl+N Move");
+    component.handleInput?.("\u000F");
+    await expect(result).resolves.toBe("internal");
+  });
+
+  it("moves one page with PgDn and stops at the last option", async () => {
+    const many = Array.from({ length: 40 }, (_, index) => ({
+      id: `model-${String(index).padStart(2, "0")}`,
+    }));
+    const { component, result } = harness(
+      { title: "Select Model", current: "model-00", items: many },
+      20,
+    );
+    const lines = component.render(60);
+
+    expect(lines[0]).toContain("(1/40)");
+
+    component.handleInput?.("\u001b[6~");
+    expect(component.render(60)[0]).toContain("(12/40)");
+
+    for (let press = 0; press < 5; press++)
+      component.handleInput?.("\u001b[6~");
+    component.handleInput?.("\r");
+    await expect(result).resolves.toBe("model-39");
+  });
+
+  it("tells an empty list apart from a search without matches", () => {
+    const { component } = harness({
+      title: "Select Model",
+      current: "",
+      items: [],
+    });
+
+    expect(component.render(60).join("\n")).toContain(
+      "No options to choose from.",
+    );
   });
 
   it("cancels on Ctrl+C, which Pi binds to cancel", async () => {
@@ -222,11 +274,11 @@ describe("openModelSelector", () => {
       terminal.rows = rows;
       component.handleInput?.("\u001b[B");
 
-      for (const width of [80, 20, 4, 1]) {
+      for (const width of [80, 40, 20, 4, 1]) {
         const lines = component.render(width);
 
         expect(lines.length).toBeLessThanOrEqual(rows - 2);
-        expect(lines.every((line) => visibleWidth(line) <= width)).toBe(true);
+        expect(findOverflowingLines(lines, width)).toEqual([]);
         if (width >= 20)
           expect(lines.some((line) => line.includes("→ 30"))).toBe(true);
       }
