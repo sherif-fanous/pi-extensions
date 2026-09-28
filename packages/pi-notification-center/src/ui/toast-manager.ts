@@ -91,7 +91,7 @@ export class ToastManager {
 
     // Evict before arming the timer, so the evicted toast's own timer is
     // cancelled in the same step.
-    while (this.visible.length > this.config.maxToastsVisible) {
+    while (this.visible.length > this.config.toast.maxVisible) {
       const [oldest] = this.visible.splice(0, 1);
 
       if (oldest) this.cancel(oldest);
@@ -101,7 +101,7 @@ export class ToastManager {
       entry,
       globalThis.setTimeout(() => {
         this.expire(entry);
-      }, this.config.toast.timeout),
+      }, this.config.toast.timeoutMs),
     );
 
     this.sync();

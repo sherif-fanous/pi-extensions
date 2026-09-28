@@ -139,12 +139,14 @@ Cards SHALL stay in the top-right corner at every card width.
 
 ### Requirement: Toast presentation is configurable
 
-The extension SHALL load optional global settings from
-`<agent-dir>/notification-center/config.json` when a session starts. The
-supported settings SHALL be a top-level `maxToastsVisible` and a `toast` object
-containing `timeout`, `maxLines`, and `width`, where `width` is the widest a
-card may be drawn rather than a fixed size. Defaults SHALL be 5 visible toasts,
-3000 milliseconds, 5 body rows, and 64 columns.
+The extension SHALL load optional User settings from
+`<agent-dir>/notification-center/config.json` when a session starts. It SHALL
+have no Project scope, so it SHALL NOT read a project file or consult Pi's
+project trust. The supported settings SHALL be a top-level integer `version`
+and a `toast` object containing `maxVisible`, `timeoutMs`, `maxLines`, and
+`width`, where `width` is the widest a card may be drawn rather than a fixed
+size. Defaults SHALL be 5 visible toasts, 3000 milliseconds, 5 body rows, and
+64 columns. The file's version SHALL be 2.
 
 #### Scenario: No configuration file exists
 
@@ -157,6 +159,24 @@ card may be drawn rather than a fixed size. Defaults SHALL be 5 visible toasts,
 - **WHEN** the configuration contains valid supported values
 - **THEN** each new toast uses the configured timeout, visible limit, body-row
   limit, and maximum width
+
+#### Scenario: Configuration has no version
+
+- **WHEN** the configuration file has no `version` key
+- **THEN** the extension reads it as version 2 without a warning
+
+#### Scenario: Configuration has an unsupported version
+
+- **WHEN** the configuration file's `version` is anything other than 2
+- **THEN** the extension ignores the file, uses the defaults, warns
+  `Configuration at <path> has version <v>, but only version 2 is supported. Ignored the file.`,
+  and never rewrites the file
+
+#### Scenario: A project configuration file exists
+
+- **WHEN** the directory Pi starts in holds `.pi/notification-center/config.json`
+- **THEN** the extension ignores it and never asks whether the project is
+  trusted
 
 #### Scenario: Configuration changes before reload
 
@@ -172,6 +192,71 @@ card may be drawn rather than a fixed size. Defaults SHALL be 5 visible toasts,
   operational, and records one warning notification, headed
   `Notification Center: 1 warning` or `Notification Center: <n> warnings`, that
   lists every rejected value
+
+### Requirement: Renamed settings migrate at session start
+
+The extension SHALL read `maxToastsVisible` as `toast.maxVisible` and
+`toast.timeout` as `toast.timeoutMs` while the new key is absent. When a
+session starts and the User file uses either old key, the extension SHALL
+rewrite the file atomically with the new keys and `"version": 2`, keeping every
+other key, and SHALL show one info notification
+`Notification Center migrated its configuration to <path>.`
+
+#### Scenario: File uses the old key names
+
+- **WHEN** a session starts and the User file sets `maxToastsVisible` or
+  `toast.timeout`
+- **THEN** the session uses those values, the file is rewritten with
+  `toast.maxVisible` and `toast.timeoutMs` and `"version": 2`, and one info
+  notification names the file
+
+#### Scenario: File sets both an old and a new key name
+
+- **WHEN** the User file sets both `toast.timeout` and `toast.timeoutMs`
+- **THEN** the value of `toast.timeoutMs` applies and the migration drops
+  `toast.timeout`
+
+#### Scenario: The migration cannot write the file
+
+- **WHEN** rewriting the User file fails
+- **THEN** the file stays unchanged, the session still uses the old keys'
+  values, and the session's warning notification lists
+  `Could not migrate configuration at <path>: <message>. Left the file unchanged.`
+  before any invalid values
+
+#### Scenario: File has an unsupported version
+
+- **WHEN** the User file uses an old key name but has a `version` other than 2
+- **THEN** the extension neither reads nor rewrites the file
+
+### Requirement: Status reports the configuration in use
+
+The extension SHALL offer `/notifications status`, completed with the
+description `Show Notification Center status`. It SHALL show a report headed
+`Notification Center Status` with whether toasts are on in this session, how
+many notifications the active branch holds, and the toast settings the session
+uses, then a blank line and a `Config:` block naming the User file's path and
+its state: `loaded`, `not found`, or `invalid: <reason>`. Warnings about
+invalid values and a failed migration SHALL follow under `Warnings:`; file
+problems SHALL show only in the `Config:` block. In the interactive TUI the
+report SHALL be a transcript entry; in other modes it SHALL be a notification.
+
+#### Scenario: User asks for status in the TUI
+
+- **WHEN** the user runs `/notifications status` in the interactive TUI
+- **THEN** a `Notification Center Status` transcript entry shows `Toasts: on`,
+  the captured count, the toast settings, and the `Config:` block
+
+#### Scenario: User asks for status outside the TUI
+
+- **WHEN** the user runs `/notifications status` in RPC, JSON, or print mode
+- **THEN** the same report arrives as an info notification with `Toasts: off`
+
+#### Scenario: The configuration file changed after the session started
+
+- **WHEN** the user edits the file and runs `/notifications status` without
+  reloading
+- **THEN** the report shows the settings the session started with
 
 ### Requirement: Toasts expire independently
 
@@ -193,9 +278,16 @@ closing unrelated overlays.
 ### Requirement: Session notification history is retained
 
 The extension SHALL store every captured notification as Pi session data
-containing the complete message, severity, and capture timestamp. It SHALL
+containing the complete message, severity, capture timestamp, and `version` 1.
+It SHALL read a stored payload without a `version` as version 1 and skip one
+with any other version. It SHALL
 rebuild history from the active session branch after session start or reload and
 SHALL NOT maintain cross-session global history.
+
+#### Scenario: Stored payload has no version
+
+- **WHEN** the active branch holds a notification entry without a `version`
+- **THEN** the history reads it as version 1 and lists it
 
 #### Scenario: Session is reloaded or resumed
 
@@ -221,8 +313,8 @@ command SHALL open a two-pane browser: a list pane naming every notification on
 the active branch newest first, and a detail pane showing the selected
 notification's local date and time, severity, and complete message. Severities
 SHALL be visually distinguished by color, and the command SHALL close on Pi's
-configured cancel input. The command takes no argument: given one, it SHALL
-warn with the standard usage reply and do nothing else.
+configured cancel input. Its only argument is `status`: given any other, it
+SHALL warn with the standard usage reply and do nothing else.
 
 #### Scenario: User opens populated history
 
@@ -272,9 +364,10 @@ warn with the standard usage reply and do nothing else.
 #### Scenario: User passes an argument
 
 - **WHEN** the user runs `/notifications` followed by any non-blank argument
+  other than `status`
 - **THEN** no browser or summary is shown, and the extension warns
-  `Unknown subcommand "<argument>". Try /notifications.` under the
-  `Notification Center: 1 warning` heading
+  `Unknown subcommand "<argument>". Try /notifications or /notifications status.`
+  under the `Notification Center: 1 warning` heading
 
 #### Scenario: User closes history
 

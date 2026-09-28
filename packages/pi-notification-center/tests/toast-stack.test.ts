@@ -1,9 +1,9 @@
+import { DEFAULT_CONFIG } from "../src/config.js";
 import { createNotificationEntry } from "../src/history.js";
-import {
-  DEFAULT_CONFIG,
-  type NotificationConfig,
-  type NotificationSeverity,
-  type ToastConfig,
+import type {
+  NotificationConfig,
+  NotificationSeverity,
+  ToastConfig,
 } from "../src/types.js";
 import {
   canRenderToasts,
@@ -347,7 +347,7 @@ describe("renderToastStack", () => {
     const entries = Array.from({ length: 10 }, (_value, index) =>
       createNotificationEntry(`m${String(index)}`, "info", index),
     );
-    const lines = render(entries, { maxToastsVisible: 10 });
+    const lines = render(entries, { toast: { maxVisible: 10 } });
 
     expect(lines.length).toBeLessThanOrEqual(50);
   });
@@ -379,11 +379,9 @@ function cardWidth(line: string): number {
 
 function render(
   entries: ReturnType<typeof createNotificationEntry>[],
-  overrides: { maxToastsVisible?: number; toast?: Partial<ToastConfig> } = {},
+  overrides: { toast?: Partial<ToastConfig> } = {},
 ): string[] {
   const config: NotificationConfig = {
-    maxToastsVisible:
-      overrides.maxToastsVisible ?? DEFAULT_CONFIG.maxToastsVisible,
     toast: { ...DEFAULT_CONFIG.toast, ...overrides.toast },
   };
 

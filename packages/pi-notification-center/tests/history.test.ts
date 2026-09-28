@@ -75,7 +75,6 @@ describe("readNotificationHistory", () => {
   it("skips invalid custom entries instead of rendering partial records", () => {
     const branch: BranchEntry[] = [
       customEntry({ ...createNotificationEntry("v2", "info", 1), version: 2 }),
-      customEntry({ message: "no version", severity: "info", timestamp: 1 }),
       customEntry({ message: 5, severity: "info", timestamp: 1, version: 1 }),
       customEntry({
         message: "s",
@@ -96,6 +95,16 @@ describe("readNotificationHistory", () => {
 
     expect(readNotificationHistory(branch)).toEqual([
       createNotificationEntry("good", "warning", 9),
+    ]);
+  });
+
+  it("reads a payload without a version as version 1", () => {
+    const branch: BranchEntry[] = [
+      customEntry({ message: "no version", severity: "info", timestamp: 1 }),
+    ];
+
+    expect(readNotificationHistory(branch)).toEqual([
+      createNotificationEntry("no version", "info", 1),
     ]);
   });
 });

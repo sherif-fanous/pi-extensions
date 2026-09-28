@@ -4,8 +4,9 @@ import {
   type CapturePi,
   type NotifyFn,
 } from "../src/capture.js";
+import { DEFAULT_CONFIG } from "../src/config.js";
 import { readNotificationHistory, type BranchEntry } from "../src/history.js";
-import { CUSTOM_ENTRY_TYPE, DEFAULT_CONFIG } from "../src/types.js";
+import { CUSTOM_ENTRY_TYPE } from "../src/types.js";
 import {
   createFakeTui,
   createFakeWidgets,
@@ -182,7 +183,7 @@ describe("CaptureRuntime.dispose", () => {
   });
 });
 
-describe("CaptureRuntime.warn", () => {
+describe("CaptureRuntime.report", () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -191,13 +192,15 @@ describe("CaptureRuntime.warn", () => {
     vi.useRealTimers();
   });
 
-  it("records exactly one warning entry without recursing", () => {
+  it("records exactly one entry at the given severity without recursing", () => {
     const harness = setup();
 
-    harness.runtime?.warn("configuration was rejected");
+    harness.runtime?.report("configuration was rejected", "warning");
+    harness.runtime?.report("configuration was migrated", "info");
 
     expect(history(harness)).toEqual([
       { message: "configuration was rejected", severity: "warning" },
+      { message: "configuration was migrated", severity: "info" },
     ]);
     expect(harness.original).not.toHaveBeenCalled();
   });

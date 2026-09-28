@@ -72,46 +72,66 @@ selected message is too long to fit.
 
 If you have remapped Pi's keys, the browser follows your bindings.
 
+Run `/notifications status` to see whether toasts are on, how many notifications
+this session has captured, the toast settings in use, and the state of your
+configuration file.
+
 ## Configuration
 
-Configuration is optional and global. Nothing is created for you, so make
-the file yourself if you want to change something.
+Notification Center reads one `config.json`, in the User scope only:
 
-`~/.pi/agent/notification-center/config.json`:
+| Scope | Path                                          |
+| :---- | :-------------------------------------------- |
+| User  | `~/.pi/agent/notification-center/config.json` |
+
+`PI_CODING_AGENT_DIR` replaces `~/.pi/agent`. Each setting comes from the file,
+then the default, and an invalid value is skipped with a warning so the default
+applies. There is no Project file, so the settings are the same in every
+project, trusted or not. Nothing creates the file for you; make it yourself if
+you want to change something.
 
 ```json
 {
-  "maxToastsVisible": 5,
+  "version": 2,
   "toast": {
-    "timeout": 3000,
+    "maxVisible": 5,
+    "timeoutMs": 3000,
     "maxLines": 5,
     "width": 64
   }
 }
 ```
 
-| Setting            | Default | Valid range                    |
-| :----------------- | ------: | :----------------------------- |
-| `maxToastsVisible` |       5 | integer from 1 through 10      |
-| `toast.timeout`    |    3000 | integer from 250 through 60000 |
-| `toast.maxLines`   |       5 | integer from 1 through 20      |
-| `toast.width`      |      64 | integer from 20 through 80     |
+| Key                | Default | Description                                                                                                         |
+| :----------------- | :------ | :------------------------------------------------------------------------------------------------------------------ |
+| `version`          | `2`     | Layout of the file. A file without it is read as version 2; a file with any other version is ignored with a warning |
+| `toast.maxVisible` | `5`     | How many cards show at once, from 1 to 10                                                                           |
+| `toast.timeoutMs`  | `3000`  | How long a card stays, in milliseconds, from 250 to 60000                                                           |
+| `toast.maxLines`   | `5`     | How many lines of the message a card shows, from 1 to 20                                                            |
+| `toast.width`      | `64`    | How wide, in columns, a card can grow, from 20 to 80                                                                |
 
-`maxToastsVisible` caps how many cards show at once. The `toast` settings
-describe one card: how long it stays (`timeout`, in milliseconds), how
-tall it can grow (`maxLines`), and how wide it can grow (`width`).
+Every value is a whole number, and every key is optional. Cards are only as wide
+as the longest message on show, so `toast.width` sets the limit rather than the
+size. Short notifications stay small, and a narrow terminal shrinks them
+further.
 
-Cards are only as wide as the longest message on show, so `width` sets
-the limit rather than the size. Short notifications stay small, and a
-narrow terminal shrinks them further.
+Pi reads this file at session start. Run `/reload` after editing it.
+`/notifications status` shows the settings in use and the file with its state:
+`loaded`, `not found`, `invalid` with the reason, or `skipped (untrusted)`.
 
-Every key is optional, so omit the ones you are happy with. If a value is
-unusable the extension keeps the default for it, warns you once, and
-carries on.
+### Migrating from 0.2 and earlier
 
-Pi reads the file when a session starts. Run `/reload` or start a new
-session to pick up your edits. If you set `PI_CODING_AGENT_DIR`, the file
-is read from there instead of `~/.pi/agent`.
+Notification Center 0.2 called two settings `maxToastsVisible` and
+`toast.timeout`, and its file had no `version`. At session start, Notification
+Center renames `maxToastsVisible` to `toast.maxVisible` and `toast.timeout` to
+`toast.timeoutMs`, adds `version`, and saves the file. It shows one message
+naming the file. A setting you already wrote under its new name wins, and the
+old one is dropped.
+
+If the file can't be saved, Notification Center warns, leaves the file as it is,
+and still uses your settings for the session. Fix the problem, for example the
+file's permissions, and run `/reload` to migrate it, or rename the keys
+yourself.
 
 ## What it does not catch
 

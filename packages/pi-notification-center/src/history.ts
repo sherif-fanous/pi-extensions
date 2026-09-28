@@ -38,9 +38,10 @@ export function createNotificationEntry(
 /**
  * Extract every valid notification entry from a session branch.
  *
- * Results keep branch order, which is oldest first. Entries from another
- * extension, entries with an unrecognized `version`, and malformed
- * payloads are skipped rather than returned as partial records.
+ * Results keep branch order, which is oldest first. A payload without a
+ * `version` reads as version 1. Entries from another extension, entries
+ * with an unrecognized `version`, and malformed payloads are skipped
+ * rather than returned as partial records.
  */
 export function readNotificationHistory(
   branch: readonly BranchEntry[],
@@ -65,7 +66,7 @@ function parseEntryData(data: unknown): NotificationEntry | undefined {
 
   const record = data as Record<string, unknown>;
 
-  if (record.version !== ENTRY_VERSION) return undefined;
+  if ((record.version ?? 1) !== ENTRY_VERSION) return undefined;
 
   const { message, severity, timestamp } = record;
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Rename the settings `maxToastsVisible` to `toast.maxVisible` and `toast.timeout` to `toast.timeoutMs`. Your file is updated at the next session start, with a message naming it
+- Add `"version": 2` to the configuration file. A file without it still loads; a file with another version is ignored with a warning instead of being misread
+
+### Added
+
+- Add `/notifications status`, which shows whether toasts are on, how many notifications this session has captured, the toast settings in use, and the state of your configuration file
+
 ## [0.2.1] - 2026-09-06
 
 ### Fixed

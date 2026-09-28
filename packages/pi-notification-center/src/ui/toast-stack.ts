@@ -127,7 +127,7 @@ export function renderToastStack(
     return [];
   }
 
-  const candidates = toasts.slice(-config.maxToastsVisible);
+  const candidates = toasts.slice(-config.toast.maxVisible);
   // Between the narrowest legible card and the smaller of the configured
   // maximum and the granted width, the widest message decides. The
   // terminal itself is not bounded again: Pi re-resolves the surface

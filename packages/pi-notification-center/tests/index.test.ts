@@ -1,26 +1,45 @@
-import { loadConfig, type LoadConfigResult } from "../src/config.js";
+import { mkdir, open, readFile, unlink } from "node:fs/promises";
+import { join } from "node:path";
+
+import type { ConfigOptions } from "../src/config.js";
 import { EXTENSION_NAME } from "../src/extension-name.js";
 import { createNotificationEntry } from "../src/history.js";
 import notificationCenter from "../src/index.js";
-import {
-  CUSTOM_ENTRY_TYPE,
-  DEFAULT_CONFIG,
-  type NotificationEntry,
-} from "../src/types.js";
+import { CUSTOM_ENTRY_TYPE, type NotificationEntry } from "../src/types.js";
 import type {
   ExtensionAPI,
   ExtensionUIContext,
 } from "@earendil-works/pi-coding-agent";
+import type { AutocompleteItem } from "@earendil-works/pi-tui";
+import type { AtomicWriteFs } from "@sherif-fanous/pi-extensions-core";
 import {
+  createDeferred,
   createFakeCustom,
   createFakeTui,
   createFakeWidgets,
+  createPlainTheme,
   createShownTextRecorder,
+  createTempConfigDirs,
   findShownTextViolations,
   type FakeTui,
   type ShownTextRecorder,
+  type TempConfigDirs,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const STATUS_REPORT_ENTRY_TYPE = "notification-center:status-report";
+
+let dirs: TempConfigDirs;
+let userPath: string;
+
+beforeEach(async () => {
+  dirs = await createTempConfigDirs();
+  userPath = join(dirs.agentDir, "notification-center", "config.json");
+});
+
+afterEach(async () => {
+  await dirs.cleanup();
+});
 
 describe("notification-center lifecycle", () => {
   beforeEach(() => {
@@ -31,26 +50,39 @@ describe("notification-center lifecycle", () => {
     vi.useRealTimers();
   });
 
-  it("registers the /notifications command", () => {
+  it("registers the /notifications command with a status completion", async () => {
     const harness = setup();
 
-    expect(harness.commands.has("notifications")).toBe(true);
+    expect(await harness.command().getArgumentCompletions?.("")).toEqual([
+      {
+        description: "Show Notification Center status",
+        label: "status",
+        value: "status",
+      },
+    ]);
   });
 
-  it("rejects an argument with a usage warning instead of running", async () => {
-    const harness = setup(undefined, { mode: "rpc" });
+  it("rejects an unknown argument with a usage warning instead of running", async () => {
+    const harness = setup({ mode: "rpc" });
 
     await harness.run(" foo ");
+    await harness.run("status foo");
 
-    expect(harness.notify).toHaveBeenCalledExactlyOnceWith(
-      'Notification Center: 1 warning\n- Unknown subcommand "foo". Try /notifications.',
-      "warning",
-    );
+    expect(harness.notify.mock.calls).toEqual([
+      [
+        'Notification Center: 1 warning\n- Unknown subcommand "foo". Try /notifications or /notifications status.',
+        "warning",
+      ],
+      [
+        'Notification Center: 1 warning\n- Unknown subcommand "status foo". Try /notifications or /notifications status.',
+        "warning",
+      ],
+    ]);
     expect(harness.branchReads).toBe(0);
   });
 
   it("runs the command when the argument is only whitespace", async () => {
-    const harness = setup(undefined, {
+    const harness = setup({
       entries: [createNotificationEntry("one", "info", 0)],
       mode: "rpc",
     });
@@ -63,28 +95,37 @@ describe("notification-center lifecycle", () => {
     );
   });
 
-  it("records no warning when configuration is absent or valid", () => {
-    const harness = setup({ config: DEFAULT_CONFIG, warnings: [] });
+  it("records no message when configuration is absent", async () => {
+    const harness = setup();
 
-    harness.start();
+    await harness.start();
 
     expect(harness.appended).toEqual([]);
     expect(harness.notify).not.toHaveBeenCalled();
   });
 
-  it("records exactly one warning entry for malformed configuration", () => {
-    const harness = setup({
-      config: DEFAULT_CONFIG,
-      warnings: ["configuration is not valid JSON"],
-    });
+  it("records no message when configuration is valid and current", async () => {
+    await dirs.writeJson(userPath, { toast: { maxVisible: 2 }, version: 2 });
 
-    harness.start();
+    const harness = setup();
+
+    await harness.start();
+
+    expect(harness.appended).toEqual([]);
+    expect(harness.notify).not.toHaveBeenCalled();
+  });
+
+  it("records exactly one warning entry for malformed configuration", async () => {
+    await dirs.writeText(userPath, "[1]");
+
+    const harness = setup();
+
+    await harness.start();
 
     expect(harness.appended).toHaveLength(1);
     expect(harness.appended[0]?.customType).toBe(CUSTOM_ENTRY_TYPE);
     expect(harness.appended[0]?.data).toMatchObject({
-      message:
-        "Notification Center: 1 warning\n- configuration is not valid JSON",
+      message: `Notification Center: 1 warning\n- Configuration at ${userPath} must be a JSON object. Ignored the file.`,
       severity: "warning",
     });
 
@@ -93,64 +134,133 @@ describe("notification-center lifecycle", () => {
     expect(harness.notify).not.toHaveBeenCalled();
   });
 
-  it("records several configuration warnings as one warning entry", () => {
-    const harness = setup({
-      config: DEFAULT_CONFIG,
-      warnings: ["first rejected value", "second rejected value"],
-    });
+  it("records several configuration warnings as one warning entry", async () => {
+    await dirs.writeJson(userPath, { toast: { maxVisible: 99, width: 1 } });
 
-    harness.start();
+    const harness = setup();
+
+    await harness.start();
 
     expect(harness.appended).toHaveLength(1);
     expect(harness.appended[0]?.data).toMatchObject({
       message:
-        "Notification Center: 2 warnings\n- first rejected value\n- second rejected value",
+        'Notification Center: 2 warnings\n- Setting "toast.maxVisible" must be an integer from 1 through 10, not 99. Using the default value 5.\n- Setting "toast.width" must be an integer from 20 through 80, not 1. Using the default value 64.',
       severity: "warning",
     });
   });
 
-  it("does not duplicate the warning across reloads", () => {
-    const harness = setup({
-      config: DEFAULT_CONFIG,
-      warnings: ["configuration is not valid JSON"],
-    });
+  it("does not duplicate the warning across reloads", async () => {
+    await dirs.writeText(userPath, "[1]");
 
-    harness.start();
+    const harness = setup();
+
+    await harness.start();
 
     expect(harness.appended).toHaveLength(1);
 
     harness.appended.length = 0;
-    harness.start();
+    await harness.start();
 
     expect(harness.appended).toHaveLength(1);
   });
 
-  it("reports the warning through notify when capture is unavailable", () => {
-    const harness = setup(
-      { config: DEFAULT_CONFIG, warnings: ["bad config"] },
-      { mode: "rpc" },
-    );
+  it("reports the warning through notify when capture is unavailable", async () => {
+    await dirs.writeText(userPath, "[1]");
 
-    harness.start();
+    const harness = setup({ mode: "rpc" });
+
+    await harness.start();
 
     expect(harness.appended).toEqual([]);
-    expect(harness.notify).toHaveBeenCalledWith(
-      "Notification Center: 1 warning\n- bad config",
+    expect(harness.notify).toHaveBeenCalledExactlyOnceWith(
+      `Notification Center: 1 warning\n- Configuration at ${userPath} must be a JSON object. Ignored the file.`,
       "warning",
     );
+  });
+
+  it("migrates old key names at startup and says so once, as info", async () => {
+    await dirs.writeJson(userPath, {
+      maxToastsVisible: 2,
+      toast: { timeout: 1000 },
+    });
+
+    const harness = setup();
+
+    await harness.start();
+
+    expect(harness.appended.map((entry) => entry.data)).toEqual([
+      expect.objectContaining({
+        message: `Notification Center migrated its configuration to ${userPath}.`,
+        severity: "info",
+      }),
+    ]);
+
+    expect(await dirs.readJson(userPath)).toEqual({
+      toast: { maxVisible: 2, timeoutMs: 1000 },
+      version: 2,
+    });
+
+    // The next start finds nothing left to migrate.
+    harness.appended.length = 0;
+    await harness.start();
+
+    expect(harness.appended).toEqual([]);
+  });
+
+  it("puts a failed migration's warning before the value warnings", async () => {
+    await dirs.writeJson(userPath, {
+      maxToastsVisible: 2,
+      toast: { width: 1 },
+    });
+
+    const harness = setup({
+      config: { atomicWriteFs: failingWriteFs() },
+      mode: "rpc",
+    });
+
+    await harness.start();
+
+    expect(harness.notify).toHaveBeenCalledExactlyOnceWith(
+      `Notification Center: 2 warnings\n- Could not migrate configuration at ${userPath}: disk full. Left the file unchanged.\n- Setting "toast.width" must be an integer from 20 through 80, not 1. Using the default value 64.`,
+      "warning",
+    );
+  });
+
+  it("drops a start that a shutdown replaced while it read the file", async () => {
+    await dirs.writeText(userPath, "[1]");
+
+    const read = createDeferred<string>();
+    const harness = setup({
+      config: {
+        fs: {
+          access: () => Promise.resolve(),
+          readFile: () => read.promise,
+        },
+      },
+    });
+    const starting = harness.start();
+
+    harness.shutdown();
+    read.resolve("[1]");
+    await starting;
+
+    expect(harness.fake.overlays).toEqual([]);
+    expect(harness.ctx.ui.notify).toBe(harness.original);
+    expect(harness.appended).toEqual([]);
+    expect(harness.notify).not.toHaveBeenCalled();
   });
 
   it("replaces the previous runtime on reload without leaking timers", async () => {
     const harness = setup();
 
-    harness.start();
+    await harness.start();
     harness.ctx.ui.notify("first session", "info");
 
     await vi.advanceTimersByTimeAsync(0);
 
     expect(harness.fake.overlays).toHaveLength(1);
 
-    harness.start();
+    await harness.start();
 
     // The previous runtime's overlay is gone and the new runtime owns its
     // own, so a stale timer cannot render into the live surface.
@@ -167,7 +277,7 @@ describe("notification-center lifecycle", () => {
   it("restores notify and cancels timers on shutdown", async () => {
     const harness = setup();
 
-    harness.start();
+    await harness.start();
     harness.ctx.ui.notify("pending", "info");
 
     await vi.advanceTimersByTimeAsync(0);
@@ -179,16 +289,10 @@ describe("notification-center lifecycle", () => {
     expect(harness.fake.overlays[0]?.hideCalls).toBe(1);
   });
 
-  it("surfaces a startup failure as an error instead of throwing", () => {
-    const harness = setup();
+  it("surfaces a startup failure as an error instead of throwing", async () => {
+    const harness = setup({ startError: new Error("disk on fire") });
 
-    harness.configLoader.mockImplementation(() => {
-      throw new Error("disk on fire");
-    });
-
-    expect(() => {
-      harness.start();
-    }).not.toThrow();
+    await expect(harness.start()).resolves.toBeUndefined();
 
     expect(harness.notify).toHaveBeenCalledWith(
       "Notification Center session_start failed: disk on fire.",
@@ -196,14 +300,10 @@ describe("notification-center lifecycle", () => {
     );
   });
 
-  it("does not double the full stop when the failure is already a sentence", () => {
-    const harness = setup();
+  it("does not double the full stop when the failure is already a sentence", async () => {
+    const harness = setup({ startError: new Error("Disk on fire.") });
 
-    harness.configLoader.mockImplementation(() => {
-      throw new Error("Disk on fire.");
-    });
-
-    harness.start();
+    await harness.start();
 
     expect(harness.notify).toHaveBeenCalledWith(
       "Notification Center session_start failed: Disk on fire.",
@@ -212,48 +312,189 @@ describe("notification-center lifecycle", () => {
   });
 });
 
+describe("/notifications status", () => {
+  it("adds a status report entry in the TUI", async () => {
+    await dirs.writeJson(userPath, {
+      toast: { maxLines: 1, maxVisible: 2, timeoutMs: 1000, width: 30 },
+    });
+
+    const harness = setup({
+      entries: [
+        createNotificationEntry("one", "info", 0),
+        createNotificationEntry("two", "info", 1),
+      ],
+    });
+
+    await harness.start();
+    await harness.run("status");
+
+    expect(harness.appended).toEqual([
+      {
+        customType: STATUS_REPORT_ENTRY_TYPE,
+        data: {
+          body: [
+            "Notification Center Status",
+            "  Toasts:         on",
+            "  Captured:       2 notifications",
+            "  Visible toasts: at most 2",
+            "  Toast timeout:  1000ms",
+            "  Toast height:   at most 1 line",
+            "  Toast width:    at most 30 columns",
+            "",
+            "Config:",
+            "  User: loaded",
+            `        ${userPath}`,
+          ].join("\n"),
+        },
+      },
+    ]);
+    expect(harness.notify).not.toHaveBeenCalled();
+  });
+
+  it("registers a renderer for the status report entry", () => {
+    const harness = setup();
+
+    expect(harness.renderers).toEqual([STATUS_REPORT_ENTRY_TYPE]);
+  });
+
+  it("shows the defaults and a missing file as a notification outside the TUI", async () => {
+    const harness = setup({ mode: "rpc" });
+
+    await harness.start();
+    await harness.run("status");
+
+    expect(harness.notify).toHaveBeenCalledExactlyOnceWith(
+      [
+        "Notification Center Status",
+        "  Toasts:         off",
+        "  Captured:       0 notifications",
+        "  Visible toasts: at most 5",
+        "  Toast timeout:  3000ms",
+        "  Toast height:   at most 5 lines",
+        "  Toast width:    at most 64 columns",
+        "",
+        "Config:",
+        "  User: not found",
+        `        ${userPath}`,
+      ].join("\n"),
+      "info",
+    );
+  });
+
+  it("shows a file problem in the Config block and value problems under Warnings", async () => {
+    await dirs.writeJson(userPath, { toast: { width: 1 }, version: 3 });
+
+    const harness = setup({ mode: "rpc" });
+
+    await harness.start();
+    harness.notify.mockClear();
+    await harness.run("status");
+
+    const body = harness.notify.mock.calls[0]?.[0] ?? "";
+
+    expect(body).toContain(
+      `Config:\n  User: invalid: unsupported version 3\n        ${userPath}`,
+    );
+    expect(body).not.toContain("Warnings:");
+  });
+
+  it("lists the invalid values and a failed migration under Warnings", async () => {
+    await dirs.writeJson(userPath, {
+      maxToastsVisible: 2,
+      toast: { width: 1 },
+    });
+
+    const harness = setup({
+      config: { atomicWriteFs: failingWriteFs() },
+      mode: "rpc",
+    });
+
+    await harness.start();
+    harness.notify.mockClear();
+    await harness.run("status");
+
+    expect(harness.notify.mock.calls[0]?.[0]).toMatch(
+      /\nWarnings:\n- Could not migrate configuration at .+: disk full\. Left the file unchanged\.\n- Setting "toast\.width" must be an integer from 20 through 80, not 1\. Using the default value 64\.$/u,
+    );
+  });
+
+  it("reports the session's configuration, not a later edit", async () => {
+    const harness = setup({ mode: "rpc" });
+
+    await harness.start();
+    await dirs.writeJson(userPath, { toast: { maxVisible: 2 } });
+    await harness.run("status");
+
+    expect(harness.notify.mock.calls[0]?.[0]).toContain(
+      "Visible toasts: at most 5",
+    );
+  });
+
+  it("reads the file when no session has started", async () => {
+    await dirs.writeJson(userPath, { maxToastsVisible: 2 });
+
+    const before = await readFile(userPath, "utf8");
+    const harness = setup({ mode: "rpc" });
+
+    await harness.run("status");
+
+    expect(harness.notify.mock.calls[0]?.[0]).toContain(
+      "Visible toasts: at most 2",
+    );
+    // Only a session start migrates.
+    expect(await readFile(userPath, "utf8")).toBe(before);
+  });
+});
+
 describe("notification-center shown text", () => {
   it("follows the family text and naming standard", async () => {
     const shown = createShownTextRecorder();
-    const invalidConfig = (): LoadConfigResult =>
-      loadConfig("/agent", {
-        readFileSync: () =>
-          JSON.stringify({ maxToastsVisible: 99, toast: "wide" }),
-      });
     const entries = [
       createNotificationEntry("first", "info", 0),
       createNotificationEntry("second", "warning", 1000),
     ];
 
+    await dirs.writeJson(userPath, { maxToastsVisible: 99, toast: "wide" });
+
     // The TUI session start uses the toast bridge widget and records its
     // configuration warning as a history entry.
-    const tui = setup(invalidConfig(), { shown });
+    const tui = setup({ shown });
 
     await shown.recordCommand(tui.command());
-    tui.start();
+    await tui.start();
+    await tui.run("status");
     tui.shutdown();
 
-    // Outside the TUI, every answer is a plain notification.
-    const rpc = setup(invalidConfig(), { mode: "rpc", shown });
+    // Old key names migrate once, with an info message.
+    await dirs.writeJson(userPath, { toast: { timeout: 1000 } });
 
-    rpc.start();
+    const migrating = setup({ mode: "rpc", shown });
+
+    await migrating.start();
+
+    // Outside the TUI, every answer is a plain notification.
+    await dirs.writeJson(userPath, { toast: { width: 1 } });
+
+    const rpc = setup({ mode: "rpc", shown });
+
+    await rpc.start();
 
     for (const branch of [[], entries.slice(0, 1), entries]) {
       rpc.setEntries(branch);
       await rpc.run("");
     }
 
+    await rpc.run("status");
     await rpc.run("foo");
 
-    rpc.configLoader.mockImplementation(() => {
-      throw new Error("disk on fire");
-    });
-    rpc.start();
+    const failing = setup({ shown, startError: new Error("disk on fire") });
+
+    await failing.start();
 
     // The history browser, populated and empty.
     for (const branch of [entries, []]) {
       const rendered: string[] = [];
-      const browser = setup(undefined, {
+      const browser = setup({
         custom: createFakeCustom({ keys: ["\u001B"], rendered }),
         entries: branch,
         shown,
@@ -277,7 +518,11 @@ describe("notification-center shown text", () => {
         },
         {
           surface: "notification",
-          text: 'Notification Center: 1 warning\n- Unknown subcommand "foo". Try /notifications.',
+          text: `Notification Center migrated its configuration to ${userPath}.`,
+        },
+        {
+          surface: "notification",
+          text: 'Notification Center: 1 warning\n- Unknown subcommand "foo". Try /notifications or /notifications status.',
         },
         {
           surface: "notification",
@@ -286,10 +531,21 @@ describe("notification-center shown text", () => {
       ]),
     );
 
+    expect(
+      shown.texts
+        .filter(({ surface }) => surface === "report")
+        .map(({ text }) => text.split("\n")[0]),
+    ).toEqual(["Notification Center Status"]);
+
+    expect(shown.completions).toEqual([
+      expect.objectContaining({ label: "status" }),
+    ]);
+
     expect(shown.keys).toEqual(
       expect.arrayContaining([
         { key: "notification-center:bridge", kind: "widget" },
         { key: CUSTOM_ENTRY_TYPE, kind: "entry" },
+        { key: STATUS_REPORT_ENTRY_TYPE, kind: "entry" },
       ]),
     );
 
@@ -305,6 +561,9 @@ describe("notification-center shown text", () => {
 /** A registered command, typed as loosely as the fake `pi` passes it on. */
 interface HarnessCommand {
   description?: string;
+  getArgumentCompletions?: (
+    prefix: string,
+  ) => AutocompleteItem[] | null | Promise<AutocompleteItem[] | null>;
   handler: (args: string, ctx: unknown) => Promise<void>;
 }
 
@@ -312,19 +571,20 @@ interface IndexHarness {
   appended: { customType: string; data: unknown }[];
   branchReads: number;
   command: () => HarnessCommand;
-  commands: Map<string, HarnessCommand>;
-  configLoader: ReturnType<typeof vi.fn<() => LoadConfigResult>>;
   ctx: { mode: string; ui: { notify: Notify } };
   fake: FakeTui;
   notify: ReturnType<typeof vi.fn<Notify>>;
   original: Notify;
+  renderers: string[];
   run: (args: string) => Promise<void>;
   setEntries: (entries: NotificationEntry[]) => void;
   shutdown: () => void;
-  start: () => void;
+  start: () => Promise<void>;
 }
 
 interface SetupOptions {
+  /** Seams for the configuration loader; the agent directory is the test's. */
+  config?: Omit<ConfigOptions, "agentDir">;
   /** Stand-in for `ctx.ui.custom`, which opens the history browser. */
   custom?: ExtensionUIContext["custom"];
   /** Notifications on the active branch. */
@@ -332,25 +592,43 @@ interface SetupOptions {
   mode?: "json" | "print" | "rpc" | "tui";
   /** Receives every notification, widget, entry, and command. */
   shown?: ShownTextRecorder;
+  /** Thrown when a session start reads `ctx.cwd`, as a stale context does. */
+  startError?: Error;
 }
 
 type Notify = (message: string, type?: "error" | "info" | "warning") => void;
 
-function setup(
-  result: LoadConfigResult = { config: DEFAULT_CONFIG, warnings: [] },
-  options: SetupOptions = {},
-): IndexHarness {
+/** Write calls whose rename always fails, so nothing is ever replaced. */
+function failingWriteFs(): AtomicWriteFs {
+  return {
+    mkdir,
+    open,
+    rename: () => Promise.reject(new Error("disk full")),
+    unlink,
+  };
+}
+
+function setup(options: SetupOptions = {}): IndexHarness {
   const fake = createFakeTui();
   const widgets = createFakeWidgets(fake);
   const appended: { customType: string; data: unknown }[] = [];
   const commands = new Map<string, HarnessCommand>();
-  const handlers = new Map<string, (event: unknown, ctx: unknown) => void>();
+  const handlers = new Map<
+    string,
+    (event: unknown, ctx: unknown) => Promise<void> | void
+  >();
+  const renderers: string[] = [];
   const notify = vi.fn<Notify>(options.shown?.notify);
-  const configLoader = vi.fn<() => LoadConfigResult>(() => result);
 
   let entries = options.entries ?? [];
 
   const ctx = {
+    get cwd(): string {
+      if (options.startError) throw options.startError;
+
+      return dirs.cwd;
+    },
+    isProjectTrusted: () => true,
     mode: options.mode ?? "tui",
     sessionManager: {
       getBranch: () => {
@@ -373,6 +651,7 @@ function setup(
         options.shown?.setWidget(key, content);
         widgets.setWidget(key, content);
       },
+      theme: createPlainTheme(),
     },
   };
   const pi = {
@@ -380,15 +659,21 @@ function setup(
       appended.push({ customType, data });
       options.shown?.appendEntry(customType, data);
     },
-    on: (event: string, handler: (e: unknown, c: unknown) => void) => {
+    on: (
+      event: string,
+      handler: (e: unknown, c: unknown) => Promise<void> | void,
+    ) => {
       handlers.set(event, handler);
     },
     registerCommand: (name: string, config: HarnessCommand) => {
       commands.set(name, config);
     },
+    registerEntryRenderer: (customType: string) => {
+      renderers.push(customType);
+    },
   } as unknown as ExtensionAPI;
 
-  notificationCenter(pi, configLoader);
+  notificationCenter(pi, { ...options.config, agentDir: dirs.agentDir });
 
   const command = (): HarnessCommand => {
     const registered = commands.get("notifications");
@@ -401,21 +686,20 @@ function setup(
     appended,
     branchReads: 0,
     command,
-    commands,
-    configLoader,
     ctx,
     fake,
     notify,
     original: notify,
+    renderers,
     run: (args) => command().handler(args, ctx),
     setEntries: (next) => {
       entries = next;
     },
     shutdown: () => {
-      handlers.get("session_shutdown")?.({}, ctx);
+      void handlers.get("session_shutdown")?.({}, ctx);
     },
-    start: () => {
-      handlers.get("session_start")?.({ reason: "startup" }, ctx);
+    start: async () => {
+      await handlers.get("session_start")?.({ reason: "startup" }, ctx);
     },
   };
 

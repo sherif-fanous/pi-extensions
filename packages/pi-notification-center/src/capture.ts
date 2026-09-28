@@ -101,13 +101,14 @@ export class CaptureRuntime {
   }
 
   /**
-   * Report a notification-center problem as a captured notification.
+   * Show one of Notification Center's own messages as a captured
+   * notification.
    *
    * Valid only after installation completes. The message gets one history
    * entry and one toast, and does not re-enter the wrapper.
    */
-  warn(message: string): void {
-    this.capture(message, "warning");
+  report(message: string, type: NotificationSeverity): void {
+    this.capture(message, type);
   }
 
   /**

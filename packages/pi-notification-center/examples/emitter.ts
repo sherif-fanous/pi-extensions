@@ -29,8 +29,8 @@
  *   leaves that overlay focused and closable with Esc. This is the
  *   regression that `tui-bridge.ts` exists to prevent, and the reason
  *   its surface is created eagerly at session start.
- * - Expiry follows `toast.timeout`, oldest first, and the stack compacts.
- * - `maxToastsVisible` and `toast.maxLines` bound what is shown, while
+ * - Expiry follows `toast.timeoutMs`, oldest first, and the stack compacts.
+ * - `toast.maxVisible` and `toast.maxLines` bound what is shown, while
  *   `/notifications` still holds every complete message.
  * - History survives `/reload`.
  * - No operating-system notification appears.
@@ -107,7 +107,7 @@ export default function emitter(pi: ExtensionAPI): void {
   });
 }
 
-/** Cards in a burst, above the default `maxToastsVisible` of 5. */
+/** Cards in a burst, above the default `toast.maxVisible` of 5. */
 const DEFAULT_BURST = 7;
 
 /** Body lines in a multiline notification. */

@@ -1,9 +1,6 @@
+import { DEFAULT_CONFIG } from "../src/config.js";
 import { createNotificationEntry } from "../src/history.js";
-import {
-  DEFAULT_CONFIG,
-  type NotificationConfig,
-  type ToastConfig,
-} from "../src/types.js";
+import type { NotificationConfig, ToastConfig } from "../src/types.js";
 import { ToastManager } from "../src/ui/toast-manager.js";
 import { TOAST_FRAME_ROWS } from "../src/ui/toast-stack.js";
 import type { BridgeUi } from "../src/ui/tui-bridge.js";
@@ -15,7 +12,6 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 interface ConfigOverrides {
-  maxToastsVisible?: number;
   toast?: Partial<ToastConfig>;
 }
 
@@ -57,7 +53,7 @@ describe("ToastManager", () => {
   });
 
   it("expires each toast independently from its own arrival", async () => {
-    const { fake, manager } = setup({ toast: { timeout: 1000 } });
+    const { fake, manager } = setup({ toast: { timeoutMs: 1000 } });
 
     manager.show(createNotificationEntry("old", "info", 1));
 
@@ -77,7 +73,7 @@ describe("ToastManager", () => {
   });
 
   it("compacts the stack when an older toast expires", async () => {
-    const { fake, manager } = setup({ toast: { timeout: 1000 } });
+    const { fake, manager } = setup({ toast: { timeoutMs: 1000 } });
 
     manager.show(createNotificationEntry("first", "info", 1));
 
@@ -96,7 +92,7 @@ describe("ToastManager", () => {
   });
 
   it("evicts the oldest visible toast beyond maxVisible", async () => {
-    const { fake, manager } = setup({ maxToastsVisible: 2 });
+    const { fake, manager } = setup({ toast: { maxVisible: 2 } });
 
     manager.show(createNotificationEntry("a", "info", 1));
     manager.show(createNotificationEntry("b", "info", 2));
@@ -116,7 +112,7 @@ describe("ToastManager", () => {
   });
 
   it("hides but keeps the surface once the stack empties", async () => {
-    const { fake, manager } = setup({ toast: { timeout: 500 } });
+    const { fake, manager } = setup({ toast: { timeoutMs: 500 } });
 
     manager.show(createNotificationEntry("bye", "info", 1));
 
@@ -134,7 +130,7 @@ describe("ToastManager", () => {
   });
 
   it("reuses the same surface after the stack empties and refills", async () => {
-    const { fake, manager } = setup({ toast: { timeout: 500 } });
+    const { fake, manager } = setup({ toast: { timeoutMs: 500 } });
 
     manager.show(createNotificationEntry("first", "info", 1));
 
@@ -149,7 +145,7 @@ describe("ToastManager", () => {
   });
 
   it("cancels timers and removes the surface on disposal", async () => {
-    const { fake, manager } = setup({ toast: { timeout: 1000 } });
+    const { fake, manager } = setup({ toast: { timeoutMs: 1000 } });
 
     manager.show(createNotificationEntry("pending", "info", 1));
 
@@ -184,11 +180,7 @@ describe("ToastManager", () => {
 });
 
 function config(overrides: ConfigOverrides): NotificationConfig {
-  return {
-    maxToastsVisible:
-      overrides.maxToastsVisible ?? DEFAULT_CONFIG.maxToastsVisible,
-    toast: { ...DEFAULT_CONFIG.toast, ...overrides.toast },
-  };
+  return { toast: { ...DEFAULT_CONFIG.toast, ...overrides.toast } };
 }
 
 function lines(fake: FakeTui): string[] {

@@ -1,20 +1,17 @@
 /**
  * Types and constants shared across the extension: the severity set, the
- * persisted entry payload, the configuration shape, and the defaults and
- * ranges every setting is validated against.
+ * persisted entry payload, and the configuration shape.
  */
 
 /**
- * Resolved notification-center configuration.
+ * Resolved Notification Center configuration.
  *
  * Every field is always present. The loader substitutes the default for a
  * missing, malformed, or out-of-range value, so callers never re-apply
  * fallbacks.
  */
 export interface NotificationConfig {
-  /** Maximum number of simultaneously visible toast cards. */
-  maxToastsVisible: number;
-  /** Appearance and lifetime of an individual toast card. */
+  /** Toast cards: how many show at once, and the size and lifetime of each. */
   toast: ToastConfig;
 }
 
@@ -22,7 +19,8 @@ export interface NotificationConfig {
  * Payload persisted as a Pi custom session entry.
  *
  * `version` is validated on read, so a payload written under a different
- * shape is rejected instead of misread. The message is stored whole; the
+ * shape is rejected instead of misread; a payload without one reads as
+ * version 1. The message is stored whole; the
  * bounded height of a toast card is presentation only.
  */
 export interface NotificationEntry {
@@ -33,56 +31,26 @@ export interface NotificationEntry {
   version: typeof ENTRY_VERSION;
 }
 
-/** Per-card toast settings. */
+/** Toast settings. */
 export interface ToastConfig {
   /** Maximum body rows one card may occupy. */
   maxLines: number;
+  /** Maximum number of simultaneously visible cards. */
+  maxVisible: number;
   /** Card lifetime in milliseconds, measured from arrival. */
-  timeout: number;
+  timeoutMs: number;
   /** Widest a card may grow, in terminal columns. */
   width: number;
 }
 
-/** Dotted path of every supported numeric setting. */
-export type ConfigPath =
-  "maxToastsVisible" | "toast.maxLines" | "toast.timeout" | "toast.width";
-
 /** Notification severity, mirroring Pi's `ctx.ui.notify` type argument. */
 export type NotificationSeverity = "error" | "info" | "warning";
-
-/**
- * Inclusive bounds for every supported numeric setting.
- *
- * Keys are the dotted configuration paths, so a warning can name a field
- * exactly as the user wrote it.
- */
-export const CONFIG_RANGES: {
-  readonly [Path in ConfigPath]: {
-    readonly max: number;
-    readonly min: number;
-  };
-} = {
-  maxToastsVisible: { max: 10, min: 1 },
-  "toast.maxLines": { max: 20, min: 1 },
-  "toast.timeout": { max: 60_000, min: 250 },
-  "toast.width": { max: 80, min: 20 },
-} as const;
 
 /**
  * Custom session-entry type used for notification history, namespaced so
  * it cannot collide with another extension's session state.
  */
 export const CUSTOM_ENTRY_TYPE = "notification-center:entry";
-
-/** Configuration defaults, used whenever a value is unusable. */
-export const DEFAULT_CONFIG = {
-  maxToastsVisible: 5,
-  toast: {
-    maxLines: 5,
-    timeout: 3000,
-    width: 64,
-  },
-} as const satisfies NotificationConfig;
 
 /** Schema version stamped on every persisted notification entry. */
 export const ENTRY_VERSION = 1;
