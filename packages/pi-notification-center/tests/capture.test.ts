@@ -8,13 +8,14 @@ import { DEFAULT_CONFIG } from "../src/config.js";
 import { readNotificationHistory, type BranchEntry } from "../src/history.js";
 import { CUSTOM_ENTRY_TYPE } from "../src/types.js";
 import {
+  createFakeContext,
   createFakeTui,
   createFakeWidgets,
   type FakeTui,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-describe("CaptureRuntime.install", () => {
+describe("CaptureRuntime.startSession", () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -236,13 +237,13 @@ function setup(
   const fake = createFakeTui();
   const appended: { customType: string; data: unknown }[] = [];
   const original: NotifyFn = vi.fn();
-  const ctx = {
+  const ctx = createFakeContext({
     mode: options.mode ?? "tui",
     ui: {
       notify: original,
       setWidget: createFakeWidgets(fake).setWidget,
     },
-  } as unknown as CaptureContext;
+  });
   const pi: CapturePi = {
     appendEntry:
       options.appendEntry ??
@@ -256,6 +257,6 @@ function setup(
     ctx,
     fake,
     original,
-    runtime: CaptureRuntime.install(ctx, pi, DEFAULT_CONFIG),
+    runtime: CaptureRuntime.startSession(ctx, pi, DEFAULT_CONFIG),
   };
 }

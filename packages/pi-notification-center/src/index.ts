@@ -7,26 +7,19 @@
 import { CaptureRuntime } from "./capture.js";
 import { runNotificationsCommand } from "./commands/notifications.js";
 import {
-  loadConfig,
   loadStartupConfig,
   type ConfigOptions,
   type LoadedConfig,
 } from "./config.js";
 import { EXTENSION_NAME } from "./extension-name.js";
-import { readNotificationHistory } from "./history.js";
 import type { NotificationSeverity } from "./types.js";
-import {
-  deliverStatusReport,
-  formatStatusReport,
-  registerStatusReportRenderer,
-} from "./ui/status-report.js";
+import { registerStatusReportRenderer } from "./ui/status-report.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   configFileWarnings,
   configMigratedMessage,
   guardCommand,
   guardEvent,
-  notifyUsageWarning,
   notifyWarnings,
   subcommandCompletions,
 } from "@sherif-fanous/pi-extensions-core";
@@ -55,33 +48,14 @@ export default function notificationCenter(
     getArgumentCompletions: subcommandCompletions([
       { description: "Show Notification Center status", name: "status" },
     ]),
-    handler: guardCommand(EXTENSION_NAME, async (args, ctx) => {
-      const argument = args.trim();
-
-      if (argument === "") {
-        await runNotificationsCommand(ctx);
-
-        return;
-      }
-
-      if (argument === "status") {
-        deliverStatusReport(ctx, pi, {
-          body: formatStatusReport({
-            captured: readNotificationHistory(ctx.sessionManager.getBranch())
-              .length,
-            loaded: session ?? (await loadConfig(ctx, configOptions)),
-            toasts: runtime !== undefined,
-          }),
-        });
-
-        return;
-      }
-
-      notifyUsageWarning(ctx, EXTENSION_NAME, argument, [
-        "/notifications",
-        "/notifications status",
-      ]);
-    }),
+    handler: guardCommand(EXTENSION_NAME, (args, ctx) =>
+      runNotificationsCommand(args, ctx, {
+        configOptions,
+        pi,
+        sessionConfig: () => session,
+        toastsActive: () => runtime !== undefined,
+      }),
+    ),
   });
 
   pi.on(
@@ -105,7 +79,7 @@ export default function notificationCenter(
         file: startup.file,
         warnings: [...startup.migrationWarnings, ...startup.warnings],
       };
-      runtime = CaptureRuntime.install(ctx, pi, startup.config);
+      runtime = CaptureRuntime.startSession(ctx, pi, startup.config);
 
       // Messages go out after installation so they travel the capture
       // path rather than the transcript. Outside the TUI there is no
@@ -143,7 +117,13 @@ export default function notificationCenter(
 
   pi.on("session_shutdown", () => {
     generation += 1;
-    runtime?.dispose();
+
+    try {
+      runtime?.dispose();
+    } catch {
+      // Pi provides no UI context during shutdown, so dispose cannot report errors.
+    }
+
     runtime = undefined;
     session = undefined;
   });

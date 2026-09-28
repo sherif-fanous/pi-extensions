@@ -24,10 +24,10 @@ export interface NotificationStatus {
 
 const statusReport = createCommandReport("notification-center:status-report");
 
-/** Shows a status report as a transcript entry in TUI mode, or a notification. */
+/** Show a status report as a transcript entry in TUI mode, or a notification. */
 export const deliverStatusReport = statusReport.deliver;
 
-/** Registers the status report renderer for current and restored sessions. */
+/** Register the status report renderer for current and restored sessions. */
 export const registerStatusReportRenderer = statusReport.register;
 
 /**

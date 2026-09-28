@@ -52,12 +52,13 @@ export class CaptureRuntime {
   ) {}
 
   /**
-   * Install interception when Pi is running its interactive TUI.
+   * Start a session's runtime, installing interception when Pi is running
+   * its interactive TUI.
    *
    * Returns `undefined` in every other mode, leaving Pi's own
    * notification behavior untouched.
    */
-  static install(
+  static startSession(
     ctx: CaptureContext,
     pi: CapturePi,
     config: NotificationConfig,

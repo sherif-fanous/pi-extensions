@@ -1,5 +1,5 @@
 import {
-  runNotificationsCommand,
+  showNotificationHistory,
   type NotificationsCommandContext,
 } from "../src/commands/notifications.js";
 import { createNotificationEntry } from "../src/history.js";
@@ -15,14 +15,14 @@ import { describe, expect, it, vi } from "vitest";
 
 const FIRST = 1_715_933_350_000;
 
-describe("runNotificationsCommand", () => {
+describe("showNotificationHistory", () => {
   it("opens a focused overlay listing the captured notifications", async () => {
     const harness = setup([
       createNotificationEntry("older", "info", FIRST),
       createNotificationEntry("newer", "error", FIRST + 1000),
     ]);
 
-    await runNotificationsCommand(harness.ctx);
+    await showNotificationHistory(harness.ctx);
 
     expect(harness.component).toBeInstanceOf(HistoryViewComponent);
     expect(harness.overlay).toBe(true);
@@ -40,7 +40,7 @@ describe("runNotificationsCommand", () => {
   it("opens the browser at the family's main overlay size", async () => {
     const harness = setup([createNotificationEntry("one", "info", FIRST)]);
 
-    await runNotificationsCommand(harness.ctx);
+    await showNotificationHistory(harness.ctx);
 
     expect(harness.overlayOptions).toMatchObject({
       anchor: "center",
@@ -54,7 +54,7 @@ describe("runNotificationsCommand", () => {
   it("opens the overlay with an empty state when nothing was captured", async () => {
     const harness = setup([]);
 
-    await runNotificationsCommand(harness.ctx);
+    await showNotificationHistory(harness.ctx);
 
     expect(harness.component?.render(60).join(" ")).toContain(
       "No notifications have been captured",
@@ -64,13 +64,13 @@ describe("runNotificationsCommand", () => {
   it("re-reads the branch on every invocation", async () => {
     const harness = setup([createNotificationEntry("branch a", "info", FIRST)]);
 
-    await runNotificationsCommand(harness.ctx);
+    await showNotificationHistory(harness.ctx);
 
     expect(harness.component?.render(60).join(" ")).toContain("branch a");
 
     harness.setEntries([createNotificationEntry("branch b", "info", FIRST)]);
 
-    await runNotificationsCommand(harness.ctx);
+    await showNotificationHistory(harness.ctx);
 
     const rendered = harness.component?.render(60).join(" ") ?? "";
 
@@ -88,7 +88,7 @@ describe("runNotificationsCommand", () => {
       { mode: "rpc" },
     );
 
-    await runNotificationsCommand(harness.ctx);
+    await showNotificationHistory(harness.ctx);
 
     expect(harness.component).toBeUndefined();
     expect(harness.notify).toHaveBeenCalledWith(
@@ -102,7 +102,7 @@ describe("runNotificationsCommand", () => {
       mode: "rpc",
     });
 
-    await runNotificationsCommand(harness.ctx);
+    await showNotificationHistory(harness.ctx);
 
     expect(harness.notify).toHaveBeenCalledWith(
       "1 notification has been captured in this session.",
@@ -113,7 +113,7 @@ describe("runNotificationsCommand", () => {
   it("reports the empty state outside the interactive TUI", async () => {
     const harness = setup([], { mode: "print" });
 
-    await runNotificationsCommand(harness.ctx);
+    await showNotificationHistory(harness.ctx);
 
     expect(harness.component).toBeUndefined();
     expect(harness.notify).toHaveBeenCalledWith(
@@ -128,7 +128,7 @@ describe("runNotificationsCommand", () => {
       createNotificationEntry("two", "info", FIRST),
     ]);
 
-    await runNotificationsCommand(harness.ctx, () => 38);
+    await showNotificationHistory(harness.ctx, () => 38);
 
     expect(harness.component).toBeUndefined();
     expect(harness.notify).toHaveBeenCalledWith(
@@ -140,7 +140,7 @@ describe("runNotificationsCommand", () => {
   it("reports the empty state when the terminal is too narrow", async () => {
     const harness = setup([]);
 
-    await runNotificationsCommand(harness.ctx, () => 38);
+    await showNotificationHistory(harness.ctx, () => 38);
 
     expect(harness.component).toBeUndefined();
     expect(harness.notify).toHaveBeenCalledWith(
@@ -152,7 +152,7 @@ describe("runNotificationsCommand", () => {
   it("opens the browser at the narrowest width that fits it", async () => {
     const harness = setup([createNotificationEntry("one", "info", FIRST)]);
 
-    await runNotificationsCommand(harness.ctx, () => 39);
+    await showNotificationHistory(harness.ctx, () => 39);
 
     expect(harness.component).toBeInstanceOf(HistoryViewComponent);
     expect(harness.notify).not.toHaveBeenCalled();
@@ -163,7 +163,7 @@ describe("runNotificationsCommand", () => {
   it("opens the browser when the terminal width cannot be read", async () => {
     const harness = setup([createNotificationEntry("one", "info", FIRST)]);
 
-    await runNotificationsCommand(harness.ctx, () => undefined);
+    await showNotificationHistory(harness.ctx, () => undefined);
 
     expect(harness.component).toBeInstanceOf(HistoryViewComponent);
     expect(harness.notify).not.toHaveBeenCalled();
@@ -172,7 +172,7 @@ describe("runNotificationsCommand", () => {
   it("withdraws the overlay when the terminal is narrowed while it is open", async () => {
     const harness = setup([createNotificationEntry("one", "info", FIRST)]);
 
-    await runNotificationsCommand(harness.ctx, () => 100);
+    await showNotificationHistory(harness.ctx, () => 100);
 
     const visible = harness.overlayOptions?.visible;
 

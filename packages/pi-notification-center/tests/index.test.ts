@@ -7,21 +7,24 @@ import { createNotificationEntry } from "../src/history.js";
 import notificationCenter from "../src/index.js";
 import { CUSTOM_ENTRY_TYPE, type NotificationEntry } from "../src/types.js";
 import type {
-  ExtensionAPI,
+  ExtensionCommandContext,
   ExtensionUIContext,
 } from "@earendil-works/pi-coding-agent";
-import type { AutocompleteItem } from "@earendil-works/pi-tui";
 import type { AtomicWriteFs } from "@sherif-fanous/pi-extensions-core";
 import {
   createDeferred,
+  createFakeContext,
   createFakeCustom,
+  createFakePi,
   createFakeTui,
   createFakeWidgets,
-  createPlainTheme,
   createShownTextRecorder,
   createTempConfigDirs,
   findShownTextViolations,
+  type FakeCommand,
+  type FakeEntry,
   type FakeTui,
+  type FakeWidgets,
   type ShownTextRecorder,
   type TempConfigDirs,
 } from "@sherif-fanous/pi-extensions-testing";
@@ -245,7 +248,7 @@ describe("notification-center lifecycle", () => {
     await starting;
 
     expect(harness.fake.overlays).toEqual([]);
-    expect(harness.ctx.ui.notify).toBe(harness.original);
+    expect(harness.ctx.ui).toHaveProperty("notify", harness.original);
     expect(harness.appended).toEqual([]);
     expect(harness.notify).not.toHaveBeenCalled();
   });
@@ -284,7 +287,7 @@ describe("notification-center lifecycle", () => {
 
     harness.shutdown();
 
-    expect(harness.ctx.ui.notify).toBe(harness.original);
+    expect(harness.ctx.ui).toHaveProperty("notify", harness.original);
     expect(vi.getTimerCount()).toBe(0);
     expect(harness.fake.overlays[0]?.hideCalls).toBe(1);
   });
@@ -558,20 +561,11 @@ describe("notification-center shown text", () => {
   });
 });
 
-/** A registered command, typed as loosely as the fake `pi` passes it on. */
-interface HarnessCommand {
-  description?: string;
-  getArgumentCompletions?: (
-    prefix: string,
-  ) => AutocompleteItem[] | null | Promise<AutocompleteItem[] | null>;
-  handler: (args: string, ctx: unknown) => Promise<void>;
-}
-
 interface IndexHarness {
-  appended: { customType: string; data: unknown }[];
+  appended: FakeEntry[];
   branchReads: number;
-  command: () => HarnessCommand;
-  ctx: { mode: string; ui: { notify: Notify } };
+  command: () => FakeCommand;
+  ctx: ExtensionCommandContext;
   fake: FakeTui;
   notify: ReturnType<typeof vi.fn<Notify>>;
   original: Notify;
@@ -598,6 +592,9 @@ interface SetupOptions {
 
 type Notify = (message: string, type?: "error" | "info" | "warning") => void;
 
+/** What the extension passes to `ctx.ui.setWidget` besides text lines. */
+type WidgetContent = Parameters<FakeWidgets["setWidget"]>[1];
+
 /** Write calls whose rename always fails, so nothing is ever replaced. */
 function failingWriteFs(): AtomicWriteFs {
   return {
@@ -611,95 +608,69 @@ function failingWriteFs(): AtomicWriteFs {
 function setup(options: SetupOptions = {}): IndexHarness {
   const fake = createFakeTui();
   const widgets = createFakeWidgets(fake);
-  const appended: { customType: string; data: unknown }[] = [];
-  const commands = new Map<string, HarnessCommand>();
-  const handlers = new Map<
-    string,
-    (event: unknown, ctx: unknown) => Promise<void> | void
-  >();
-  const renderers: string[] = [];
   const notify = vi.fn<Notify>(options.shown?.notify);
 
   let entries = options.entries ?? [];
 
-  const ctx = {
-    get cwd(): string {
-      if (options.startError) throw options.startError;
-
-      return dirs.cwd;
-    },
-    isProjectTrusted: () => true,
+  const ctx = createFakeContext({
     mode: options.mode ?? "tui",
     sessionManager: {
       getBranch: () => {
         harness.branchReads += 1;
 
-        return entries.map((data) => ({
+        return entries.map((data, index) => ({
           customType: CUSTOM_ENTRY_TYPE,
           data,
+          id: `entry-${String(index)}`,
+          parentId: null,
+          timestamp: new Date(data.timestamp).toISOString(),
           type: "custom",
         }));
       },
     },
     ui: {
-      custom: options.custom,
+      ...(options.custom && { custom: options.custom }),
       notify,
-      setWidget: (
-        key: string,
-        content: Parameters<typeof widgets.setWidget>[1],
-      ) => {
+      setWidget: (key: string, content: string[] | WidgetContent) => {
         options.shown?.setWidget(key, content);
-        widgets.setWidget(key, content);
+
+        if (!Array.isArray(content)) widgets.setWidget(key, content);
       },
-      theme: createPlainTheme(),
     },
-  };
-  const pi = {
-    appendEntry: (customType: string, data?: unknown) => {
-      appended.push({ customType, data });
-      options.shown?.appendEntry(customType, data);
-    },
-    on: (
-      event: string,
-      handler: (e: unknown, c: unknown) => Promise<void> | void,
-    ) => {
-      handlers.set(event, handler);
-    },
-    registerCommand: (name: string, config: HarnessCommand) => {
-      commands.set(name, config);
-    },
-    registerEntryRenderer: (customType: string) => {
-      renderers.push(customType);
-    },
-  } as unknown as ExtensionAPI;
+  });
 
-  notificationCenter(pi, { ...options.config, agentDir: dirs.agentDir });
+  // A start reads `ctx.cwd` first, so a stale context fails there.
+  Object.defineProperty(ctx, "cwd", {
+    get(): string {
+      if (options.startError) throw options.startError;
 
-  const command = (): HarnessCommand => {
-    const registered = commands.get("notifications");
+      return dirs.cwd;
+    },
+  });
 
-    if (!registered) throw new Error("/notifications is not registered");
+  const pi = createFakePi({ appendEntry: options.shown?.appendEntry });
 
-    return registered;
-  };
+  notificationCenter(pi.pi, { ...options.config, agentDir: dirs.agentDir });
+
+  const command = (): FakeCommand => pi.command("notifications");
   const harness: IndexHarness = {
-    appended,
+    appended: pi.appendedEntries,
     branchReads: 0,
     command,
     ctx,
     fake,
     notify,
     original: notify,
-    renderers,
-    run: (args) => command().handler(args, ctx),
+    renderers: [...pi.entryRenderers.keys()],
+    run: (args) => pi.runCommand("notifications", args, ctx),
     setEntries: (next) => {
       entries = next;
     },
     shutdown: () => {
-      void handlers.get("session_shutdown")?.({}, ctx);
+      void pi.emit({ reason: "quit", type: "session_shutdown" }, ctx);
     },
     start: async () => {
-      await handlers.get("session_start")?.({ reason: "startup" }, ctx);
+      await pi.emit({ reason: "startup", type: "session_start" }, ctx);
     },
   };
 
