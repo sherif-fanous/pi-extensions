@@ -4,7 +4,7 @@
  * runs the original command.
  */
 
-import type { RtkRuntime } from "./runtime.js";
+import type { RtkRuntime, RtkUiContext } from "./runtime.js";
 import {
   createBashTool,
   createLocalBashOperations,
@@ -17,11 +17,11 @@ export function createRewritingBashTool(
   runtime: RtkRuntime,
 ): ReturnType<typeof createBashTool> {
   return createBashTool(process.cwd(), {
-    spawnHook: ({ command, cwd, env }) => {
-      if (!runtime.isSessionEnabled()) return { command, cwd, env };
-
-      return { command: runtime.rewriteCommand(command) ?? command, cwd, env };
-    },
+    spawnHook: ({ command, cwd, env }) => ({
+      command: runtime.rewriteIfEnabled(command) ?? command,
+      cwd,
+      env,
+    }),
   });
 }
 
@@ -33,14 +33,18 @@ export function createRewritingBashTool(
  */
 export function createUserBashRewriter(
   runtime: RtkRuntime,
-): (event: UserBashEvent) => undefined | UserBashEventResult {
+): (
+  event: UserBashEvent,
+  ctx: RtkUiContext,
+) => undefined | UserBashEventResult {
   const localBashOperations = createLocalBashOperations();
 
-  return (event) => {
-    if (event.excludeFromContext) return undefined;
-    if (!runtime.isSessionEnabled()) return undefined;
+  return (event, ctx) => {
+    runtime.setNotifyContext(ctx);
 
-    const rewritten = runtime.rewriteCommand(event.command);
+    if (event.excludeFromContext) return undefined;
+
+    const rewritten = runtime.rewriteIfEnabled(event.command);
 
     if (rewritten === undefined) return undefined;
 

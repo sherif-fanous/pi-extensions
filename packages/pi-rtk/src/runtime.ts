@@ -4,7 +4,11 @@
  * footer badge that shows them.
  */
 
-import { spawnSync } from "node:child_process";
+import {
+  spawnSync,
+  type SpawnSyncOptionsWithStringEncoding,
+  type SpawnSyncReturns,
+} from "node:child_process";
 
 import { EXTENSION_NAME } from "./extension-name.js";
 import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
@@ -14,14 +18,20 @@ import {
 } from "@sherif-fanous/pi-extensions-core";
 
 const REWRITE_TIMEOUT_MS = 5000;
+const SPAWN_OPTIONS: SpawnSyncOptionsWithStringEncoding = {
+  encoding: "utf-8",
+  timeout: REWRITE_TIMEOUT_MS,
+};
 /** Footer status key: the bare slug, so Pi orders the family's entries by slug. */
 const STATUS_KEY = "rtk";
 
 /** RTK's state for one call of the extension's default export. */
 export interface RtkRuntime {
-  isSessionEnabled(): boolean;
-  /** Rewrite `command` with `rtk rewrite`, or `undefined` for no rewrite. */
-  rewriteCommand(command: string): string | undefined;
+  /**
+   * Rewrite `command` with `rtk rewrite` while rewriting is on, or
+   * `undefined` for no rewrite.
+   */
+  rewriteIfEnabled(command: string): string | undefined;
   /** The footer badge text, which also titles the bare `/rtk` menu. */
   rtkStateText(): string;
   /** Spawn rtk for its version and path, and build the status report body. */
@@ -36,10 +46,23 @@ export interface RtkRuntime {
   startSession(ctx: RtkUiContext): void;
 }
 
+/** Options for {@link createRtkRuntime}. */
+export interface RtkRuntimeOptions {
+  /** The function that runs rtk and `sh`, `spawnSync` by default. */
+  readonly spawn?: RtkSpawn;
+}
+
 /** The part of a Pi context used to warn and to draw the footer badge. */
 export interface RtkUiContext {
   readonly ui: Pick<ExtensionUIContext, "notify" | "setStatus" | "theme">;
 }
+
+/** Run a program to completion and collect its output, as `spawnSync` does. */
+export type RtkSpawn = (
+  command: string,
+  args: readonly string[],
+  options: SpawnSyncOptionsWithStringEncoding,
+) => Pick<SpawnSyncReturns<string>, "error" | "stdout">;
 
 type RtkUnavailableReason = "missing" | "unexecutable";
 
@@ -57,7 +80,7 @@ const processState = {
   rtkAvailable: true,
   /**
    * Whether the current outage has been reported. Availability warnings are
-   * warn-once per outage: a successful rewrite spawn resets the gate, and the
+   * warn-once per outage: any successful rtk spawn resets the gate, and the
    * next ENOENT/EACCES may warn again.
    */
   rtkUnavailableNotified: false,
@@ -66,7 +89,9 @@ const processState = {
 };
 
 /** Create RTK's state for one call of the extension's default export. */
-export function createRtkRuntime(): RtkRuntime {
+export function createRtkRuntime({
+  spawn = spawnSync,
+}: RtkRuntimeOptions = {}): RtkRuntime {
   // Pi only exposes the notify surface through handler contexts, so the
   // latest one is kept; a context from an earlier session is stale.
   let notifyContext: null | RtkUiContext = null;
@@ -85,11 +110,6 @@ export function createRtkRuntime(): RtkRuntime {
     notifyWarnings(notifyContext, EXTENSION_NAME, [messages[reason]]);
   }
 
-  function markRtkUnavailable(reason: RtkUnavailableReason): void {
-    alertRtkUnavailable(reason);
-    setRtkAvailable(false);
-  }
-
   function renderStatusText(ctx: RtkUiContext): string {
     const color =
       processState.sessionEnabled && !processState.rtkAvailable
@@ -99,11 +119,50 @@ export function createRtkRuntime(): RtkRuntime {
     return ctx.ui.theme.fg(color, rtkStateText());
   }
 
+  function rewriteCommand(command: string): string | undefined {
+    // rtk's exit codes are permission verdicts (0/1/2/3 = allow/no-equiv/
+    // deny/ask). We trust stdout and ignore the exit code. The deny verdict
+    // is intentionally not enforced — this shim rewrites, it does not gate.
+    try {
+      const out = runRtk(["rewrite", command])?.trimEnd() ?? "";
+
+      return out.length > 0 ? out : undefined; // empty stdout = exit 1 or 2
+    } catch {
+      return undefined;
+    }
+  }
+
   function rtkStateText(): string {
     if (!processState.sessionEnabled) return `${EXTENSION_NAME}: off`;
     if (!processState.rtkAvailable) return `${EXTENSION_NAME}: unavailable`;
 
     return `${EXTENSION_NAME}: on`;
+  }
+
+  /**
+   * Spawn rtk with `args` and record whether it ran: a missing or
+   * unexecutable binary marks rtk unavailable and warns once per outage, and
+   * any successful spawn marks it available and ends the outage. The stdout
+   * of a spawn that ran, or `undefined` when it failed.
+   */
+  function runRtk(args: readonly string[]): string | undefined {
+    const result = spawn("rtk", args, SPAWN_OPTIONS);
+
+    if (result.error) {
+      const reason = classifySpawnError(result.error);
+
+      if (reason !== "other") {
+        alertRtkUnavailable(reason);
+        setRtkAvailable(false);
+      }
+
+      return undefined;
+    }
+
+    processState.rtkUnavailableNotified = false;
+    setRtkAvailable(true);
+
+    return result.stdout ?? "";
   }
 
   // Refreshes the footer badge when availability flips, because rewrites from
@@ -121,57 +180,20 @@ export function createRtkRuntime(): RtkRuntime {
   }
 
   return {
-    isSessionEnabled: () => processState.sessionEnabled,
-    rewriteCommand(command) {
-      // rtk's exit codes are permission verdicts (0/1/2/3 = allow/no-equiv/
-      // deny/ask). We trust stdout and ignore the exit code. The deny verdict
-      // is intentionally not enforced — this shim rewrites, it does not gate.
-      try {
-        const result = spawnSync("rtk", ["rewrite", command], {
-          encoding: "utf-8",
-          timeout: REWRITE_TIMEOUT_MS,
-        });
+    rewriteIfEnabled(command) {
+      if (!processState.sessionEnabled) return undefined;
 
-        if (result.error) {
-          const reason = classifySpawnError(result.error);
-
-          if (reason !== "other") markRtkUnavailable(reason);
-
-          return undefined;
-        }
-
-        processState.rtkUnavailableNotified = false;
-        setRtkAvailable(true);
-
-        const out = (result.stdout ?? "").trimEnd();
-
-        return out.length > 0 ? out : undefined; // empty stdout = exit 1 or 2
-      } catch {
-        return undefined;
-      }
+      return rewriteCommand(command);
     },
     rtkStateText,
     rtkStatusReport() {
-      const version = spawnSync("rtk", ["--version"], {
-        encoding: "utf-8",
-        timeout: REWRITE_TIMEOUT_MS,
-      });
+      const version = runRtk(["--version"]);
 
       let binary = "rtk not detected on PATH";
 
-      if (version.error) {
-        const reason = classifySpawnError(version.error);
-
-        if (reason !== "other") markRtkUnavailable(reason);
-      } else {
-        processState.rtkUnavailableNotified = false;
-        setRtkAvailable(true);
-
-        const path = spawnSync("sh", ["-c", "command -v rtk"], {
-          encoding: "utf-8",
-          timeout: REWRITE_TIMEOUT_MS,
-        });
-        const versionText = (version.stdout ?? "").trim() || "version unknown";
+      if (version !== undefined) {
+        const path = spawn("sh", ["-c", "command -v rtk"], SPAWN_OPTIONS);
+        const versionText = version.trim() || "version unknown";
         const pathText = (path.stdout ?? "").trim();
 
         binary =
@@ -196,19 +218,7 @@ export function createRtkRuntime(): RtkRuntime {
     },
     startSession(ctx) {
       notifyContext = ctx;
-
-      const result = spawnSync("rtk", ["--version"], {
-        timeout: REWRITE_TIMEOUT_MS,
-      });
-
-      if (result.error) {
-        const reason = classifySpawnError(result.error);
-
-        if (reason !== "other") markRtkUnavailable(reason);
-      } else {
-        setRtkAvailable(true);
-      }
-
+      runRtk(["--version"]);
       updateFooterStatus(ctx);
     },
   };

@@ -1,7 +1,7 @@
 /**
- * Covers RTK's footer badge (toggle state and rtk binary availability), the
- * warning when rtk can't run, the rewriting of `!` commands, the `/rtk`
- * command's replies, and the text RTK shows against the family standard.
+ * Covers RTK's wiring into Pi: the rewriting of `!` commands and of the
+ * agent's `bash` tool, the `/rtk` command's replies, and the text RTK shows
+ * against the family standard.
  */
 
 import type {
@@ -47,11 +47,7 @@ interface LoadedRtk {
   readonly commandOptions: FakeCommand;
   /** Call RTK's handlers for a session start or a `!` command. */
   readonly emit: FakePi["emit"];
-  /**
-   * Call the default export again on the same module, as Pi does on `/new`,
-   * `/resume`, and `/fork`.
-   */
-  readonly switchSession: () => LoadedRtk;
+  readonly tools: FakePi["tools"];
 }
 
 /** Surfaces a test may replace on the fake context. */
@@ -76,23 +72,18 @@ async function loadRtk(
   vi.resetModules();
 
   const { default: rtk } = await import("../src/index.js");
+  const fake = createFakePi({ appendEntry });
 
-  function register(): LoadedRtk {
-    const fake = createFakePi({ appendEntry });
+  rtk(fake.pi);
 
-    rtk(fake.pi);
+  const commandOptions = fake.command("rtk");
 
-    const commandOptions = fake.command("rtk");
-
-    return {
-      command: commandOptions.handler,
-      commandOptions,
-      emit: fake.emit,
-      switchSession: register,
-    };
-  }
-
-  return register();
+  return {
+    command: commandOptions.handler,
+    commandOptions,
+    emit: fake.emit,
+    tools: fake.tools,
+  };
 }
 
 function makeContext(
@@ -130,113 +121,6 @@ beforeEach(() => {
   mocks.spawnSync.mockReturnValue(RTK_WORKS);
 });
 
-describe("footer badge", () => {
-  it("shows a dim on badge when rewriting is enabled and rtk runs", async () => {
-    const { emit } = await loadRtk();
-    const { ctx, setStatus } = makeContext();
-
-    await emit({ reason: "startup", type: "session_start" }, ctx);
-
-    expect(setStatus).toHaveBeenLastCalledWith("rtk", "<dim>RTK: on</dim>");
-  });
-
-  it("shows a warning badge when rtk is missing at session start", async () => {
-    mocks.spawnSync.mockReturnValue(RTK_MISSING);
-
-    const { emit } = await loadRtk();
-    const { ctx, setStatus } = makeContext();
-
-    await emit({ reason: "startup", type: "session_start" }, ctx);
-
-    expect(setStatus).toHaveBeenLastCalledWith(
-      "rtk",
-      "<warning>RTK: unavailable</warning>",
-    );
-  });
-
-  it("shows a dim off badge after /rtk disable, even when rtk is missing", async () => {
-    mocks.spawnSync.mockReturnValue(RTK_MISSING);
-
-    const { command, emit } = await loadRtk();
-    const { ctx, setStatus } = makeContext();
-
-    await emit({ reason: "startup", type: "session_start" }, ctx);
-    await command("disable", ctx);
-
-    expect(setStatus).toHaveBeenLastCalledWith("rtk", "<dim>RTK: off</dim>");
-
-    await command("enable", ctx);
-
-    expect(setStatus).toHaveBeenLastCalledWith(
-      "rtk",
-      "<warning>RTK: unavailable</warning>",
-    );
-  });
-
-  it("keeps rewriting off across a session switch", async () => {
-    const first = await loadRtk();
-    const { ctx } = makeContext();
-
-    await first.emit({ reason: "startup", type: "session_start" }, ctx);
-    await first.command("disable", ctx);
-
-    const second = first.switchSession();
-    const { ctx: newCtx, setStatus } = makeContext();
-
-    await second.emit({ reason: "new", type: "session_start" }, newCtx);
-
-    expect(setStatus).toHaveBeenLastCalledWith("rtk", "<dim>RTK: off</dim>");
-
-    mocks.spawnSync.mockClear();
-    await second.emit(userBashEvent("git status"), newCtx);
-
-    expect(mocks.spawnSync).not.toHaveBeenCalled();
-  });
-
-  it("follows rtk availability detected by later rewrites", async () => {
-    const { emit } = await loadRtk();
-    const { ctx, setStatus } = makeContext();
-
-    await emit({ reason: "startup", type: "session_start" }, ctx);
-    mocks.spawnSync.mockReturnValue(RTK_MISSING);
-    await emit(userBashEvent("git status"), ctx);
-
-    expect(setStatus).toHaveBeenLastCalledWith(
-      "rtk",
-      "<warning>RTK: unavailable</warning>",
-    );
-
-    mocks.spawnSync.mockReturnValue({
-      error: undefined,
-      stdout: "rtk git status\n",
-    });
-    await emit(userBashEvent("git status"), ctx);
-
-    expect(setStatus).toHaveBeenLastCalledWith("rtk", "<dim>RTK: on</dim>");
-  });
-});
-
-describe("rtk unavailable warning", () => {
-  it("warns in the new session after a session switch, not the old one", async () => {
-    const first = await loadRtk();
-    const old = makeContext();
-
-    await first.emit({ reason: "startup", type: "session_start" }, old.ctx);
-
-    const second = first.switchSession();
-    const current = makeContext();
-
-    mocks.spawnSync.mockReturnValue(RTK_MISSING);
-    await second.emit({ reason: "new", type: "session_start" }, current.ctx);
-
-    expect(old.notify).not.toHaveBeenCalled();
-    expect(current.notify).toHaveBeenCalledExactlyOnceWith(
-      expect.stringContaining("The rtk binary was not found on PATH."),
-      "warning",
-    );
-  });
-});
-
 describe("! commands", () => {
   it("runs rtk's rewrite of the command", async () => {
     const { emit } = await loadRtk();
@@ -263,28 +147,6 @@ describe("! commands", () => {
     );
   });
 
-  it.each([
-    ["rtk has no rewrite for it", { error: undefined, stdout: "" }],
-    [
-      "rtk times out",
-      {
-        error: Object.assign(new Error("spawnSync rtk ETIMEDOUT"), {
-          code: "ETIMEDOUT",
-        }),
-        stdout: "",
-      },
-    ],
-  ])("leaves the command to Pi when %s", async (_case, rewrite) => {
-    const { emit } = await loadRtk();
-    const { ctx, notify } = makeContext();
-
-    await emit({ reason: "startup", type: "session_start" }, ctx);
-    mocks.spawnSync.mockReturnValue(rewrite);
-
-    expect(await emit(userBashEvent("git status"), ctx)).toEqual([undefined]);
-    expect(notify).not.toHaveBeenCalled();
-  });
-
   it("leaves !! commands alone, so their output stays out of the model's context", async () => {
     const { emit } = await loadRtk();
     const { ctx } = makeContext();
@@ -296,6 +158,35 @@ describe("! commands", () => {
 
     expect(results).toEqual([undefined]);
     expect(mocks.spawnSync).not.toHaveBeenCalled();
+  });
+});
+
+describe("bash tool", () => {
+  it("runs rtk's rewrite of the agent's command", async () => {
+    const { tools } = await loadRtk();
+    const ctx = createFakeContext({ cwd: process.cwd() });
+
+    mocks.spawnSync.mockReturnValue({
+      error: undefined,
+      stdout: "echo rewritten\n",
+    });
+
+    const result = await tools
+      .get("bash")
+      ?.execute(
+        "call",
+        { command: "echo original" },
+        undefined,
+        undefined,
+        ctx,
+      );
+
+    expect(mocks.spawnSync).toHaveBeenCalledExactlyOnceWith(
+      "rtk",
+      ["rewrite", "echo original"],
+      expect.anything(),
+    );
+    expect(result?.content).toEqual([{ text: "rewritten\n", type: "text" }]);
   });
 });
 

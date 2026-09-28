@@ -45,12 +45,5 @@ export default function rtk(pi: ExtensionAPI): void {
   );
 
   // A failure here resolves to no result, so Pi runs the command itself.
-  pi.on(
-    "user_bash",
-    guardEvent(EXTENSION_NAME, "user_bash", (event, ctx) => {
-      runtime.setNotifyContext(ctx);
-
-      return rewriteUserBash(event);
-    }),
-  );
+  pi.on("user_bash", guardEvent(EXTENSION_NAME, "user_bash", rewriteUserBash));
 }
