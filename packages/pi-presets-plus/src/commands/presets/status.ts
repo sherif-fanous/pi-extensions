@@ -9,7 +9,10 @@ import type { ActivePresetSession } from "../../activation/session.js";
 import { findPreset } from "../../preset-identity.js";
 import { loadAll } from "../../store/api.js";
 import type { LoadedPreset } from "../../types.js";
-import { deliverCommandReport } from "../../ui/command-report.js";
+import {
+  appendReportWarnings,
+  deliverCommandReport,
+} from "../../ui/command-report.js";
 import {
   BASELINE_MODEL_LABEL,
   BASELINE_THINKING_LABEL,
@@ -25,6 +28,7 @@ import {
   SCOPE_LABEL,
   STATUS_DIALOG_TITLE,
 } from "../../ui/labels.js";
+import { formatScopeName } from "../../ui/widgets.js";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
@@ -68,7 +72,7 @@ export function formatStatus(
       STATUS_DIALOG_TITLE,
       ...alignLabelRows([
         [`${PRESET_LABEL}:`, active.name],
-        [`${SCOPE_LABEL}:`, active.scope],
+        [`${SCOPE_LABEL}:`, formatScopeName(active.scope)],
         [
           `${RESTORE_LABEL}:`,
           "No saved baseline. Clear will only turn the preset off.",
@@ -92,7 +96,7 @@ export function formatStatus(
     STATUS_DIALOG_TITLE,
     ...alignLabelRows([
       [`${PRESET_LABEL}:`, active.name],
-      [`${SCOPE_LABEL}:`, active.scope],
+      [`${SCOPE_LABEL}:`, formatScopeName(active.scope)],
       [`${BASELINE_MODEL_LABEL}:`, formatModel(baseline.model)],
       [`${BASELINE_THINKING_LABEL}:`, baseline.thinkingLevel],
       [`${BASELINE_TOOLS_LABEL}:`, formatTools(baseline.tools)],
@@ -157,7 +161,7 @@ export async function runStatus(
 ): Promise<void> {
   const result = await formatStatusBody(ctx, pi, session);
 
-  const body = withWarnings(result.body, result.warnings);
+  const body = appendReportWarnings(result.body, result.warnings);
 
   deliverCommandReport(ctx, pi, {
     body,
@@ -187,10 +191,4 @@ function formatTools(tools: readonly string[]): string {
 
 function statusLabel(classification: OverlayFieldClassification): string {
   return STATUS_VOCABULARY[classification];
-}
-
-function withWarnings(body: string, warnings: readonly string[]): string {
-  if (warnings.length === 0) return body;
-
-  return `${body}\n\nWarnings:\n${warnings.map((warning) => `- ${warning}`).join("\n")}`;
 }

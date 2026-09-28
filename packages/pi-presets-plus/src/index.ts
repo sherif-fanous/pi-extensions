@@ -15,6 +15,7 @@ import {
   getArgumentCompletions,
   handlePresetsCommand,
 } from "./commands/presets/index.js";
+import { EXTENSION_NAME } from "./extension-name.js";
 import { applyPresetFlag, registerPresetFlag } from "./flag.js";
 import {
   HotkeyRegistry,
@@ -26,7 +27,7 @@ import { describeMigration, migrateAll } from "./store/migrate.js";
 import { registerCommandReportRenderer } from "./ui/command-report.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
-  describeError,
+  describeErrorSentence,
   guardCommand,
   guardEvent,
   notifyWarnings,
@@ -44,11 +45,10 @@ export default function presetsPlus(pi: ExtensionAPI) {
   registerPresetFlag(pi);
 
   pi.registerCommand("presets", {
-    description:
-      "Browse and switch presets that bundle a model, thinking level, tools, and system prompt. Run `/presets` to open the picker, or use `reload`, `clear`, `status`, or `policy`.",
+    description: "Browse, activate, and manage presets",
     getArgumentCompletions: (prefix) =>
       getArgumentCompletions(prefix, () => presetNamesLoader.fn()),
-    handler: guardCommand("Presets Plus", (args, ctx) =>
+    handler: guardCommand(EXTENSION_NAME, (args, ctx) =>
       handlePresetsCommand(args, ctx, pi, session, hotkeys),
     ),
   });
@@ -57,7 +57,7 @@ export default function presetsPlus(pi: ExtensionAPI) {
   // collects its own warnings and reports them together.
   pi.on(
     "session_start",
-    guardEvent("Presets Plus", "session_start", async (_event, ctx) => {
+    guardEvent(EXTENSION_NAME, "session_start", async (_event, ctx) => {
       const startupSelection = captureStartupSelection(ctx, pi);
       // Every startup step adds its warnings here, so they show as one
       // notification once startup ends.
@@ -127,17 +127,17 @@ export default function presetsPlus(pi: ExtensionAPI) {
         );
       } catch (err) {
         startupWarnings.push(
-          `Could not load preset files: ${describeError(err)}.`,
+          `Could not load preset files: ${describeErrorSentence(err)}`,
         );
       }
 
-      notifyWarnings(ctx, "Presets Plus", startupWarnings);
+      notifyWarnings(ctx, EXTENSION_NAME, startupWarnings);
     }),
   );
 
   pi.on(
     "before_agent_start",
-    guardEvent("Presets Plus", "before_agent_start", async (event, ctx) => {
+    guardEvent(EXTENSION_NAME, "before_agent_start", async (event, ctx) => {
       const active = session.current();
 
       if (!active) return undefined;
@@ -158,21 +158,21 @@ export default function presetsPlus(pi: ExtensionAPI) {
 
   pi.on(
     "model_select",
-    guardEvent("Presets Plus", "model_select", async (event, ctx) => {
+    guardEvent(EXTENSION_NAME, "model_select", async (event, ctx) => {
       await handleModelSelectDrift(event, ctx, pi, session);
     }),
   );
 
   pi.on(
     "thinking_level_select",
-    guardEvent("Presets Plus", "thinking_level_select", async (_event, ctx) => {
+    guardEvent(EXTENSION_NAME, "thinking_level_select", async (_event, ctx) => {
       await syncDirtyFromCurrentState(ctx, pi, session);
     }),
   );
 
   pi.on(
     "turn_start",
-    guardEvent("Presets Plus", "turn_start", async (_event, ctx) => {
+    guardEvent(EXTENSION_NAME, "turn_start", async (_event, ctx) => {
       await syncDirtyFromCurrentState(ctx, pi, session);
     }),
   );

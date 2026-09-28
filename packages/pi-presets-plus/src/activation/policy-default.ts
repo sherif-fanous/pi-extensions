@@ -71,7 +71,7 @@ export async function maybeApplyPolicyDefault(
     return false;
   }
 
-  notifyApplyResult(ctx, preset, result, warnings);
+  notifyApplyResult(ctx, preset, result, { unprompted: true, warnings });
 
   return true;
 }

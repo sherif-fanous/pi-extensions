@@ -109,7 +109,7 @@ describe("formatShowPromptBody", () => {
 
     expect(formatShowPromptBody({ kind: "unknown", name: "missing" })).toEqual({
       body: 'No preset named "missing".',
-      severity: "error",
+      severity: "warning",
     });
   });
 

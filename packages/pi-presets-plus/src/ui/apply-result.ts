@@ -4,9 +4,22 @@
  * warnings.
  */
 import type { ApplyResult } from "../activation/apply.js";
+import { EXTENSION_NAME } from "../extension-name.js";
 import type { LoadedPreset } from "../types.js";
 import { reportWarnings } from "../warnings.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+
+/** How {@link notifyApplyResult} words and routes one activation outcome. */
+export interface ApplyResultDelivery {
+  /**
+   * The activation ran without the user asking for it just then (at
+   * startup or from a hotkey), so the success line names Presets Plus as
+   * its subject.
+   */
+  readonly unprompted?: boolean;
+  /** Collects the warning notices instead of notifying them. */
+  readonly warnings?: string[];
+}
 
 /**
  * Deliver one activation outcome through the current human-facing UI.
@@ -18,7 +31,7 @@ export function notifyApplyResult(
   ctx: Pick<ExtensionContext, "ui">,
   preset: Pick<LoadedPreset, "name">,
   result: ApplyResult,
-  warnings?: string[],
+  { unprompted = false, warnings }: ApplyResultDelivery = {},
 ): void {
   if (!result.ok) {
     ctx.ui.notify(result.reason, "error");
@@ -30,7 +43,9 @@ export function notifyApplyResult(
 
   const notices = result.notices ?? [];
   const body = [
-    `Preset "${preset.name}" applied.`,
+    unprompted
+      ? `${EXTENSION_NAME} applied preset "${preset.name}".`
+      : `Preset "${preset.name}" applied.`,
     ...notices
       .filter((notice) => notice.severity === "info")
       .map((notice) => notice.message),

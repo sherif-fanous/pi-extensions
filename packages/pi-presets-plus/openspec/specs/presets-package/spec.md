@@ -294,11 +294,12 @@ SHALL be a type-only import (`import type ...`), as required by
 `verbatimModuleSyntax: true`. When invoked by pi, the factory SHALL register
 exactly one command named `presets` and SHALL NOT register any other commands,
 hotkeys, flags, message renderers, or event handlers in this change. The
-registered command's `description` string SHALL make clear that each preset
-bundles a model, thinking level, tools, and system prompt (i.e. one preset is a
-combo of all four configurable aspects, not four separate kinds of presets). The
-handler SHALL be lint-clean under the type-checked ESLint preset (no `async`
-keyword without an `await`); it MAY return `Promise<void>` explicitly.
+registered command's `description` string SHALL be
+`Browse, activate, and manage presets`, following the family's description
+style: sentence case, starting with a verb, no trailing period, and at most 60
+characters. The handler SHALL be lint-clean under the type-checked ESLint preset
+(no `async` keyword without an `await`); it MAY return `Promise<void>`
+explicitly.
 
 #### Scenario: Entry point shape
 
@@ -313,8 +314,8 @@ keyword without an `await`); it MAY return `Promise<void>` explicitly.
 
 - **WHEN** pi loads the package
 - **THEN** `/presets` SHALL appear in the command list
-- **AND** the registered command's `description` SHALL convey that each preset
-  bundles a model, thinking level, tools, and system prompt
+- **AND** the registered command's `description` SHALL be
+  `Browse, activate, and manage presets`
 
 #### Scenario: Invocation
 
@@ -396,10 +397,11 @@ shared module SHALL include at minimum:
   `Current model`, etc.).
 - Dialog titles surfaced by overlays from the four concurrent changes that this
   change finalizes the voice of:
-  - `Preset Status` (picker `s` action's info-dialog from
+  - `Presets Plus Status` (picker `s` action's info-dialog from
     `route-picker-info-output-through-overlay`).
-  - `Preset cleared: <name>` (picker `c` action's info-dialog and prompt-invoked
-    clear's notify title — same string sourced once).
+  - `Presets Plus Clear` (picker `c` action's info-dialog and prompt-invoked
+    clear's report heading — same string sourced once).
+  - `Presets Plus Policy` (`/presets policy` report heading).
   - `Activation failed` (picker error info-dialog from
     `surface-picker-activation-errors-in-overlay`).
   - `Reload Pi?` (post-Save and post-Delete confirm overlay from
@@ -431,13 +433,13 @@ requirement is that no two surfaces hold their own copy of the same string.
 
 #### Scenario: Clear summary lead and labels follow the convention
 
-- **WHEN** `renderClearSummary` renders its title and lead sentence
-- **THEN** the title SHALL read `Preset cleared: <name>` (Title-Case label,
-  plain name)
+- **WHEN** `renderClearSummary` renders its heading and lead sentence
+- **THEN** the heading SHALL read `Presets Plus Clear`
 - **AND** the lead SHALL be sentence-case English with a terminal period (e.g.
   `Restored your previous settings.`)
-- **AND** each per-field row's label SHALL be Title-Case with a trailing colon
-  (`Model:`, `Thinking level:`, `Tools:`)
+- **AND** a `Preset:` row SHALL name the cleared preset, followed by one row per
+  field, each label sentence case with a trailing colon (`Model:`,
+  `Thinking level:`, `Tools:`), all aligned by `alignLabelRows`
 
 #### Scenario: Activation-failure reason follows the convention
 
@@ -483,8 +485,8 @@ requirement is that no two surfaces hold their own copy of the same string.
 #### Scenario: Overlay titles introduced by concurrent changes follow the convention
 
 - **WHEN** the package opens any of the overlays introduced by
-  `route-picker-info-output-through-overlay` (Preset Status, Preset cleared),
-  `surface-picker-activation-errors-in-overlay` (Activation failed), or
+  `route-picker-info-output-through-overlay` (Presets Plus Status, Presets Plus
+  Clear), `surface-picker-activation-errors-in-overlay` (Activation failed), or
   `prompt-reload-on-hotkey-mutation` (Reload Pi?)
 - **THEN** the overlay title SHALL be sourced from the shared labels module
 - **AND** the title SHALL follow the Title-Case convention
@@ -512,6 +514,64 @@ requirement is that no two surfaces hold their own copy of the same string.
   appears in two or more surfaces (status, clear, editor, picker card)
 - **THEN** the label SHALL be defined exactly once in a shared module and
   consumed by each surface
+
+### Requirement: Shown text follows the family text standard
+
+Every text Presets Plus shows SHALL follow the family's text and naming
+standard, and SHALL name the product only as `Presets Plus`, taken from the
+`EXTENSION_NAME` constant in `src/extension-name.ts`. Concretely:
+
+- The `--preset` flag description SHALL be
+  `Activate the named Presets Plus preset at startup`.
+- The `/presets` subcommand completions SHALL carry these descriptions: `reload`
+  `Reload presets from disk`, `clear` `Clear the active preset`, `status`
+  `Show the active preset's status`, `policy`
+  `Show the preset policy for this directory`, and `show-prompt`
+  `Show a preset's prompt, the active one by default`.
+- A subcommand SHALL match only the whole trimmed argument, except that
+  `show-prompt` may be followed by a preset name. Any other argument that names
+  no preset, and any argument whose first word is `list`, SHALL get the warning
+  `Unknown subcommand "<argument>". Try /presets, /presets reload, /presets clear, /presets status, /presets policy, or /presets show-prompt.`
+  through `notifyUsageWarning`, and SHALL run nothing.
+- An activation the user did not start from `/presets` or the picker (the
+  `--preset` flag, the policy default at startup, or a hotkey) SHALL announce
+  itself as `Presets Plus applied preset "<name>".`; an activation from
+  `/presets` or the picker SHALL say `Preset "<name>" applied.`.
+- The startup migration notice SHALL read
+  `Presets Plus migrated <scopes> configuration to config.json.`.
+- `/presets reload` SHALL count presets with a real plural, as in
+  `Reloaded 1 preset.`.
+- A hotkey whose activation throws SHALL notify the error
+  `Presets Plus hotkey for preset "<name>" failed: <message>`, a picker or
+  editor action that throws SHALL show
+  `Could not complete the action: <message>`, and a failed reload of Pi SHALL
+  notify the error `Could not reload Pi: <message>`, where `<message>` is
+  `describeErrorSentence(error)`.
+- The status report SHALL show the scope as `User` or `Project`, and the
+  editor's scope row SHALL offer `User` and `Project`.
+
+#### Scenario: An argument after a subcommand that takes none
+
+- **WHEN** the user runs `/presets status foo` and no preset is named
+  `status foo`
+- **THEN** the package SHALL NOT show the status report
+- **AND** it SHALL warn
+  `Unknown subcommand "status foo". Try /presets, /presets reload, /presets clear, /presets status, /presets policy, or /presets show-prompt.`
+  under the `Presets Plus` heading
+
+#### Scenario: A hotkey activation
+
+- **WHEN** the user presses the hotkey of preset `plan` and the activation
+  succeeds
+- **THEN** the package SHALL notify `Presets Plus applied preset "plan".` at
+  `info` severity
+
+#### Scenario: The main paths pass the shown-text check
+
+- **WHEN** the package's shown-text test runs `/presets` and its subcommands,
+  the `--preset` flag, and a hotkey with every surface recorded
+- **THEN** `findShownTextViolations` SHALL return no violations for the display
+  name `Presets Plus` and the slug `presets-plus`
 
 ### Requirement: Active preset attachment is owned by a single class
 
@@ -727,8 +787,9 @@ The package SHALL split the pure clear-summary rendering surface out of
 rendering surface previously living in `src/activation/clear.ts` SHALL move to
 that new module, exporting at minimum `renderClearSummary`, `chooseClearLead`,
 and any helpers required to render a `ClearPart[]` (`formatRowValue`,
-`formatModel`, `formatTools`, `isKeptLike`, `isRestoreLike`, the `Styler` type,
-`IDENTITY_STYLER`, `normalizeStyler`, and the `FIELD_LABELS` table).
+`formatModel`, `formatTools`, `isKeptLike`, `isRestoreLike`, and the
+`FIELD_LABELS` table). `renderClearSummary` SHALL return a plain report body;
+styling is left to the command report or `styleReport`.
 
 The engine module `src/activation/clear.ts` SHALL retain `decideClear`,
 `executeClear`, `clear`, `clearReturning`, and the `ClearDecision` / `ClearPart`
@@ -881,8 +942,9 @@ The `/presets` command SHALL accept a `show-prompt` subcommand that emits the
 active preset's prompt — or any named preset's prompt — to the user.
 
 The subcommand SHALL be registered in the same subcommand registry that contains
-`reload`, `clear`, and `status`, alongside an autocomplete label of the form
-`show-prompt: show the active preset's prompt (or [name])`. Argument-position
+`reload`, `clear`, and `status`, alongside an autocomplete entry labeled
+`show-prompt` with the description
+`Show a preset's prompt, the active one by default`. Argument-position
 autocomplete SHALL offer known preset names from `loadAll()` when the cursor is
 past the `show-prompt` token; an empty prefix SHALL offer every loaded preset,
 and a non-empty prefix SHALL filter to names that start with the prefix
@@ -897,9 +959,10 @@ the words joined by single spaces, because preset names may contain spaces.
 
 The runtime behavior of the subcommand SHALL follow the matrix below. Lookup by
 name SHALL use the same scope-precedence rules as `findPreset` (project shadows
-user). Short status outcomes SHALL be surfaced through `ctx.ui.notify`;
-prompt-body outcomes SHALL be surfaced through the package's multi-line
-`openInfoDialog` reader surface.
+user). Short status outcomes SHALL be surfaced through `ctx.ui.notify`, in the
+TUI as well; only prompt-body outcomes SHALL open the package's multi-line
+`openInfoDialog` reader surface in the TUI, and outside the TUI they SHALL be
+notified at `info` severity.
 
 - `/presets show-prompt` with no preset active SHALL emit an `info`-severity
   message of exactly `No preset is active.`.
@@ -915,7 +978,8 @@ prompt-body outcomes SHALL be surfaced through the package's multi-line
   `Markdown` component, the body SHALL be rendered as markdown; otherwise the
   body SHALL be rendered as plain text.
 - `/presets show-prompt <name>` with `<name>` not matching any loaded preset
-  SHALL emit an `error`-severity message of exactly `No preset named "<name>".`.
+  SHALL emit the warning `No preset named "<name>".` through `notifyWarnings`
+  under the `Presets Plus` heading.
 - `/presets show-prompt <name>` with `<name>` matching a loaded preset whose
   `instructions` field is empty SHALL emit an `info`-severity message of exactly
   `Preset "<name>" has no prompt.`.
@@ -928,7 +992,7 @@ The subcommand SHALL NOT activate, modify, or otherwise mutate any preset,
 active state, or hotkey registration. It is a strict reader.
 
 The package SHALL expose a pure formatter
-(`formatShowPromptBody(result, theme): { body: string; severity: "info" | "warning" | "error" }`)
+(`formatShowPromptBody(result, theme): { body: string; severity: "info" | "warning" }`)
 backed by a pure classifier (`findPresetForShowPrompt(name, active, loaded)`)
 that returns a discriminated result. Both helpers SHALL be exported separately
 from the runner so that tests can exercise the behavior matrix without stubbing
@@ -961,8 +1025,8 @@ UI calls.
 
 - **WHEN** `/presets show-prompt missing` is invoked
 - **AND** no preset named `missing` exists in either scope
-- **THEN** the user SHALL receive an `error`-severity notification with body
-  `No preset named "missing".`
+- **THEN** the user SHALL receive one `warning`-severity notification reading
+  `Presets Plus: 1 warning` and `- No preset named "missing".` on separate lines
 
 #### Scenario: `show-prompt <name>` with known name that has no prompt
 

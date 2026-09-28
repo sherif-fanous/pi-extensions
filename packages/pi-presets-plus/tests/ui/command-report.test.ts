@@ -20,11 +20,11 @@ describe("command reports", () => {
     deliverCommandReport(
       { mode: "tui", ui: { notify } } as unknown as ExtensionContext,
       { appendEntry },
-      { body: "Preset Status", severity: "info" },
+      { body: "Presets Plus Status", severity: "info" },
     );
 
     expect(appendEntry).toHaveBeenCalledWith(COMMAND_REPORT_ENTRY_TYPE, {
-      body: "Preset Status",
+      body: "Presets Plus Status",
       severity: "info",
     });
     expect(notify).not.toHaveBeenCalled();
@@ -40,10 +40,10 @@ describe("command reports", () => {
         ui: { notify, theme: createPlainTheme() },
       } as unknown as ExtensionContext,
       { appendEntry },
-      { body: "Preset Policy", severity: "warning" },
+      { body: "Presets Plus Policy", severity: "warning" },
     );
 
-    expect(notify).toHaveBeenCalledWith("Preset Policy", "warning");
+    expect(notify).toHaveBeenCalledWith("Presets Plus Policy", "warning");
     expect(appendEntry).not.toHaveBeenCalled();
   });
 
@@ -63,13 +63,13 @@ describe("command reports", () => {
 
     const component = renderCommandReport(
       {
-        data: { body: "Preset Status", severity: "info" },
+        data: { body: "Presets Plus Status", severity: "info" },
       } as never,
       { expanded: false },
       theme as never,
     );
 
-    expect(component?.render(80).join("\n")).toContain("Preset Status");
+    expect(component?.render(80).join("\n")).toContain("Presets Plus Status");
     expect(component?.render(80).join("\n")).toContain("<muted>");
   });
 });

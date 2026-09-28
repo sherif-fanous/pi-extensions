@@ -56,7 +56,7 @@ export async function applyPresetFlag(
 
   if (!result.ok && result.kind === "cancelled") return false;
 
-  notifyApplyResult(ctx, preset, result, warnings);
+  notifyApplyResult(ctx, preset, result, { unprompted: true, warnings });
 
   return result.ok;
 }
@@ -66,7 +66,7 @@ export function registerPresetFlag(
   pi: Pick<ExtensionAPI, "registerFlag">,
 ): void {
   pi.registerFlag(PRESET_FLAG, {
-    description: "Activate the named pi-presets-plus preset on session start.",
+    description: "Activate the named Presets Plus preset at startup",
     type: "string",
   });
 }

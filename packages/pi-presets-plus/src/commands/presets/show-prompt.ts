@@ -3,6 +3,7 @@
  * the command line, and explains itself when there is no prompt to show.
  */
 import type { ActivePresetSession } from "../../activation/session.js";
+import { EXTENSION_NAME } from "../../extension-name.js";
 import type { HotkeyRegistry } from "../../hotkey-registry.js";
 import { findPreset } from "../../preset-identity.js";
 import { loadAll } from "../../store/api.js";
@@ -14,12 +15,15 @@ import type {
   ExtensionCommandContext,
   Theme,
 } from "@earendil-works/pi-coding-agent";
-import { isInteractiveTui } from "@sherif-fanous/pi-extensions-core";
+import {
+  isInteractiveTui,
+  notifyWarnings,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** Text and severity to display for one `show-prompt` invocation. */
 export interface ShowPromptNotification {
   readonly body: string;
-  readonly severity: "info" | "warning" | "error";
+  readonly severity: "info" | "warning";
 }
 
 /** What `show-prompt` found: a prompt to display, or why there is none. */
@@ -91,14 +95,18 @@ export function formatShowPromptBody(
         severity: "info",
       };
     case "unknown":
-      return { body: `No preset named "${result.name}".`, severity: "error" };
+      return {
+        body: `No preset named "${result.name}".`,
+        severity: "warning",
+      };
   }
 }
 
 /**
- * Run `/presets show-prompt`, using a dialog under the TUI and a plain
- * notification everywhere else. The arguments after the subcommand form one
- * preset name, because names may contain spaces.
+ * Run `/presets show-prompt`. A prompt opens in a dialog under the TUI and
+ * shows as a notification everywhere else; an answer without a prompt is a
+ * notification, and an unknown name a warning. The arguments after the
+ * subcommand form one preset name, because names may contain spaces.
  */
 export async function runShowPrompt(
   ctx: ExtensionCommandContext,
@@ -115,9 +123,19 @@ export async function runShowPrompt(
   const result = findPresetForShowPrompt(name, session.current(), presets);
   const notification = formatShowPromptBody(result, ctx.ui.theme);
 
-  // Neither branch appends to the transcript. Inspecting a prompt must not
-  // copy the preset instructions into the session.
-  if (!isInteractiveTui(ctx) || typeof ctx.ui.custom !== "function") {
+  if (notification.severity === "warning") {
+    notifyWarnings(ctx, EXTENSION_NAME, [notification.body]);
+
+    return;
+  }
+
+  // No branch appends to the transcript. Inspecting a prompt must not copy
+  // the preset instructions into the session.
+  if (
+    (result.kind !== "active" && result.kind !== "named") ||
+    !isInteractiveTui(ctx) ||
+    typeof ctx.ui.custom !== "function"
+  ) {
     ctx.ui.notify(notification.body, notification.severity);
 
     return;

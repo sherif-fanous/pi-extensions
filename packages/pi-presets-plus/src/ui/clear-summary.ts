@@ -1,6 +1,6 @@
 /**
- * Renders the summary shown after a preset is cleared: a title, a lead
- * sentence, and one row per managed field.
+ * Renders the summary shown after a preset is cleared: a heading, a lead
+ * sentence, the preset's name, and one row per managed field.
  */
 import type {
   ClearAction,
@@ -10,28 +10,17 @@ import type {
 import {
   CLEAR_DIALOG_TITLE,
   MODEL_LABEL,
+  PRESET_LABEL,
   THINKING_LABEL,
   TOOLS_LABEL,
 } from "./labels.js";
-import type { Theme } from "@earendil-works/pi-coding-agent";
-
-/** Minimum theme surface the summary needs to color its title and labels. */
-interface Styler {
-  bold(text: string): string;
-  fg(color: Parameters<Theme["fg"]>[0], text: string): string;
-}
+import { alignLabelRows } from "@sherif-fanous/pi-extensions-core";
 
 /** Row label for each field the clear summary reports on. */
 const FIELD_LABELS: Record<ClearField, string> = {
   model: MODEL_LABEL,
   thinking: THINKING_LABEL,
   tools: TOOLS_LABEL,
-};
-
-/** Styler used when the caller passes no theme, leaving the text plain. */
-const IDENTITY_STYLER: Styler = {
-  bold: (text) => text,
-  fg: (_color, text) => text,
 };
 
 /**
@@ -107,27 +96,25 @@ export function formatTools(tools: readonly string[]): string {
   return tools.length > 0 ? tools.join(", ") : "none";
 }
 
-/** Render the full clear summary: title, lead sentence, and field rows. */
+/**
+ * Render the full clear summary as a plain report body: heading, lead
+ * sentence, the cleared preset's name, and one row per field.
+ */
 export function renderClearSummary(
   name: string,
   parts: readonly ClearPart[],
-  styler?: Pick<Theme, "bold" | "fg">,
 ): string {
-  const safeStyler = styler ?? IDENTITY_STYLER;
-  const labels = parts.map((part) => `${FIELD_LABELS[part.field]}:`);
-  const labelWidth = Math.max(...labels.map((label) => label.length));
-  const title = safeStyler.bold(
-    safeStyler.fg("accent", `${CLEAR_DIALOG_TITLE}: ${name}`),
-  );
-  const lead = chooseClearLead(parts);
-  const rows = parts.map((part) => {
-    const label = `${FIELD_LABELS[part.field]}:`;
-    const padding = " ".repeat(labelWidth - label.length);
-
-    return `  ${safeStyler.fg("muted", label)}${padding} ${formatRowValue(part)}`;
-  });
-
-  return [title, lead, ...rows].join("\n");
+  return [
+    CLEAR_DIALOG_TITLE,
+    chooseClearLead(parts),
+    ...alignLabelRows([
+      [`${PRESET_LABEL}:`, name],
+      ...parts.map(
+        (part) =>
+          [`${FIELD_LABELS[part.field]}:`, formatRowValue(part)] as const,
+      ),
+    ]),
+  ].join("\n");
 }
 
 function isKeptLike(action: ClearAction): boolean {

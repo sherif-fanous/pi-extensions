@@ -73,12 +73,18 @@ both.
 Prose in notifications, dialog bodies, inline editor notices, warnings,
 and lead sentences uses complete sentences with terminal periods.
 Single-line labels do not carry one. Key/value labels in dialogs, status
-and clear rows, picker cards, and footer hints use Title Case with a
+and clear rows, picker cards, and footer hints use sentence case with a
 trailing colon, as in `Preset:`, `Scope:`, `Baseline model:`, and
-`Thinking level:`. Editor form rows use the same Title Case text without
-the colon, because their layout is not a key/value row. Button and footer
+`Thinking level:`. Editor form rows use the same text without the colon,
+because their layout is not a key/value row. Button and footer
 action labels use Title Case, as in `Save`, `Cancel`,
 `Test (apply temporarily)`, `Activate`, `Filter`, `Status`, and `Quit`.
 
 `Pi` is the product, `pi` the binary, and Pi command names stay literal:
 `/presets`, `/presets clear`, `/reload`, `/model`.
+
+The "Text and naming" section of the repository's `AGENTS.md` is the
+family standard these rules follow: name the product only as
+`EXTENSION_NAME` (`Presets Plus`), and route usage mistakes, handled
+errors, and reports through core. `tests/shown-text.test.ts` checks the
+main command paths against it.

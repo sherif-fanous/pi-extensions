@@ -2,6 +2,7 @@
  * The editor's scope row, which toggles a preset between the user scope
  * and the project scope.
  */
+import { formatScopeName } from "../../widgets.js";
 import { renderChoiceRow, withFieldDiagnostic } from "../row-render.js";
 import type { EditorRow, EditorRowHost } from "../row.js";
 import { Key, matchesKey } from "@earendil-works/pi-tui";
@@ -41,8 +42,8 @@ export function makeScopeRow(host: EditorRowHost): EditorRow {
         renderChoiceRow(
           host.theme,
           "Scope",
-          ["user", "project"],
-          host.getState().scope,
+          [formatScopeName("user"), formatScopeName("project")],
+          formatScopeName(host.getState().scope),
           host.currentRow() === "scope",
         ),
       );

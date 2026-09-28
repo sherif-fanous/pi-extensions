@@ -485,7 +485,8 @@ describe("clear", () => {
     expect(harness.pi.getThinkingLevel()).toBe("medium");
     expect(harness.setToolsCalls.at(-1)).toEqual(["bash"]);
     expect(harness.session.current()).toBeUndefined();
-    expect(harness.notifications.at(-1)).toContain("Preset cleared: plan");
+    expect(harness.notifications.at(-1)).toContain("Presets Plus Clear");
+    expect(harness.notifications.at(-1)).toContain("Preset:         plan");
     expect(harness.notifications.at(-1)).toContain(
       "Pi restored your previous settings.",
     );

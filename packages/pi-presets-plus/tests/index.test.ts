@@ -215,7 +215,7 @@ describe("session_start configuration", () => {
     await handlers.get("session_start")?.({ type: "session_start" }, ctx);
 
     expect(notify).toHaveBeenCalledWith(
-      expect.stringContaining("Migrated user configuration"),
+      expect.stringContaining("Presets Plus migrated user configuration"),
       "info",
     );
   });
@@ -250,7 +250,7 @@ describe("session_start configuration", () => {
     await handlers.get("session_start")?.({ type: "session_start" }, ctx);
 
     expect(notify).toHaveBeenCalledWith(
-      "Migrated user configuration to config.json.",
+      "Presets Plus migrated user configuration to config.json.",
       "info",
     );
 

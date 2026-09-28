@@ -230,52 +230,32 @@ describe("handlePresetsCommand", () => {
     },
   );
 
-  it("warns on an unknown subcommand", async () => {
-    const { ctx, notify } = makeStubCtx();
+  it.each([
+    ["bogus", "bogus"],
+    ["list", "list"],
+    ["list --text", "list --text"],
+    ["  status foo  ", "status foo"],
+  ])(
+    "answers %j with the usage warning and runs nothing",
+    async (args, argument) => {
+      const { ctx, notify } = makeStubCtx();
 
-    await handlePresetsCommand(
-      "bogus",
-      ctx,
-      makeStubPi(),
-      new ActivePresetSession(),
-      new HotkeyRegistry(),
-    );
-    expect(notify).toHaveBeenCalledTimes(1);
-    expect(notify.mock.calls[0]?.[0]).toContain('"bogus"');
-    expect(notify.mock.calls[0]?.[1]).toBe("warning");
-  });
+      await handlePresetsCommand(
+        args,
+        ctx,
+        makeStubPi(),
+        new ActivePresetSession(),
+        new HotkeyRegistry(),
+      );
 
-  it("does not open the picker for `list`", async () => {
-    const { ctx, notify } = makeStubCtx();
-
-    await handlePresetsCommand(
-      "list",
-      ctx,
-      makeStubPi(),
-      new ActivePresetSession(),
-      new HotkeyRegistry(),
-    );
-    expect(notify).toHaveBeenCalledTimes(1);
-    expect(notify.mock.calls[0]?.[0]).toContain("not a supported");
-    expect(notify.mock.calls[0]?.[0]).toContain("/presets");
-    expect(notify.mock.calls[0]?.[1]).toBe("warning");
-  });
-
-  it("does not print text for `list --text`", async () => {
-    const { ctx, notify } = makeStubCtx();
-
-    await handlePresetsCommand(
-      "list --text",
-      ctx,
-      makeStubPi(),
-      new ActivePresetSession(),
-      new HotkeyRegistry(),
-    );
-    expect(notify).toHaveBeenCalledTimes(1);
-    expect(notify.mock.calls[0]?.[0]).toContain("not a supported");
-    expect(notify.mock.calls[0]?.[0]).not.toContain("no presets configured");
-    expect(notify.mock.calls[0]?.[1]).toBe("warning");
-  });
+      expect(notify).toHaveBeenCalledExactlyOnceWith(
+        `Presets Plus: 1 warning\n- Unknown subcommand "${argument}". Try /presets, /presets reload, /presets clear, /presets status, /presets policy, or /presets show-prompt.`,
+        "warning",
+      );
+      expect(openPickerMock).not.toHaveBeenCalled();
+      expect(requestActivationMock).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(["save quickfix", "edit plan", "rm plan", "next", "prev"])(
     "does not expose unsupported subcommand %s",
@@ -411,6 +391,34 @@ describe("handlePresetsCommand", () => {
     );
     expect(requestActivationMock).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["show-prompt", "No preset is active.", "info"],
+    [
+      "show-prompt missing",
+      'Presets Plus: 1 warning\n- No preset named "missing".',
+      "warning",
+    ],
+  ])(
+    "answers %j without opening a dialog in the TUI",
+    async (args, message, severity) => {
+      const { ctx, notify } = makeStubCtx();
+      const custom = vi.fn();
+
+      Object.assign(ctx.ui, { custom });
+
+      await handlePresetsCommand(
+        args,
+        ctx,
+        makeStubPi(),
+        new ActivePresetSession(),
+        new HotkeyRegistry(),
+      );
+
+      expect(notify).toHaveBeenCalledExactlyOnceWith(message, severity);
+      expect(custom).not.toHaveBeenCalled();
+    },
+  );
 
   it("dispatches `reload` to runReload (empty-state path)", async () => {
     const { ctx, notify } = makeStubCtx();

@@ -438,7 +438,7 @@ default is the first default candidate in merged preset order.
 When one or more policy rules match the current directory, the report SHALL use
 the labeled-row presentation of `/presets status`:
 
-- A title of `Preset Policy`.
+- A title of `Presets Plus Policy`.
 - A `Directory:` row containing the current working directory.
 - An `Allowed presets:` row containing the comma-separated names of usable
   permitted presets, or `none` when there are none.
@@ -570,7 +570,7 @@ colon is muted.
 #### Scenario: Policy view with no matching rules
 
 - **WHEN** the cwd matches no policy rule
-- **THEN** the output SHALL be the `Preset Policy` heading followed by the
+- **THEN** the output SHALL be the `Presets Plus Policy` heading followed by the
   sentence `No preset policy applies to <cwd>.` on its own line, indented two
   spaces, with `<cwd>` replaced by the current working directory
 

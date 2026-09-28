@@ -221,7 +221,7 @@ describe("openPicker info actions", () => {
 
     expect(openInfoDialog).toHaveBeenCalledWith(ctx, {
       body: "status body",
-      title: "Preset Status",
+      title: "Presets Plus Status",
       tone: "info",
     });
     expect(ctx.setHidden).toHaveBeenCalledWith(true);
@@ -239,8 +239,8 @@ describe("openPicker info actions", () => {
     await runPicker("s");
 
     expect(openInfoDialog).toHaveBeenCalledWith(expect.anything(), {
-      body: "Warnings:\n- failed to read user presets\n\nstatus body",
-      title: "Preset Status",
+      body: "status body\n\nWarnings:\n- failed to read user presets",
+      title: "Presets Plus Status",
       tone: "info",
     });
   });
@@ -278,7 +278,7 @@ describe("openPicker info actions", () => {
     expect(clearReturning).toHaveBeenCalledOnce();
     expect(openInfoDialog).toHaveBeenCalledWith(ctx, {
       body: "clear body",
-      title: "Preset Cleared",
+      title: "Presets Plus Clear",
       tone: "info",
     });
     expect(ctx.notify).not.toHaveBeenCalledWith("clear body", "info");
@@ -334,7 +334,7 @@ describe("openPicker info actions", () => {
 
     expect(ctx.notify).toHaveBeenCalledOnce();
     expect(ctx.notify).toHaveBeenCalledWith(
-      "Pi Presets Plus could not complete the action. Status failed.",
+      "Could not complete the action: Status failed.",
       "error",
     );
 
@@ -347,7 +347,7 @@ describe("openPicker info actions", () => {
 
   it("reports a rejected reorder without refreshing the picker", async () => {
     const reason =
-      "Pi Presets Plus did not change the user preset file at /tmp/presets.json. It could not load the complete file. Fix the file and try again.";
+      "Presets Plus did not change the user preset file at /tmp/presets.json. It could not load the complete file. Fix the file and try again.";
     const notify = vi.fn();
     const refreshPresets = vi.fn();
     const next = { ...selected, name: "ship" };

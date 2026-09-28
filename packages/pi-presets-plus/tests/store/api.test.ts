@@ -78,7 +78,7 @@ async function saveScope(
 }
 
 function unsafeMutationReason(scope: PresetScope, path: string): string {
-  return `Pi Presets Plus did not change the ${scope} configuration file at ${path}. It could not load the complete file. Fix the file and try again.`;
+  return `Presets Plus did not change the ${scope} configuration file at ${path}. It could not load the complete file. Fix the file and try again.`;
 }
 
 async function writeRawScope(
@@ -650,7 +650,7 @@ describe("movePreset", () => {
 
     expect(thrown.errors).toEqual([sourceError, rollbackError]);
     expect(thrown.message).toBe(
-      "The preset move failed, and Pi Presets Plus could not restore the destination scope.",
+      "The preset move failed, and Presets Plus could not restore the destination scope.",
     );
 
     expect(

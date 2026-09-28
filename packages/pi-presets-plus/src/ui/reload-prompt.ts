@@ -5,6 +5,7 @@
 import { openConfirm } from "./confirm.js";
 import { RELOAD_PROMPT_TITLE } from "./labels.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { describeErrorSentence } from "@sherif-fanous/pi-extensions-core";
 
 /** Body of the reload confirmation dialog. */
 const RELOAD_PROMPT_BODY =
@@ -40,19 +41,15 @@ export function reloadAfterOverlayClose(ctx: ReloadContext): void {
   }, 0);
 }
 
-function formatError(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-
-  return "unknown error";
-}
-
 async function reloadPi(
   ctx: Required<Pick<ReloadContext, "reload" | "ui">>,
 ): Promise<void> {
   try {
     await ctx.reload();
   } catch (error) {
-    ctx.ui.notify(`Failed to reload Pi: ${formatError(error)}.`, "error");
+    ctx.ui.notify(
+      `Could not reload Pi: ${describeErrorSentence(error)}`,
+      "error",
+    );
   }
 }

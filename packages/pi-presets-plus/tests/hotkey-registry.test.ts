@@ -308,6 +308,22 @@ describe("HotkeyRegistry.bindForSession", () => {
     );
   });
 
+  it("names Presets Plus when a hotkey applies a preset", async () => {
+    const registry = new HotkeyRegistry();
+    const current = preset("plan", "ctrl+shift+1");
+
+    const { ctx, notify, shortcuts } = bind(registry, [current], () =>
+      Promise.resolve([current]),
+    );
+
+    await shortcuts.get("ctrl+shift+1")?.handler(ctx as ExtensionContext);
+
+    expect(notify).toHaveBeenCalledExactlyOnceWith(
+      'Presets Plus applied preset "plan".',
+      "info",
+    );
+  });
+
   it("does not notify when hotkey activation is cancelled", async () => {
     const registry = new HotkeyRegistry();
     const current = preset("plan", "ctrl+shift+1");
@@ -383,7 +399,7 @@ describe("HotkeyRegistry.bindForSession", () => {
     await shortcuts.get("ctrl+shift+1")?.handler(ctx as ExtensionContext);
 
     expect(notify).toHaveBeenCalledWith(
-      'pi-presets-plus failed to activate preset "plan" from hotkey: boom.',
+      'Presets Plus hotkey for preset "plan" failed: boom.',
       "error",
     );
   });

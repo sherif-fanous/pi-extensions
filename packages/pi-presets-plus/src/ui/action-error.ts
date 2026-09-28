@@ -2,25 +2,12 @@
  * Turns a value thrown by an editor or picker action into one
  * user-facing sentence.
  */
+import { describeErrorSentence } from "@sherif-fanous/pi-extensions-core";
 
-/** Format an unexpected action failure with stable terminal punctuation. */
+/**
+ * Format an unexpected action failure as
+ * `Could not complete the action: <message>`.
+ */
 export function formatActionError(error: unknown): string {
-  const detail = describeThrownValue(error);
-  const punctuatedDetail = /[.!?]$/u.test(detail) ? detail : `${detail}.`;
-
-  return `Pi Presets Plus could not complete the action. ${punctuatedDetail}`;
-}
-
-function describeThrownValue(error: unknown): string {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message.trim();
-  }
-
-  try {
-    const detail = String(error).trim();
-
-    return detail.length > 0 ? detail : "Unknown error.";
-  } catch {
-    return "Unknown error.";
-  }
+  return `Could not complete the action: ${describeErrorSentence(error)}`;
 }

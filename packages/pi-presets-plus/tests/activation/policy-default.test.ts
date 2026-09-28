@@ -175,7 +175,10 @@ describe("maybeApplyPolicyDefault", () => {
 
     expect(result).toBe(true);
     expect(applyMock).toHaveBeenCalledWith(selected, ctx, pi, session);
-    expect(notify).toHaveBeenCalledWith('Preset "work-opus" applied.', "info");
+    expect(notify).toHaveBeenCalledWith(
+      'Presets Plus applied preset "work-opus".',
+      "info",
+    );
   });
 
   it("warns and keeps the baseline when the default is unresolvable", async () => {

@@ -8,13 +8,13 @@ import {
   formatTools,
   renderClearSummary,
 } from "../ui/clear-summary.js";
+import { deliverCommandReport } from "../ui/command-report.js";
 import { assessOverlay } from "./overlay-assessment.js";
 import type { ActivePresetSession } from "./session.js";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-import { styleReport } from "@sherif-fanous/pi-extensions-core";
 
 /** What a clear will write to Pi and how it will report each field. */
 export interface ClearDecision {
@@ -74,7 +74,10 @@ export type ClearAction =
 /** Pi state channel that a clear reports on. */
 export type ClearField = "model" | "thinking" | "tools";
 
-/** Run a clear and notify the user with the rendered summary. */
+/**
+ * Run a clear and deliver its summary as a command report, or say that no
+ * preset is active.
+ */
 export async function clear(
   ctx: ExtensionCommandContext,
   pi: ExtensionAPI,
@@ -82,20 +85,21 @@ export async function clear(
 ): Promise<void> {
   const result = await clearReturning(ctx, pi, session);
 
-  const parts = result?.parts ?? [];
-  const severity = parts.some(
-    (part) =>
-      part.action === "restore-failed" || part.action === "restored-partial",
-  )
-    ? "warning"
-    : "info";
+  if (!result) {
+    ctx.ui.notify("No preset is active.", "info");
 
-  ctx.ui.notify(
-    result
-      ? styleReport(renderClearSummary(result.name, result.parts), ctx.ui.theme)
-      : "No preset is active.",
-    severity,
-  );
+    return;
+  }
+
+  deliverCommandReport(ctx, pi, {
+    body: renderClearSummary(result.name, result.parts),
+    severity: result.parts.some(
+      (part) =>
+        part.action === "restore-failed" || part.action === "restored-partial",
+    )
+      ? "warning"
+      : "info",
+  });
 }
 
 /** Run a clear and return its outcome, or `undefined` when none is active. */

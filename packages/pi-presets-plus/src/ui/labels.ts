@@ -2,6 +2,7 @@
  * Holds the field labels, dialog titles, and action labels that the
  * preset surfaces share, so one spelling reaches every surface.
  */
+import { EXTENSION_NAME } from "../extension-name.js";
 
 // Field labels shared by status, clear, editor rows, and picker cards.
 export const MODEL_LABEL = "Model";
@@ -29,10 +30,10 @@ export const DEFAULT_PRESET_LABEL = "Default preset";
 /** Label for the ordered presets that match the default pattern. */
 export const DEFAULT_MATCHES_LABEL = "Default matches";
 
-// Dialog titles shared by overlays and formatter headings.
-export const STATUS_DIALOG_TITLE = "Preset Status";
-export const POLICY_DIALOG_TITLE = "Preset Policy";
-export const CLEAR_DIALOG_TITLE = "Preset cleared";
+// Dialog titles shared by overlays and report headings.
+export const STATUS_DIALOG_TITLE = `${EXTENSION_NAME} Status`;
+export const POLICY_DIALOG_TITLE = `${EXTENSION_NAME} Policy`;
+export const CLEAR_DIALOG_TITLE = `${EXTENSION_NAME} Clear`;
 export const ACTIVATION_FAILED_TITLE = "Activation failed";
 export const RELOAD_PROMPT_TITLE = "Reload Pi?";
 export const MOVE_PRESET_TITLE = "Move preset?";

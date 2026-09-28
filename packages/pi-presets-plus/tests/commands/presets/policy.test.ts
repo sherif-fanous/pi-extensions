@@ -64,7 +64,7 @@ describe("formatPolicy", () => {
   it("reports mixed outcomes and a single resolved default", () => {
     expect(formatPolicy("/work/project", presets, rules)).toBe(
       [
-        "Preset Policy",
+        "Presets Plus Policy",
         "  Directory:          /work/project",
         "  Allowed presets:    work-opus",
         "  Prohibited presets: work-personal, other",
@@ -87,7 +87,7 @@ describe("formatPolicy", () => {
       formatPolicy("/work/project", orderedPresets, multipleDefaultRules),
     ).toBe(
       [
-        "Preset Policy",
+        "Presets Plus Policy",
         "  Directory:          /work/project",
         "  Allowed presets:    work-sonnet, work-opus, other",
         "  Prohibited presets: none",
@@ -111,7 +111,7 @@ describe("formatPolicy", () => {
       formatPolicy("/work/project", orderedPresets, prohibitedDefaultRules),
     ).toBe(
       [
-        "Preset Policy",
+        "Presets Plus Policy",
         "  Directory:          /work/project",
         "  Allowed presets:    work-sonnet, work-opus",
         "  Prohibited presets: work-personal",
@@ -128,7 +128,7 @@ describe("formatPolicy", () => {
 
     expect(formatPolicy("/work/project", presets, allAllowedRules)).toBe(
       [
-        "Preset Policy",
+        "Presets Plus Policy",
         "  Directory:          /work/project",
         "  Allowed presets:    work-opus, work-personal, other",
         "  Prohibited presets: none",
@@ -144,7 +144,7 @@ describe("formatPolicy", () => {
 
     expect(formatPolicy("/work/project", presets, allProhibitedRules)).toBe(
       [
-        "Preset Policy",
+        "Presets Plus Policy",
         "  Directory:          /work/project",
         "  Allowed presets:    none",
         "  Prohibited presets: work-opus, work-personal, other",
@@ -166,7 +166,7 @@ describe("formatPolicy", () => {
       ]),
     ).toBe(
       [
-        "Preset Policy",
+        "Presets Plus Policy",
         "  Directory:          /work/project",
         "  Allowed presets:    usable",
         "  Prohibited presets: none",
@@ -182,7 +182,7 @@ describe("formatPolicy", () => {
 
     expect(formatPolicy("/work/project", presets, unresolvableRules)).toBe(
       [
-        "Preset Policy",
+        "Presets Plus Policy",
         "  Directory:          /work/project",
         "  Allowed presets:    other",
         "  Prohibited presets: work-opus, work-personal",
@@ -191,27 +191,15 @@ describe("formatPolicy", () => {
     );
   });
 
-  it("applies title and row styling", () => {
-    const output = formatPolicy("/work/project", presets, rules, {
-      bold: (text) => `<bold>${text}</bold>`,
-      fg: (color, text) => `<${color}>${text}</${color}>`,
-    });
-
-    expect(output).toContain("<bold><accent>Preset Policy</accent></bold>");
-    expect(output).toContain(
-      "  <muted>Directory:</muted>          /work/project",
-    );
-  });
-
   it("states when no rules match", () => {
     expect(formatPolicy("/personal", presets, rules)).toBe(
-      "Preset Policy\n  No preset policy applies to /personal.",
+      "Presets Plus Policy\n  No preset policy applies to /personal.",
     );
   });
 });
 
 describe("runPolicy", () => {
-  it("includes warnings in one report and does not modify config.json", async () => {
+  it("delivers one styled report with its warnings and does not modify config.json", async () => {
     tempAgentDir = await mkdtemp(join(tmpdir(), "pi-policy-view-"));
     previousAgentDir = process.env.PI_CODING_AGENT_DIR;
     process.env.PI_CODING_AGENT_DIR = tempAgentDir;
@@ -223,20 +211,24 @@ describe("runPolicy", () => {
     await mkdir(join(tempAgentDir, "presets-plus"), { recursive: true });
     await writeFile(path, original);
 
-    await runPolicy({
-      cwd: "/work/project",
-      modelRegistry: {
-        find: () => undefined,
-        hasConfiguredAuth: () => false,
-      },
-      ui: {
-        notify,
-        theme: {
-          bold: (text: string) => `<bold>${text}</bold>`,
-          fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+    await runPolicy(
+      {
+        cwd: "/work/project",
+        mode: "print",
+        modelRegistry: {
+          find: () => undefined,
+          hasConfiguredAuth: () => false,
         },
-      },
-    } as unknown as ExtensionCommandContext);
+        ui: {
+          notify,
+          theme: {
+            bold: (text: string) => `<bold>${text}</bold>`,
+            fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+          },
+        },
+      } as unknown as ExtensionCommandContext,
+      { appendEntry: vi.fn() },
+    );
 
     expect(await readFile(path, "utf-8")).toBe(original);
     expect(notify).toHaveBeenCalledTimes(1);
@@ -244,7 +236,14 @@ describe("runPolicy", () => {
       expect.stringContaining("Warnings:"),
       "warning",
     );
-    expect(notify.mock.calls[0]?.[0]).toContain("Preset Policy");
+
+    expect(notify.mock.calls[0]?.[0]).toContain(
+      "<accent><bold>Presets Plus Policy</bold></accent>",
+    );
+
+    expect(notify.mock.calls[0]?.[0]).toContain(
+      "  <muted>Directory:</muted>          /work/project",
+    );
   });
 });
 

@@ -12,8 +12,8 @@ returning to the same setups: a fast, cheap model for boilerplate; a heavier
 model for tricky design; a "review only" setup with no write tools and a strict
 prompt; or separate planning and implementation modes.
 
-`pi-presets-plus` saves those settings together as a named preset. You can
-switch presets with one keystroke.
+Presets Plus saves those settings together as a named preset. You can switch
+presets with one keystroke.
 
 ## Install
 
@@ -48,7 +48,7 @@ and delete them. Its footer shows the available keys.
 
 ## Configuration
 
-Pi Presets Plus reads these files:
+Presets Plus reads these files:
 
 | Scope   | File                                   | Notes                                                                                                                        |
 | ------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |

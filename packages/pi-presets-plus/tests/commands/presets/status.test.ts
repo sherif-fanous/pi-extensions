@@ -59,7 +59,7 @@ describe("runStatus", () => {
     );
 
     expect(notifications).toEqual([
-      ["Preset Status\n  No preset is active.", "info"],
+      ["Presets Plus Status\n  No preset is active.", "info"],
     ]);
   });
 
@@ -93,7 +93,7 @@ describe("runStatus", () => {
     await runStatus(ctx as never, pi("high", ["read"]) as never, session);
 
     expect(notifications).toHaveLength(1);
-    expect(notifications[0]?.[0]).toContain("Preset Status");
+    expect(notifications[0]?.[0]).toContain("Presets Plus Status");
     expect(notifications[0]?.[0]).toContain("Preset:                 plan");
     expect(notifications[0]?.[1]).toBe("info");
   });
@@ -134,9 +134,9 @@ describe("formatStatus", () => {
       pi("high", ["read"]),
     );
 
-    expect(out).toContain("Preset Status");
+    expect(out).toContain("Presets Plus Status");
     expect(out).toContain("Preset:                  plan");
-    expect(out).toContain("Scope:                   project");
+    expect(out).toContain("Scope:                   Project");
     expect(out).not.toContain("restore:");
     expect(out).toContain("Baseline model:          anthropic/old");
     expect(out).toContain("Baseline thinking level: medium");

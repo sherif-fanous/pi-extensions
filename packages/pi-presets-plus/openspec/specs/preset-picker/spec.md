@@ -418,7 +418,7 @@ picker SHALL remain open with list focus restored.
 - **WHEN** the user opens the picker, no preset is active, and the user presses
   `s`
 - **THEN** an info-dialog overlay SHALL appear with the same body that
-  `/presets status` emits: the `Preset Status` heading followed by
+  `/presets status` emits: the `Presets Plus Status` heading followed by
   `No preset is active.` on its own line, indented two spaces
 - **AND** dismissing the dialog SHALL return list focus to the picker
 
@@ -546,17 +546,15 @@ change's user-facing command surface.
 
 - **WHEN** the user runs `/presets list`
 - **THEN** the package SHALL NOT open the picker as a `list` synonym
-- **AND** the package SHALL report that `list` is not a supported subcommand or
-  otherwise leave the command unhandled according to the router's
-  unknown-subcommand behavior
+- **AND** the package SHALL answer with the unknown-subcommand usage warning,
+  which lists every valid `/presets` form
 
 #### Scenario: /presets list --text is not supported
 
 - **WHEN** the user runs `/presets list --text`
 - **THEN** the package SHALL NOT print a textual preset list
-- **AND** the package SHALL report that `list` is not a supported subcommand or
-  otherwise leave the command unhandled according to the router's
-  unknown-subcommand behavior
+- **AND** the package SHALL answer with the unknown-subcommand usage warning,
+  which lists every valid `/presets` form
 
 #### Scenario: Exact-name activation is not supported
 

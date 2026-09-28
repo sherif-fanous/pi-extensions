@@ -5,6 +5,7 @@
  */
 import { requestActivation } from "./activation/request.js";
 import type { ActivePresetSession } from "./activation/session.js";
+import { EXTENSION_NAME } from "./extension-name.js";
 import { findPreset, type PresetIdentity } from "./preset-identity.js";
 import type { LoadedPreset } from "./types.js";
 import { notifyApplyResult } from "./ui/apply-result.js";
@@ -20,7 +21,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { KeyId } from "@earendil-works/pi-tui";
 import {
-  describeError,
+  describeErrorSentence,
   notifyWarnings,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -122,7 +123,7 @@ export class HotkeyRegistry {
             });
 
             if (!current) {
-              notifyWarnings(handlerCtx, "Presets Plus", [
+              notifyWarnings(handlerCtx, EXTENSION_NAME, [
                 `Preset "${registeredName}" no longer exists.`,
               ]);
 
@@ -138,10 +139,12 @@ export class HotkeyRegistry {
 
             if (!result.ok && result.kind === "cancelled") return;
 
-            notifyApplyResult(handlerCtx, current, result);
+            notifyApplyResult(handlerCtx, current, result, {
+              unprompted: true,
+            });
           } catch (err) {
             handlerCtx.ui.notify(
-              `pi-presets-plus failed to activate preset "${registeredName}" from hotkey: ${describeError(err)}.`,
+              `${EXTENSION_NAME} hotkey for preset "${registeredName}" failed: ${describeErrorSentence(err)}`,
               "error",
             );
           }

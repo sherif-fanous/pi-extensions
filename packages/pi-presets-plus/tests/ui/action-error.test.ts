@@ -15,7 +15,7 @@ describe("formatActionError", () => {
     [42, "42."],
   ])("formats %p", (error, detail) => {
     expect(formatActionError(error)).toBe(
-      `Pi Presets Plus could not complete the action. ${detail}`,
+      `Could not complete the action: ${detail}`,
     );
   });
 
@@ -27,7 +27,7 @@ describe("formatActionError", () => {
     };
 
     expect(formatActionError(thrown)).toBe(
-      "Pi Presets Plus could not complete the action. Unknown error.",
+      "Could not complete the action: Unknown error.",
     );
   });
 });

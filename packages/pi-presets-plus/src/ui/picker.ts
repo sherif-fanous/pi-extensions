@@ -5,6 +5,7 @@
 import { detectDriftReasons } from "../activation/drift.js";
 import type { ActivationResult } from "../activation/request.js";
 import type { ActivePresetSession } from "../activation/session.js";
+import { EXTENSION_NAME } from "../extension-name.js";
 import type { HotkeyRegistry } from "../hotkey-registry.js";
 import { samePresetIdentity } from "../preset-identity.js";
 import { loadAll } from "../store/api.js";
@@ -354,7 +355,7 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
   async refreshPresets(selectionKey?: string): Promise<void> {
     const { presets, warnings } = await loadAll(this.ctx);
 
-    notifyWarnings(this.ctx, "Presets Plus", warnings);
+    notifyWarnings(this.ctx, EXTENSION_NAME, warnings);
     this.allPresets = presets;
     this.inheritedTools = this.pi?.getActiveTools() ?? this.inheritedTools;
     this.invalidateVisible();
@@ -556,7 +557,7 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
           frameLine("", width),
           frameLine(
             centerText(
-              this.theme.fg("warning", "No matching presets"),
+              this.theme.fg("warning", "No matching presets."),
               width - 2,
             ),
             width,
@@ -641,7 +642,7 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
   private renderTopBorder(width: number): string {
     if (width <= 2) return truncateToWidth("┌┐", width, "");
 
-    const title = this.theme.fg("accent", this.theme.bold("Presets Plus"));
+    const title = this.theme.fg("accent", this.theme.bold(EXTENSION_NAME));
     const scope = this.theme.fg(
       "muted",
       `Scope: ${formatScopeFilter(this.state.scopeFilter)}`,
@@ -695,7 +696,7 @@ export async function openPicker(
 ): Promise<PickerResult | undefined> {
   const { presets, warnings } = await loadAll(ctx);
 
-  notifyWarnings(ctx, "Presets Plus", warnings);
+  notifyWarnings(ctx, EXTENSION_NAME, warnings);
 
   const inheritedTools = options.inheritedTools ?? [];
   let currentPicker: PresetPickerComponent | undefined;

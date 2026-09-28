@@ -10,10 +10,12 @@ import type { HotkeyRegistry } from "../hotkey-registry.js";
 import { removePreset, reorderWithinScope } from "../store/api.js";
 import type { LoadedPreset } from "../types.js";
 import { renderClearSummary } from "./clear-summary.js";
+import { appendReportWarnings } from "./command-report.js";
 import { openConfirm } from "./confirm.js";
 import { openEditor } from "./editor.js";
 import { openInfoDialog } from "./info-dialog.js";
 import {
+  CLEAR_DIALOG_TITLE,
   CLEAR_LABEL,
   DELETE_LABEL,
   DUPLICATE_LABEL,
@@ -153,7 +155,7 @@ export class PickerCommands {
             renderClearSummary(result.name, result.parts),
             theme,
           ),
-          title: "Preset Cleared",
+          title: CLEAR_DIALOG_TITLE,
           tone: result.parts.some(
             (part) =>
               part.action === "restore-failed" ||
@@ -305,7 +307,7 @@ export class PickerCommands {
     await this.host.runWithHiddenOverlay(() =>
       openInfoDialog(ctx, {
         body: styleReport(
-          withWarnings(result.body, result.warnings),
+          appendReportWarnings(result.body, result.warnings),
           this.host.theme,
         ),
         title: STATUS_DIALOG_TITLE,
@@ -383,15 +385,4 @@ export class PickerCommands {
       }),
     );
   }
-}
-
-function withWarnings(body: string, warnings: readonly string[]): string {
-  if (warnings.length === 0) return body;
-
-  return [
-    `Warnings:`,
-    ...warnings.map((warning) => `- ${warning}`),
-    "",
-    body,
-  ].join("\n");
 }

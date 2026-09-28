@@ -6,6 +6,7 @@
 import { clear } from "../../activation/clear.js";
 import { requestActivation } from "../../activation/request.js";
 import type { ActivePresetSession } from "../../activation/session.js";
+import { EXTENSION_NAME } from "../../extension-name.js";
 import type { HotkeyRegistry } from "../../hotkey-registry.js";
 import { loadAll } from "../../store/api.js";
 import { notifyApplyResult } from "../../ui/apply-result.js";
@@ -18,7 +19,9 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
+import type { AutocompleteItem } from "@earendil-works/pi-tui";
 import {
+  notifyUsageWarning,
   notifyWarnings,
   requireInteractiveTui,
   subcommandCompletions,
@@ -26,9 +29,11 @@ import {
 
 /**
  * One `/presets` subcommand: the token, the description its completion
- * label shows, and its runner.
+ * shows, whether a preset name may follow it, and its runner.
  */
 interface Subcommand {
+  /** A preset name may follow the token; other subcommands take nothing. */
+  readonly acceptsName?: boolean;
   readonly description: string;
   readonly name: string;
   run(
@@ -44,33 +49,39 @@ interface Subcommand {
 const SUBCOMMANDS: readonly Subcommand[] = [
   {
     name: "reload",
-    description: "re-read both scope files",
+    description: "Reload presets from disk",
     run: runReloadWrapper,
   },
   {
     name: "clear",
-    description: "clear the active preset",
+    description: "Clear the active preset",
     run: runClearWrapper,
   },
   {
     name: "status",
-    description: "show active preset details",
+    description: "Show the active preset's status",
     run: runStatusWrapper,
   },
   {
     name: "policy",
-    description: "show access policy for this directory",
+    description: "Show the preset policy for this directory",
     run: runPolicyWrapper,
   },
   {
     name: "show-prompt",
-    description: "show the active preset's prompt (or [name])",
+    acceptsName: true,
+    description: "Show a preset's prompt, the active one by default",
     run: runShowPrompt,
   },
 ] as const;
 
 /** Completes the first word of the argument with a subcommand name. */
 const completeSubcommand = subcommandCompletions(SUBCOMMANDS);
+/** Every way to run `/presets`, listed by the usage warning. */
+const USAGE_FORMS = [
+  "/presets",
+  ...SUBCOMMANDS.map((subcommand) => `/presets ${subcommand.name}`),
+] as const satisfies readonly [string, ...string[]];
 
 /**
  * Complete the argument after `/presets`: preset names once the user has
@@ -82,7 +93,7 @@ const completeSubcommand = subcommandCompletions(SUBCOMMANDS);
 export async function getArgumentCompletions(
   prefix: string,
   getPresetNames: () => Promise<readonly string[]> = () => Promise.resolve([]),
-): Promise<{ value: string; label: string }[]> {
+): Promise<AutocompleteItem[]> {
   const trimmedPrefix = prefix.trimStart();
   const showPromptPrefix = "show-prompt ";
 
@@ -99,9 +110,10 @@ export async function getArgumentCompletions(
 }
 
 /**
- * Run a `/presets` invocation. An empty argument opens the picker, a known
- * subcommand runs it, and any other token is tried as a preset name before
- * the unknown-subcommand warning.
+ * Run a `/presets` invocation. An empty argument opens the picker, a
+ * subcommand runs it, and any other argument is tried as a preset name
+ * before the unknown-subcommand warning. A subcommand matches the whole
+ * argument, except that `show-prompt` may be followed by a preset name.
  */
 export async function handlePresetsCommand(
   args: string,
@@ -118,32 +130,30 @@ export async function handlePresetsCommand(
     return;
   }
 
-  const tokens = trimmedArgs.split(/\s+/);
-  const subCommand = tokens[0] ?? "";
+  const [firstToken, ...rest] = trimmedArgs.split(/\s+/);
 
-  if (subCommand === "list") {
-    notifyWarnings(ctx, "Presets Plus", [
-      '"list" is not a supported /presets subcommand. Run /presets to open the picker.',
-    ]);
+  // `list` was never a subcommand, and it stays out of preset-name lookup.
+  if (firstToken === "list") {
+    notifyUsageWarning(ctx, EXTENSION_NAME, trimmedArgs, USAGE_FORMS);
 
     return;
   }
 
   const target = SUBCOMMANDS.find(
-    (subcommand) => subcommand.name === subCommand,
+    (subcommand) =>
+      subcommand.name === trimmedArgs ||
+      (subcommand.acceptsName === true && subcommand.name === firstToken),
   );
 
   if (target) {
-    await target.run(ctx, tokens.slice(1), pi, session, hotkeys);
+    await target.run(ctx, rest, pi, session, hotkeys);
 
     return;
   }
 
   if (await activateNamedPreset(trimmedArgs, ctx, pi, session)) return;
 
-  notifyWarnings(ctx, "Presets Plus", [
-    `Unknown subcommand "${subCommand ?? ""}". Try ${formatSupportedCommandHint()}.`,
-  ]);
+  notifyUsageWarning(ctx, EXTENSION_NAME, trimmedArgs, USAGE_FORMS);
 }
 
 /** Activate a preset by name, returning false when no such preset exists. */
@@ -155,7 +165,7 @@ async function activateNamedPreset(
 ): Promise<boolean> {
   const { presets, warnings } = await loadAll(ctx);
 
-  notifyWarnings(ctx, "Presets Plus", warnings);
+  notifyWarnings(ctx, EXTENSION_NAME, warnings);
 
   const preset = presets.find(
     (candidate) => candidate.name === name && !candidate.shadowed,
@@ -170,18 +180,6 @@ async function activateNamedPreset(
   notifyApplyResult(ctx, preset, result);
 
   return true;
-}
-
-/** List the supported commands for the unknown-subcommand warning. */
-function formatSupportedCommandHint(): string {
-  const commands = [
-    "/presets",
-    ...SUBCOMMANDS.map((subcommand) => `/presets ${subcommand.name}`),
-  ];
-
-  if (commands.length <= 1) return commands[0] ?? "/presets";
-
-  return `${commands.slice(0, -1).join(", ")}, or ${commands[commands.length - 1]}`;
 }
 
 async function runClearWrapper(
@@ -201,7 +199,7 @@ async function runPicker(
 ): Promise<void> {
   // Outside the TUI, ui.custom resolves undefined and no picker can open.
   // The preset editor opens only from the picker, so this gates it too.
-  if (!requireInteractiveTui(ctx, "Presets Plus", "/presets")) return;
+  if (!requireInteractiveTui(ctx, EXTENSION_NAME, "/presets")) return;
 
   await openPicker(ctx, {
     hotkeys,

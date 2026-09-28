@@ -730,8 +730,9 @@ introduced in change 2:
 - `<name>` — activate the named preset (any token that is not a known subcommand
   is interpreted as a preset name).
 - `clear` — clear the active preset per the baseline-overlay restore rules with
-  user-override protection. The result SHALL be delivered via `ctx.ui.notify`
-  (prompt invocation surface).
+  user-override protection. The clear summary SHALL be delivered as a command
+  report, the same way as the `status` report below; when no preset is active,
+  the package SHALL instead notify `No preset is active.` at `info` severity.
 - `status`: produce a read-only command report of active state including
   baseline, `lastApplied`, current Pi values, per-field ownership classification
   (extension-owned / user override / already at baseline), `applyCount`, and the
@@ -766,13 +767,14 @@ info-dialog overlay (see the picker capability for those scenarios).
 
 - **WHEN** the user runs `/presets clear`
 - **THEN** the clear flow SHALL run per the clear requirement
-- **AND** the result SHALL be delivered via `ctx.ui.notify`
+- **AND** the summary SHALL be delivered as a command report headed
+  `Presets Plus Clear`
 
 #### Scenario: Status with no active preset
 
 - **WHEN** the user runs `/presets status` and no preset is active
-- **THEN** the command report SHALL be the `Preset Status` heading followed by
-  `No preset is active.` on its own line, indented two spaces
+- **THEN** the command report SHALL be the `Presets Plus Status` heading
+  followed by `No preset is active.` on its own line, indented two spaces
 
 #### Scenario: Status with baseline-managed attachment from prompt
 

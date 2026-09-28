@@ -449,7 +449,7 @@ describe("preset editor input UX", () => {
 
     await waitForEditorUpdate(() => {
       expect(renderText(editor)).toContain(
-        "Pi Presets Plus could not complete the action. Disk full.",
+        "Could not complete the action: Disk full.",
       );
     });
 

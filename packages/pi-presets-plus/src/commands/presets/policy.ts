@@ -10,7 +10,10 @@ import {
   type CompiledPolicyRule,
 } from "../../store/policy.js";
 import type { LoadedPreset } from "../../types.js";
-import { deliverCommandReport } from "../../ui/command-report.js";
+import {
+  appendReportWarnings,
+  deliverCommandReport,
+} from "../../ui/command-report.js";
 import {
   ALLOWED_PRESETS_LABEL,
   DEFAULT_MATCHES_LABEL,
@@ -22,39 +25,17 @@ import {
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
-  Theme,
 } from "@earendil-works/pi-coding-agent";
+import { alignLabelRows } from "@sherif-fanous/pi-extensions-core";
 
-/** The theme surface {@link formatPolicy} needs to style its rows. */
-interface Styler {
-  bold(text: string): string;
-  fg(color: string, text: string): string;
-}
-
-/** Styler that returns text unchanged, for plain output and for tests. */
-const IDENTITY_STYLER: Styler = {
-  bold: (text) => text,
-  fg: (_color, text) => text,
-};
-/** Every label the report can render, in display order. */
-const POLICY_LABELS = [
-  `${DIRECTORY_LABEL}:`,
-  `${ALLOWED_PRESETS_LABEL}:`,
-  `${PROHIBITED_PRESETS_LABEL}:`,
-  `${DEFAULT_PRESET_LABEL}:`,
-  `${DEFAULT_MATCHES_LABEL}:`,
-] as const;
-/** Width of the label column, so the values line up. */
-const POLICY_LABEL_WIDTH = Math.max(
-  ...POLICY_LABELS.map((label) => label.length),
-);
-
-/** Format the effective policy for a cwd without performing I/O. */
+/**
+ * Format the effective policy for a cwd as a plain report body, without
+ * performing I/O.
+ */
 export function formatPolicy(
   cwd: string,
   presets: readonly LoadedPreset[],
   rules: readonly CompiledPolicyRule[],
-  styler: Pick<Theme, "bold" | "fg"> = IDENTITY_STYLER,
 ): string {
   const resolvedDefault = resolvePolicyDefault(cwd, presets, rules);
   const { matchedRules } = resolvedDefault;
@@ -79,58 +60,38 @@ export function formatPolicy(
     resolvedDefault.kind === "resolved"
       ? resolvedDefault.candidates.map(({ name }) => name)
       : [];
-  const lines = [
-    styler.bold(styler.fg("accent", POLICY_DIALOG_TITLE)),
-    row(`${DIRECTORY_LABEL}:`, cwd, styler),
-    row(`${ALLOWED_PRESETS_LABEL}:`, formatNames(allowed), styler),
-    row(`${PROHIBITED_PRESETS_LABEL}:`, formatNames(prohibited), styler),
-    row(`${DEFAULT_PRESET_LABEL}:`, defaultNames[0] ?? "none", styler),
+  const rows: [label: string, value: string][] = [
+    [`${DIRECTORY_LABEL}:`, cwd],
+    [`${ALLOWED_PRESETS_LABEL}:`, formatNames(allowed)],
+    [`${PROHIBITED_PRESETS_LABEL}:`, formatNames(prohibited)],
+    [`${DEFAULT_PRESET_LABEL}:`, defaultNames[0] ?? "none"],
   ];
 
   if (defaultNames.length > 1) {
-    lines.push(
-      row(`${DEFAULT_MATCHES_LABEL}:`, formatNames(defaultNames), styler),
-    );
+    rows.push([`${DEFAULT_MATCHES_LABEL}:`, formatNames(defaultNames)]);
   }
 
-  return lines.join("\n");
+  return [POLICY_DIALOG_TITLE, ...alignLabelRows(rows)].join("\n");
 }
 
-/** Load and display the current effective policy through one notification. */
+/** Load the current effective policy and deliver it as one command report. */
 export async function runPolicy(
   ctx: ExtensionCommandContext,
-  pi?: Pick<ExtensionAPI, "appendEntry">,
+  pi: Pick<ExtensionAPI, "appendEntry">,
 ): Promise<void> {
   const [policy, loaded] = await Promise.all([loadPolicy(), loadAll(ctx)]);
   const warnings = [...policy.warnings, ...loaded.warnings];
-  const body = withWarnings(
+  const body = appendReportWarnings(
     formatPolicy(ctx.cwd, loaded.presets, policy.rules),
     warnings,
   );
 
-  if (pi) {
-    deliverCommandReport(ctx, pi, {
-      body,
-      severity: warnings.length > 0 ? "warning" : "info",
-    });
-  } else {
-    ctx.ui.notify(body, warnings.length > 0 ? "warning" : "info");
-  }
+  deliverCommandReport(ctx, pi, {
+    body,
+    severity: warnings.length > 0 ? "warning" : "info",
+  });
 }
 
 function formatNames(names: readonly string[]): string {
   return names.length > 0 ? names.join(", ") : "none";
-}
-
-/** Render one label and value pair padded to the label column. */
-function row(label: string, value: string, styler: Pick<Theme, "fg">): string {
-  const padding = " ".repeat(POLICY_LABEL_WIDTH - label.length);
-
-  return `  ${styler.fg("muted", label)}${padding} ${value}`;
-}
-
-function withWarnings(body: string, warnings: readonly string[]): string {
-  if (warnings.length === 0) return body;
-
-  return `${body}\n\nWarnings:\n${warnings.map((warning) => `- ${warning}`).join("\n")}`;
 }

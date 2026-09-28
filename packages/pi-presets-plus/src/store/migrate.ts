@@ -4,6 +4,7 @@
  */
 import { readFile, unlink } from "node:fs/promises";
 
+import { EXTENSION_NAME } from "../extension-name.js";
 import type { ConfigDocument, PresetScope } from "../types.js";
 import {
   getGlobalConfigPath,
@@ -52,7 +53,7 @@ export function describeMigration(outcomes: readonly MigrationOutcome[]): {
 
   return migrated.length > 0
     ? {
-        info: `Migrated ${migrated.join(" and ")} configuration to config.json.`,
+        info: `${EXTENSION_NAME} migrated ${migrated.join(" and ")} configuration to config.json.`,
         warnings,
       }
     : { warnings };

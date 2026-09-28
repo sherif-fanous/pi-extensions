@@ -2,6 +2,7 @@
  * Loads and mutates consolidated configuration across both scopes.
  * Every operation reads current files again so reloads and direct edits take effect.
  */
+import { EXTENSION_NAME } from "../extension-name.js";
 import { analyzeHotkeys, type HotkeyAnalysis } from "../hotkey-registry.js";
 import type {
   LoadedPreset,
@@ -165,7 +166,7 @@ export async function movePreset(
     } catch (rollbackError) {
       throw new AggregateError(
         [sourceError, rollbackError],
-        "The preset move failed, and Pi Presets Plus could not restore the destination scope.",
+        `The preset move failed, and ${EXTENSION_NAME} could not restore the destination scope.`,
         { cause: rollbackError },
       );
     }
@@ -322,7 +323,7 @@ async function readScope(
   if (warnings.length > 0 || result.invalidShowInactiveStatus !== undefined) {
     return {
       ok: false,
-      reason: `Pi Presets Plus did not change the ${scope} configuration file at ${path}. It could not load the complete file. Fix the file and try again.`,
+      reason: `${EXTENSION_NAME} did not change the ${scope} configuration file at ${path}. It could not load the complete file. Fix the file and try again.`,
     };
   }
 

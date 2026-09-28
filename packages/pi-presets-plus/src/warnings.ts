@@ -3,6 +3,7 @@
  * runs several steps, such as session startup, can show them all in one
  * notification.
  */
+import { EXTENSION_NAME } from "./extension-name.js";
 import {
   notifyWarnings,
   type GuardContext,
@@ -23,5 +24,5 @@ export function reportWarnings(
     return;
   }
 
-  notifyWarnings(ctx, "Presets Plus", found);
+  notifyWarnings(ctx, EXTENSION_NAME, found);
 }

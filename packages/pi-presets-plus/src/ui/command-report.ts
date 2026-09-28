@@ -17,3 +17,16 @@ export const deliverCommandReport = commandReport.deliver;
 
 /** Register the report renderer so stored entries survive a reload. */
 export const registerCommandReportRenderer = commandReport.register;
+
+/**
+ * End a report body with its warnings as one `Warnings:` block of `- `
+ * lines, or return the body unchanged when there are none.
+ */
+export function appendReportWarnings(
+  body: string,
+  warnings: readonly string[],
+): string {
+  if (warnings.length === 0) return body;
+
+  return `${body}\n\nWarnings:\n${warnings.map((warning) => `- ${warning}`).join("\n")}`;
+}
