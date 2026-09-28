@@ -236,7 +236,7 @@ import {
 
 const statusReport = createCommandReport("theme-sync:status-report");
 
-export default function (pi: ExtensionAPI) {
+export default function themeSync(pi: ExtensionAPI): void {
   statusReport.register(pi);
   pi.registerCommand("theme-sync", {
     handler: async (_args, ctx) => {
@@ -287,7 +287,7 @@ result types from the matching overload.
 ```ts
 import { guardCommand, guardEvent } from "@sherif-fanous/pi-extensions-core";
 
-export default function (pi: ExtensionAPI) {
+export default function themeSync(pi: ExtensionAPI): void {
   pi.registerCommand("theme-sync", {
     handler: guardCommand("Theme Sync", (args, ctx) =>
       runThemeSyncCommand(args, ctx),
