@@ -5,10 +5,10 @@
 
 import { EXTENSION_NAME } from "../extension-name.js";
 import {
-  buildSlice,
   listCandidates,
-  SUPPORTED_SESSION_VERSION,
-  writeSliceFile,
+  sliceSession,
+  unsupportedSourceReason,
+  type SliceSessionResult,
 } from "../slice.js";
 import { showEndPicker, showStartPicker } from "../ui/picker.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
@@ -42,9 +42,7 @@ async function runSliceFlow(ctx: ExtensionCommandContext): Promise<void> {
 
   // Pi assigns the path at session creation and defers the first write; like
   // /fork, slicing only records the path as parentSession and never reads it.
-  const sourcePath = ctx.sessionManager.getSessionFile();
-
-  if (!sourcePath) {
+  if (!ctx.sessionManager.getSessionFile()) {
     notifyWarnings(ctx, EXTENSION_NAME, [
       "Slicing needs a session file to switch to, but Pi was started with --no-session.",
     ]);
@@ -60,12 +58,10 @@ async function runSliceFlow(ctx: ExtensionCommandContext): Promise<void> {
     return;
   }
 
-  const header = ctx.sessionManager.getHeader();
+  const unsupportedReason = unsupportedSourceReason(ctx.sessionManager);
 
-  if (header?.version !== SUPPORTED_SESSION_VERSION) {
-    notifyWarnings(ctx, EXTENSION_NAME, [
-      `This session uses unsupported format version ${String(header?.version ?? "unknown")}.`,
-    ]);
+  if (unsupportedReason !== undefined) {
+    notifyWarnings(ctx, EXTENSION_NAME, [unsupportedReason]);
 
     return;
   }
@@ -82,51 +78,31 @@ async function runSliceFlow(ctx: ExtensionCommandContext): Promise<void> {
 
   const start = await showStartPicker(ctx.ui, candidates);
 
-  if (start.kind !== "message") return;
+  if (start.kind === "cancel") return;
 
-  const startCandidate = candidates.find(
-    (candidate) => candidate.id === start.id,
-  );
-
-  if (!startCandidate) {
-    notifyWarnings(ctx, EXTENSION_NAME, [
-      "The selected start message is no longer available.",
-    ]);
-
-    return;
-  }
-
-  const end = await showEndPicker(ctx.ui, candidates, startCandidate.ordinal);
+  const end = await showEndPicker(ctx.ui, candidates, start.candidate.ordinal);
 
   if (end.kind === "cancel") return;
 
-  const endId = end.kind === "message" ? end.id : null;
-  const endText =
-    end.kind === "message"
-      ? candidates.find((candidate) => candidate.id === end.id)?.text
-      : undefined;
-  const result = buildSlice(ctx.sessionManager.getBranch(), start.id, endId);
-
-  if ("reason" in result) {
-    notifyWarnings(ctx, EXTENSION_NAME, [result.reason]);
-
-    return;
-  }
-
-  let destination: string;
+  const endCandidate = end.kind === "message" ? end.candidate : undefined;
+  let result: SliceSessionResult;
 
   try {
-    destination = writeSliceFile(
-      ctx.sessionManager.getSessionDir(),
-      ctx.sessionManager.getCwd(),
-      sourcePath,
-      result.entries,
-    );
+    result = sliceSession(ctx.sessionManager, {
+      startId: start.candidate.id,
+      endId: endCandidate?.id,
+    });
   } catch (error) {
     ctx.ui.notify(
       `Could not create the sliced session: ${describeErrorSentence(error)}`,
       "error",
     );
+
+    return;
+  }
+
+  if ("reason" in result) {
+    notifyWarnings(ctx, EXTENSION_NAME, [result.reason]);
 
     return;
   }
@@ -137,11 +113,11 @@ async function runSliceFlow(ctx: ExtensionCommandContext): Promise<void> {
   // or that status replaces it.
   let sliceCtx: ExtensionCommandContext | undefined;
 
-  const switched = await ctx.switchSession(destination, {
+  const switched = await ctx.switchSession(result.path, {
     withSession: (newCtx) => {
       sliceCtx = newCtx;
 
-      if (endText !== undefined) newCtx.ui.setEditorText(endText);
+      if (endCandidate) newCtx.ui.setEditorText(endCandidate.text);
 
       return Promise.resolve();
     },
@@ -149,14 +125,14 @@ async function runSliceFlow(ctx: ExtensionCommandContext): Promise<void> {
 
   if (switched.cancelled) {
     notifyWarnings(ctx, EXTENSION_NAME, [
-      `The sliced session was saved at ${destination}, but Pi did not switch to it.`,
+      `The sliced session was saved at ${result.path}, but Pi did not switch to it.`,
     ]);
 
     return;
   }
 
   sliceCtx?.ui.notify(
-    `Sliced ${pluralize(result.copiedCount, "entry", "entries")} into a new session.`,
+    `Sliced ${pluralize(result.copied, "entry", "entries")} into a new session.`,
     "info",
   );
 }

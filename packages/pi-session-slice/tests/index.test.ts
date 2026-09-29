@@ -1,5 +1,10 @@
 /** Covers `/slice` registration, preconditions, orchestration, and failure reporting. */
 
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+
+import type { SliceCandidate } from "../src/slice.js";
 import type {
   ExtensionCommandContext,
   ExtensionUIContext,
@@ -15,22 +20,16 @@ import {
   findShownTextViolations,
   type FakeCommand,
 } from "@sherif-fanous/pi-extensions-testing";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   showStartPicker: vi.fn(),
   showEndPicker: vi.fn(),
-  writeSliceFile: vi.fn(),
 }));
 
 vi.mock("../src/ui/picker.js", () => ({
   showStartPicker: mocks.showStartPicker,
   showEndPicker: mocks.showEndPicker,
-}));
-
-vi.mock("../src/slice.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../src/slice.js")>()),
-  writeSliceFile: mocks.writeSliceFile,
 }));
 
 const { default: sessionSlice } = await import("../src/index.js");
@@ -90,6 +89,24 @@ const CANDIDATE_ENTRIES: SessionEntry[] = [
   },
 ];
 
+const START_CANDIDATE: SliceCandidate = {
+  id: "u1",
+  ordinal: 1,
+  text: "start",
+  timestamp: "2026-03-10T12:00:00.000Z",
+  total: 2,
+};
+
+const END_CANDIDATE: SliceCandidate = {
+  id: "u2",
+  ordinal: 2,
+  text: "end",
+  timestamp: "2026-03-10T12:01:00.000Z",
+  total: 2,
+};
+
+const temporaryDirectories: string[] = [];
+
 function makeContext(
   overrides: Partial<{
     custom: ExtensionUIContext["custom"];
@@ -97,15 +114,24 @@ function makeContext(
     idle: boolean;
     mode: ExtensionCommandContext["mode"];
     contextEntries: SessionEntry[];
+    sessionDirMissing: boolean;
     sessionFile: string | undefined;
   }> = {},
 ): {
   ctx: ExtensionCommandContext;
   newNotify: ReturnType<typeof vi.fn>;
   notify: ReturnType<typeof vi.fn>;
+  sessionDir: string;
   setEditorText: ReturnType<typeof vi.fn>;
   switchSession: ReturnType<typeof vi.fn>;
 } {
+  const directory = mkdtempSync(join(tmpdir(), "pi-session-slice-command-"));
+
+  temporaryDirectories.push(directory);
+
+  const sessionDir = overrides.sessionDirMissing
+    ? join(directory, "missing")
+    : directory;
   const notify = vi.fn();
   const setEditorText = vi.fn();
   const newNotify = vi.fn();
@@ -139,7 +165,7 @@ function makeContext(
       getHeader: () => (header ? { ...SOURCE_HEADER, ...header } : null),
       buildContextEntries: () => overrides.contextEntries ?? CANDIDATE_ENTRIES,
       getBranch: () => overrides.contextEntries ?? CANDIDATE_ENTRIES,
-      getSessionDir: () => "/sessions",
+      getSessionDir: () => sessionDir,
       getCwd: () => "/project",
     },
     switchSession,
@@ -153,7 +179,23 @@ function makeContext(
     },
   });
 
-  return { ctx, newNotify, notify, setEditorText, switchSession };
+  return { ctx, newNotify, notify, sessionDir, setEditorText, switchSession };
+}
+
+/** The header and entries of the session file at `path`. */
+function readSession(path: string): {
+  entries: SessionEntry[];
+  header: SessionHeader;
+} {
+  const [header, ...entries] = readFileSync(path, "utf8")
+    .trimEnd()
+    .split("\n")
+    .map((line) => JSON.parse(line) as SessionEntry | SessionHeader);
+
+  return {
+    entries: entries as SessionEntry[],
+    header: header as SessionHeader,
+  };
 }
 
 function registeredCommand(): FakeCommand {
@@ -167,10 +209,21 @@ function registeredCommand(): FakeCommand {
 beforeEach(() => {
   mocks.showStartPicker.mockReset();
   mocks.showEndPicker.mockReset();
-  mocks.writeSliceFile.mockReset();
-  mocks.showStartPicker.mockResolvedValue({ id: "u1", kind: "message" });
-  mocks.showEndPicker.mockResolvedValue({ id: "u2", kind: "message" });
-  mocks.writeSliceFile.mockReturnValue("/sessions/slice.jsonl");
+  mocks.showStartPicker.mockResolvedValue({
+    candidate: START_CANDIDATE,
+    kind: "message",
+  });
+
+  mocks.showEndPicker.mockResolvedValue({
+    candidate: END_CANDIDATE,
+    kind: "message",
+  });
+});
+
+afterEach(() => {
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { force: true, recursive: true });
+  }
 });
 
 describe("sessionSlice", () => {
@@ -209,20 +262,20 @@ describe("sessionSlice", () => {
     ],
   ])("refuses an unsupported state", async (overrides, message) => {
     const command = registeredCommand();
-    const { ctx, notify } = makeContext(overrides);
+    const { ctx, notify, sessionDir } = makeContext(overrides);
 
     await command.handler("", ctx);
 
     expect(notify).toHaveBeenCalledWith(message, "warning");
     expect(mocks.showStartPicker).not.toHaveBeenCalled();
-    expect(mocks.writeSliceFile).not.toHaveBeenCalled();
+    expect(readdirSync(sessionDir)).toEqual([]);
   });
 
   it.each(["rpc", "json", "print"] as const)(
     "warns instead of opening the picker in %s mode",
     async (mode) => {
       const command = registeredCommand();
-      const { ctx, notify } = makeContext({ mode });
+      const { ctx, notify, sessionDir } = makeContext({ mode });
 
       await command.handler("", ctx);
 
@@ -231,13 +284,13 @@ describe("sessionSlice", () => {
         "warning",
       );
       expect(mocks.showStartPicker).not.toHaveBeenCalled();
-      expect(mocks.writeSliceFile).not.toHaveBeenCalled();
+      expect(readdirSync(sessionDir)).toEqual([]);
     },
   );
 
   it("refuses a context with no user messages", async () => {
     const command = registeredCommand();
-    const { ctx, notify } = makeContext({ contextEntries: [] });
+    const { ctx, notify, sessionDir } = makeContext({ contextEntries: [] });
 
     await command.handler("", ctx);
 
@@ -246,7 +299,7 @@ describe("sessionSlice", () => {
       "warning",
     );
     expect(mocks.showStartPicker).not.toHaveBeenCalled();
-    expect(mocks.writeSliceFile).not.toHaveBeenCalled();
+    expect(readdirSync(sessionDir)).toEqual([]);
   });
 
   it("cancels before writing from either picker", async () => {
@@ -261,28 +314,42 @@ describe("sessionSlice", () => {
     mocks.showEndPicker.mockResolvedValueOnce({ kind: "cancel" });
     await command.handler("", second.ctx);
 
-    expect(mocks.writeSliceFile).not.toHaveBeenCalled();
+    expect(readdirSync(first.sessionDir)).toEqual([]);
+    expect(readdirSync(second.sessionDir)).toEqual([]);
     expect(first.switchSession).not.toHaveBeenCalled();
     expect(second.switchSession).not.toHaveBeenCalled();
   });
 
   it("writes, switches, pre-fills the end message, and reports success", async () => {
     const command = registeredCommand();
-    const { ctx, newNotify, notify, setEditorText, switchSession } =
+    const { ctx, newNotify, notify, sessionDir, setEditorText, switchSession } =
       makeContext();
 
     await command.handler("", ctx);
 
-    expect(mocks.writeSliceFile).toHaveBeenCalledTimes(1);
-    expect(mocks.writeSliceFile).toHaveBeenCalledWith(
-      "/sessions",
-      "/project",
-      SOURCE_PATH,
-      expect.any(Array),
-    );
-
     expect(switchSession).toHaveBeenCalledTimes(1);
-    expect(switchSession.mock.calls[0]?.[0]).toBe("/sessions/slice.jsonl");
+
+    const path = String(switchSession.mock.calls[0]?.[0]);
+    const { entries, header } = readSession(path);
+    const [model, start] = entries;
+
+    expect(dirname(path)).toBe(sessionDir);
+    expect(readdirSync(sessionDir)).toHaveLength(1);
+    expect(header).toMatchObject({
+      cwd: "/project",
+      parentSession: SOURCE_PATH,
+      type: "session",
+      version: 3,
+    });
+
+    expect(model).toMatchObject({
+      type: "model_change",
+      parentId: null,
+      provider: "anthropic",
+      modelId: "claude-test",
+    });
+    expect(start).toEqual({ ...CANDIDATE_ENTRIES[1], parentId: model?.id });
+    expect(entries).toHaveLength(2);
     expect(setEditorText).toHaveBeenCalledWith("end");
     // The original ctx is stale after the switch and must not be used.
     expect(notify).not.toHaveBeenCalled();
@@ -300,11 +367,14 @@ describe("sessionSlice", () => {
 
   it("keeps the editor empty when slicing to the end", async () => {
     const command = registeredCommand();
-    const { ctx, newNotify, setEditorText } = makeContext();
+    const { ctx, newNotify, setEditorText, switchSession } = makeContext();
 
     mocks.showEndPicker.mockResolvedValueOnce({ kind: "end" });
     await command.handler("", ctx);
 
+    const { entries } = readSession(String(switchSession.mock.calls[0]?.[0]));
+
+    expect(entries.map((entry) => entry.id).slice(1)).toEqual(["u1", "u2"]);
     expect(setEditorText).not.toHaveBeenCalled();
     expect(newNotify).toHaveBeenCalledWith(
       "Sliced 2 entries into a new session.",
@@ -316,7 +386,7 @@ describe("sessionSlice", () => {
     "rejects the argument %j without slicing",
     async (args) => {
       const command = registeredCommand();
-      const { ctx, notify } = makeContext();
+      const { ctx, notify, sessionDir } = makeContext();
 
       await command.handler(args, ctx);
 
@@ -325,7 +395,7 @@ describe("sessionSlice", () => {
         "warning",
       );
       expect(mocks.showStartPicker).not.toHaveBeenCalled();
-      expect(mocks.writeSliceFile).not.toHaveBeenCalled();
+      expect(readdirSync(sessionDir)).toEqual([]);
     },
   );
 
@@ -341,17 +411,19 @@ describe("sessionSlice", () => {
 
   it("reports a write failure without switching", async () => {
     const command = registeredCommand();
-    const { ctx, notify, switchSession } = makeContext();
-
-    mocks.writeSliceFile.mockImplementationOnce(() => {
-      throw new Error("read-only directory");
+    const { ctx, notify, sessionDir, switchSession } = makeContext({
+      sessionDirMissing: true,
     });
+
     await command.handler("", ctx);
 
-    expect(notify).toHaveBeenCalledWith(
-      "Could not create the sliced session: read-only directory.",
+    expect(notify).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(
+        /^Could not create the sliced session: ENOENT: no such file or directory, open '.+\.jsonl'\.$/u,
+      ),
       "error",
     );
+    expect(String(notify.mock.calls[0]?.[0])).toContain(sessionDir);
     expect(switchSession).not.toHaveBeenCalled();
   });
 
@@ -375,8 +447,11 @@ describe("sessionSlice", () => {
     switchSession.mockResolvedValueOnce({ cancelled: true });
     await command.handler("", ctx);
 
+    const path = String(switchSession.mock.calls[0]?.[0]);
+
+    expect(readSession(path).header.parentSession).toBe(SOURCE_PATH);
     expect(notify).toHaveBeenCalledWith(
-      "Session Slice: 1 warning\n- The sliced session was saved at /sessions/slice.jsonl, but Pi did not switch to it.",
+      `Session Slice: 1 warning\n- The sliced session was saved at ${path}, but Pi did not switch to it.`,
       "warning",
     );
   });
@@ -424,10 +499,7 @@ describe("Session Slice shown text", () => {
     await run("", { header: { version: 2 } });
     await run("", { contextEntries: [] });
 
-    mocks.writeSliceFile.mockImplementationOnce(() => {
-      throw new Error("read-only directory");
-    });
-    await run("");
+    await run("", { sessionDirMissing: true });
 
     await run("", {}, true);
 

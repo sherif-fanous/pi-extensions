@@ -1,11 +1,7 @@
 /** Drives the real slice picker component through its focused input handler. */
 
 import type { SliceCandidate } from "../../src/slice.js";
-import {
-  showEndPicker,
-  showStartPicker,
-  type PickerResult,
-} from "../../src/ui/picker.js";
+import { showEndPicker, showStartPicker } from "../../src/ui/picker.js";
 import type {
   ExtensionUIContext,
   Theme,
@@ -73,11 +69,11 @@ interface PickerRender {
   readonly width: number;
 }
 
-async function drivePicker(
+async function drivePicker<Result>(
   keys: readonly string[],
-  invoke: (ui: ExtensionUIContext) => Promise<PickerResult>,
+  invoke: (ui: ExtensionUIContext) => Promise<Result>,
   render?: PickerRender,
-): Promise<PickerResult> {
+): Promise<Result> {
   let finished = false;
   const custom = createFakeCustom({
     keybindings: render?.keybindings ?? KEYBINDINGS,
@@ -102,7 +98,7 @@ describe("slice picker input", () => {
       showStartPicker(ui, CANDIDATES),
     );
 
-    expect(result).toEqual({ id: "u1", kind: "message" });
+    expect(result).toEqual({ candidate: CANDIDATES[0], kind: "message" });
   });
 
   it("wraps upward from the default end option", async () => {
@@ -110,7 +106,7 @@ describe("slice picker input", () => {
       showEndPicker(ui, CANDIDATES, 1),
     );
 
-    expect(result).toEqual({ id: "u2", kind: "message" });
+    expect(result).toEqual({ candidate: CANDIDATES[1], kind: "message" });
   });
 
   it("selects a message after the default end option", async () => {
@@ -118,7 +114,7 @@ describe("slice picker input", () => {
       showEndPicker(ui, CANDIDATES, 1),
     );
 
-    expect(result).toEqual({ id: "u2", kind: "message" });
+    expect(result).toEqual({ candidate: CANDIDATES[1], kind: "message" });
   });
 
   it("selects the preselected end default with Enter", async () => {
@@ -146,7 +142,10 @@ describe("slice picker input", () => {
       { lines: [], width: 80 },
     );
 
-    expect(result).toEqual({ id: "u2", kind: "message" });
+    expect(result).toEqual({
+      candidate: MANY_CANDIDATES[1],
+      kind: "message",
+    });
   });
 
   it("stops PgUp at the first message instead of wrapping", async () => {
@@ -156,7 +155,10 @@ describe("slice picker input", () => {
       { lines: [], width: 80 },
     );
 
-    expect(result).toEqual({ id: "u1", kind: "message" });
+    expect(result).toEqual({
+      candidate: MANY_CANDIDATES[0],
+      kind: "message",
+    });
   });
 
   it("moves down one page with PgDn and stops at the last message", async () => {
@@ -171,8 +173,15 @@ describe("slice picker input", () => {
       { lines: [], width: 80 },
     );
 
-    expect(onePage).toEqual({ id: "u11", kind: "message" });
-    expect(pastTheEnd).toEqual({ id: "u12", kind: "message" });
+    expect(onePage).toEqual({
+      candidate: MANY_CANDIDATES[10],
+      kind: "message",
+    });
+
+    expect(pastTheEnd).toEqual({
+      candidate: MANY_CANDIDATES[11],
+      kind: "message",
+    });
   });
 
   it("follows a remapped cancel key instead of Escape", async () => {
@@ -197,7 +206,7 @@ describe("slice picker input", () => {
       },
     );
 
-    expect(result).toEqual({ id: "u2", kind: "message" });
+    expect(result).toEqual({ candidate: CANDIDATES[1], kind: "message" });
     expect(remapped).toEqual({ kind: "cancel" });
     expect(lines).toContain(
       " ↑/↓ Move · PgUp/PgDn Page · Enter Select · Ctrl+Q Cancel",

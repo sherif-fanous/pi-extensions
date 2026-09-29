@@ -1,14 +1,14 @@
-/** Covers candidate projection, exact range copying, state, labels, and JSONL output. */
+/** Covers candidate projection, source checks, exact range copying, state, labels, and JSONL output. */
 
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import {
-  buildSlice,
   listCandidates,
-  SUPPORTED_SESSION_VERSION,
-  writeSliceFile,
+  sliceSession,
+  unsupportedSourceReason,
+  type SliceBoundaries,
   type SliceFileSystem,
 } from "../src/slice.js";
 import {
@@ -19,8 +19,18 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it } from "vitest";
 
+const SOURCE_PATH = "/sessions/source.jsonl";
 const TIMESTAMP = "2026-03-10T12:00:00.000Z";
 const temporaryDirectories: string[] = [];
+
+/** A session file written by `sliceSession`, read back from disk. */
+interface WrittenSlice {
+  copied: number;
+  entries: SessionEntry[];
+  header: SessionHeader;
+  lines: string[];
+  path: string;
+}
 
 function assistant(id: string, parentId: string, text: string): SessionEntry {
   return {
@@ -60,14 +70,6 @@ function customMessage(id: string, parentId: string): SessionEntry {
   };
 }
 
-function deterministicIds(
-  ...values: string[]
-): (ids: ReadonlySet<string>) => string {
-  let index = 0;
-
-  return () => values[index++] ?? `generated-${index}`;
-}
-
 function entryAt(
   entries: readonly SessionEntry[],
   index: number,
@@ -77,6 +79,14 @@ function entryAt(
   if (!entry) throw new Error(`Missing fixture entry at index ${index}.`);
 
   return entry;
+}
+
+async function makeTemporaryDirectory(): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "pi-session-slice-"));
+
+  temporaryDirectories.push(directory);
+
+  return directory;
 }
 
 function messageAt(entries: readonly SessionEntry[], index: number) {
@@ -97,6 +107,44 @@ function model(id: string, parentId: string | null): SessionEntry {
     timestamp: TIMESTAMP,
     provider: "anthropic",
     modelId: "claude-test",
+  };
+}
+
+/** Slice `branch` into a new temporary directory and read the file back. */
+async function sliceBranch(
+  branch: readonly SessionEntry[],
+  boundaries: SliceBoundaries,
+): Promise<WrittenSlice> {
+  const directory = await makeTemporaryDirectory();
+  const result = sliceSession(sourceSession(branch, directory), boundaries);
+
+  if ("reason" in result) throw new Error(result.reason);
+
+  const lines = (await readFile(result.path, "utf8")).trimEnd().split("\n");
+  const [header, ...entries] = lines.map(
+    (line) => JSON.parse(line) as SessionEntry | SessionHeader,
+  );
+
+  return {
+    copied: result.copied,
+    entries: entries as SessionEntry[],
+    header: header as SessionHeader,
+    lines,
+    path: result.path,
+  };
+}
+
+/** A source session manager whose current branch is `branch`. */
+function sourceSession(
+  branch: readonly SessionEntry[],
+  sessionDir: string,
+  sourcePath: string = SOURCE_PATH,
+): Parameters<typeof sliceSession>[0] {
+  return {
+    getBranch: () => [...branch],
+    getCwd: () => "/project",
+    getSessionDir: () => sessionDir,
+    getSessionFile: () => sourcePath,
   };
 }
 
@@ -244,8 +292,36 @@ describe("listCandidates", () => {
   });
 });
 
-describe("buildSlice", () => {
-  it("copies tool and custom entries without changing their data", () => {
+describe("unsupportedSourceReason", () => {
+  it("accepts a version 3 session and names any other version", () => {
+    const reasonFor = (version: number | undefined): string | undefined =>
+      unsupportedSourceReason({
+        getHeader: () => ({
+          type: "session",
+          id: "source",
+          timestamp: TIMESTAMP,
+          cwd: "/project",
+          version,
+        }),
+      });
+
+    expect(reasonFor(3)).toBeUndefined();
+    expect(reasonFor(2)).toBe(
+      "This session uses unsupported format version 2.",
+    );
+
+    expect(reasonFor(undefined)).toBe(
+      "This session uses unsupported format version unknown.",
+    );
+
+    expect(unsupportedSourceReason({ getHeader: () => null })).toBe(
+      "This session uses unsupported format version unknown.",
+    );
+  });
+});
+
+describe("sliceSession", () => {
+  it("copies tool and custom entries without changing their data", async () => {
     const branch = [
       user("u1", null, "drop"),
       user("u2", "u1", "keep"),
@@ -254,35 +330,28 @@ describe("buildSlice", () => {
       customMessage("c2", "t2"),
       user("u3", "c2", "editor"),
     ];
-    const result = buildSlice(branch, "u2", "u3");
+    const slice = await sliceBranch(branch, { startId: "u2", endId: "u3" });
 
-    expect(result).toEqual({
-      copiedCount: 4,
-      entries: [
-        { ...entryAt(branch, 1), parentId: null },
-        entryAt(branch, 2),
-        entryAt(branch, 3),
-        entryAt(branch, 4),
-      ],
+    expect(slice.copied).toBe(4);
+    expect(slice.entries).toEqual([
+      { ...entryAt(branch, 1), parentId: null },
+      entryAt(branch, 2),
+      entryAt(branch, 3),
+      entryAt(branch, 4),
+    ]);
+
+    expect(slice.lines.slice(2)).toEqual(
+      [2, 3, 4].map((index) => JSON.stringify(entryAt(branch, index))),
+    );
+
+    expect(slice.entries[2]).toMatchObject({
+      id: "t2",
+      message: { toolCallId: "call-1" },
+      timestamp: TIMESTAMP,
     });
-
-    if ("entries" in result) {
-      const untouchedToolCall = entryAt(branch, 2);
-
-      expect(result.entries[1]).toBe(untouchedToolCall);
-      expect(JSON.stringify(result.entries[1])).toBe(
-        JSON.stringify(untouchedToolCall),
-      );
-
-      expect(result.entries[2]).toMatchObject({
-        id: "t2",
-        message: { toolCallId: "call-1" },
-        timestamp: TIMESTAMP,
-      });
-    }
   });
 
-  it("preserves custom, bash, and branch-summary entries", () => {
+  it("preserves custom, bash, and branch-summary entries", async () => {
     const branch: SessionEntry[] = [
       user("u1", null, "keep"),
       {
@@ -318,18 +387,15 @@ describe("buildSlice", () => {
       },
       assistant("a1", "summary", "reply"),
     ];
-    const result = buildSlice(branch, "u1", null);
+    const slice = await sliceBranch(branch, { startId: "u1" });
 
-    expect(result).toEqual({ copiedCount: 5, entries: branch });
-
-    if ("entries" in result) {
-      for (let index = 0; index < branch.length; index += 1) {
-        expect(result.entries[index]).toBe(entryAt(branch, index));
-      }
-    }
+    expect(slice.copied).toBe(5);
+    expect(slice.lines.slice(1)).toEqual(
+      branch.map((entry) => JSON.stringify(entry)),
+    );
   });
 
-  it("strips a compaction after a retained start and re-chains around it", () => {
+  it("strips a compaction after a retained start and re-chains around it", async () => {
     const branch: SessionEntry[] = [
       user("u1", null, "old"),
       assistant("a1", "u1", "old reply"),
@@ -347,24 +413,59 @@ describe("buildSlice", () => {
       user("u3", "compact", "after"),
       assistant("a3", "u3", "after reply"),
     ];
+    const fromRetained = await sliceBranch(branch, { startId: "u2" });
+    const fromAfter = await sliceBranch(branch, { startId: "u3" });
 
-    expect(buildSlice(branch, "u2", null)).toEqual({
-      copiedCount: 4,
-      entries: [
-        { ...entryAt(branch, 2), parentId: null },
-        entryAt(branch, 3),
-        { ...entryAt(branch, 5), parentId: "a2" },
-        entryAt(branch, 6),
-      ],
-    });
+    expect(fromRetained.copied).toBe(4);
+    expect(fromRetained.entries).toEqual([
+      { ...entryAt(branch, 2), parentId: null },
+      entryAt(branch, 3),
+      { ...entryAt(branch, 5), parentId: "a2" },
+      entryAt(branch, 6),
+    ]);
 
-    expect(buildSlice(branch, "u3", null)).toEqual({
-      copiedCount: 2,
-      entries: [{ ...entryAt(branch, 5), parentId: null }, entryAt(branch, 6)],
-    });
+    expect(fromAfter.copied).toBe(2);
+    expect(fromAfter.entries).toEqual([
+      { ...entryAt(branch, 5), parentId: null },
+      entryAt(branch, 6),
+    ]);
   });
 
-  it("carries the effective model and thinking level but not the name", () => {
+  it("round-trips a pre-compaction start without restoring the compaction", async () => {
+    const branch: SessionEntry[] = [
+      user("u1", null, "hidden"),
+      assistant("a1", "u1", "hidden reply"),
+      user("u2", "a1", "retained"),
+      assistant("a2", "u2", "retained reply"),
+      {
+        type: "compaction",
+        id: "compact",
+        parentId: "a2",
+        timestamp: TIMESTAMP,
+        summary: "summary",
+        firstKeptEntryId: "u2",
+        tokensBefore: 10,
+      },
+      user("u3", "compact", "after"),
+      assistant("a3", "u3", "after reply"),
+    ];
+    const slice = await sliceBranch(branch, { startId: "u2" });
+    const loaded = SessionManager.open(slice.path);
+
+    expect(loaded.getEntries()).toEqual(slice.entries);
+    expect(
+      loaded.getEntries().some((entry) => entry.type === "compaction"),
+    ).toBe(false);
+
+    expect(loaded.buildSessionContext().messages).toEqual([
+      messageAt(branch, 2),
+      messageAt(branch, 3),
+      messageAt(branch, 5),
+      messageAt(branch, 6),
+    ]);
+  });
+
+  it("carries the effective model and thinking level but not the name", async () => {
     const branch: SessionEntry[] = [
       model("m1", null),
       thinking("t1", "m1"),
@@ -378,32 +479,39 @@ describe("buildSlice", () => {
       user("u1", "name", "keep"),
       assistant("a1", "u1", "reply"),
     ];
-    const result = buildSlice(
-      branch,
-      "u1",
-      null,
-      new Date(TIMESTAMP),
-      deterministicIds("new-model", "new-thinking"),
-    );
+    const slice = await sliceBranch(branch, { startId: "u1" });
+    const [newModel, newThinking, ...copied] = slice.entries;
+    const sourceIds = branch.map((entry) => entry.id);
 
-    expect(result).toEqual({
-      copiedCount: 2,
-      entries: [
-        { ...entryAt(branch, 0), id: "new-model", parentId: null },
-        { ...entryAt(branch, 1), id: "new-thinking", parentId: "new-model" },
-        { ...entryAt(branch, 3), parentId: "new-thinking" },
-        entryAt(branch, 4),
-      ],
+    expect(slice.copied).toBe(2);
+    expect(newModel).toEqual({
+      ...entryAt(branch, 0),
+      id: newModel?.id,
+      parentId: null,
+      timestamp: slice.header.timestamp,
     });
 
-    if ("entries" in result) {
-      expect(
-        result.entries.some((entry) => entry.type === "session_info"),
-      ).toBe(false);
-    }
+    expect(newThinking).toEqual({
+      ...entryAt(branch, 1),
+      id: newThinking?.id,
+      parentId: newModel?.id,
+      timestamp: slice.header.timestamp,
+    });
+    expect(newModel?.id).toMatch(/^[\da-f]{8}$/u);
+    expect(sourceIds).not.toContain(newModel?.id);
+    expect(sourceIds).not.toContain(newThinking?.id);
+    expect(newModel?.id).not.toBe(newThinking?.id);
+    expect(copied).toEqual([
+      { ...entryAt(branch, 3), parentId: newThinking?.id },
+      entryAt(branch, 4),
+    ]);
+
+    expect(slice.entries.some((entry) => entry.type === "session_info")).toBe(
+      false,
+    );
   });
 
-  it("carries the latest model and thinking changes before the start", () => {
+  it("carries the latest model and thinking changes before the start", async () => {
     const branch: SessionEntry[] = [
       model("model-old", null),
       thinking("thinking-old", "model-old"),
@@ -425,34 +533,25 @@ describe("buildSlice", () => {
       user("u1", "thinking-latest", "keep"),
       assistant("a1", "u1", "reply"),
     ];
-    const result = buildSlice(
-      branch,
-      "u1",
-      null,
-      new Date(TIMESTAMP),
-      deterministicIds("new-model", "new-thinking"),
-    );
+    const slice = await sliceBranch(branch, { startId: "u1" });
 
-    if ("reason" in result) throw new Error(result.reason);
-
-    expect(result.copiedCount).toBe(2);
-    expect(result.entries[0]).toMatchObject({
+    expect(slice.copied).toBe(2);
+    expect(slice.entries[0]).toMatchObject({
       provider: "openai",
       modelId: "gpt-latest",
     });
-    expect(result.entries[1]).toMatchObject({ thinkingLevel: "xhigh" });
+    expect(slice.entries[1]).toMatchObject({ thinkingLevel: "xhigh" });
   });
 
-  it("adds no synthetic state when the prefix has none", () => {
+  it("adds no synthetic state when the prefix has none", async () => {
     const branch = [user("u1", null, "keep"), assistant("a1", "u1", "reply")];
+    const slice = await sliceBranch(branch, { startId: "u1" });
 
-    expect(buildSlice(branch, "u1", null)).toEqual({
-      copiedCount: 2,
-      entries: branch,
-    });
+    expect(slice.copied).toBe(2);
+    expect(slice.entries).toEqual(branch);
   });
 
-  it("strips a source rename inside the selected range", () => {
+  it("strips a source rename inside the selected range", async () => {
     const branch: SessionEntry[] = [
       user("u1", null, "keep"),
       {
@@ -464,11 +563,13 @@ describe("buildSlice", () => {
       },
       assistant("a1", "name", "reply"),
     ];
+    const slice = await sliceBranch(branch, { startId: "u1" });
 
-    expect(buildSlice(branch, "u1", null)).toEqual({
-      copiedCount: 2,
-      entries: [entryAt(branch, 0), { ...entryAt(branch, 2), parentId: "u1" }],
-    });
+    expect(slice.copied).toBe(2);
+    expect(slice.entries).toEqual([
+      entryAt(branch, 0),
+      { ...entryAt(branch, 2), parentId: "u1" },
+    ]);
   });
 
   it("writes a label that resolves on the new session", async () => {
@@ -492,126 +593,93 @@ describe("buildSlice", () => {
         label: "current",
       },
     ];
-    const result = buildSlice(
-      branch,
-      "u1",
-      null,
-      new Date(TIMESTAMP),
-      deterministicIds("new-label"),
-    );
+    const slice = await sliceBranch(branch, { startId: "u1" });
 
-    if ("reason" in result) throw new Error(result.reason);
-
-    const directory = await mkdtemp(join(tmpdir(), "pi-session-slice-label-"));
-
-    temporaryDirectories.push(directory);
-
-    const destination = writeSliceFile(
-      directory,
-      "/project",
-      "/sessions/source.jsonl",
-      result.entries,
-      new Date(TIMESTAMP),
-      () => "label-session",
-    );
-
-    expect(SessionManager.open(destination).getLabel("u1")).toBe("current");
+    expect(SessionManager.open(slice.path).getLabel("u1")).toBe("current");
   });
 
-  it("returns reasons for missing and reversed boundaries", () => {
-    const branch = [user("u1", null, "one"), user("u2", "u1", "two")];
+  it("returns reasons for missing and reversed boundaries without writing", async () => {
+    const directory = await makeTemporaryDirectory();
+    const session = sourceSession(
+      [user("u1", null, "one"), user("u2", "u1", "two")],
+      directory,
+    );
 
-    expect(buildSlice(branch, "missing", null)).toEqual({
+    expect(sliceSession(session, { startId: "missing" })).toEqual({
       reason: "The start message is no longer available.",
     });
 
-    expect(buildSlice(branch, "u1", "missing")).toEqual({
+    expect(sliceSession(session, { startId: "u1", endId: "missing" })).toEqual({
       reason: "The end message is no longer available.",
     });
 
-    expect(buildSlice(branch, "u2", "u1")).toEqual({
+    expect(sliceSession(session, { startId: "u2", endId: "u1" })).toEqual({
       reason: "The end message must come after the start message.",
     });
+
+    expect(await readdir(directory)).toEqual([]);
   });
-});
 
-describe("writeSliceFile", () => {
-  it("round-trips a pre-compaction start without restoring the compaction", async () => {
-    const directory = await mkdtemp(
-      join(tmpdir(), "pi-session-slice-compact-"),
-    );
-
-    temporaryDirectories.push(directory);
-
+  it("writes a loadable v3 session with lineage and restored model", async () => {
     const branch: SessionEntry[] = [
-      user("u1", null, "hidden"),
-      assistant("a1", "u1", "hidden reply"),
-      user("u2", "a1", "retained"),
-      assistant("a2", "u2", "retained reply"),
-      {
-        type: "compaction",
-        id: "compact",
-        parentId: "a2",
-        timestamp: TIMESTAMP,
-        summary: "summary",
-        firstKeptEntryId: "u2",
-        tokensBefore: 10,
-      },
-      user("u3", "compact", "after"),
-      assistant("a3", "u3", "after reply"),
+      model("model", null),
+      user("u1", "model", "hello"),
+      assistant("a1", "u1", "hi"),
     ];
-    const result = buildSlice(branch, "u2", null);
+    const slice = await sliceBranch(branch, { startId: "u1" });
+    const loaded = SessionManager.open(slice.path);
 
-    if ("reason" in result) throw new Error(result.reason);
+    expect(slice.header).toEqual({
+      type: "session",
+      version: 3,
+      id: slice.header.id,
+      timestamp: slice.header.timestamp,
+      cwd: "/project",
+      parentSession: SOURCE_PATH,
+    });
 
-    const destination = writeSliceFile(
-      directory,
-      "/project",
-      "/sessions/source.jsonl",
-      result.entries,
-      new Date(TIMESTAMP),
-      () => "compact-session",
+    expect(slice.header.id).toMatch(
+      /^[\da-f]{8}-[\da-f]{4}-7[\da-f]{3}-[\da-f]{4}-[\da-f]{12}$/u,
     );
-    const loaded = SessionManager.open(destination);
 
-    expect(loaded.getEntries()).toEqual(result.entries);
-    expect(
-      loaded.getEntries().some((entry) => entry.type === "compaction"),
-    ).toBe(false);
+    expect(new Date(slice.header.timestamp).toISOString()).toBe(
+      slice.header.timestamp,
+    );
 
-    expect(loaded.buildSessionContext().messages).toEqual([
-      messageAt(branch, 2),
-      messageAt(branch, 3),
-      messageAt(branch, 5),
-      messageAt(branch, 6),
-    ]);
+    expect(basename(slice.path)).toBe(
+      `${slice.header.timestamp.replaceAll(/[:.]/g, "-")}_${slice.header.id}.jsonl`,
+    );
+
+    expect(await readFile(slice.path, "utf8")).toBe(
+      `${slice.lines.join("\n")}\n`,
+    );
+    expect(slice.lines).toHaveLength(slice.entries.length + 1);
+    expect(loaded.buildSessionContext()).toMatchObject({
+      messages: [messageAt(branch, 1), messageAt(branch, 2)],
+      model: { provider: "anthropic", modelId: "claude-test" },
+    });
   });
 
   it("does not change the source after a successful write", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "pi-session-slice-source-"));
-
-    temporaryDirectories.push(directory);
-
+    const directory = await makeTemporaryDirectory();
     const source = join(directory, "source.jsonl");
     const sourceBytes = Buffer.from('{"source":true}\n');
 
     await writeFile(source, sourceBytes);
 
     const before = await readdir(directory);
-    const destination = writeSliceFile(
-      directory,
-      "/project",
-      source,
-      [user("u1", null, "hello")],
-      new Date(TIMESTAMP),
-      () => "successful-session",
+    const result = sliceSession(
+      sourceSession([user("u1", null, "hello")], directory, source),
+      { startId: "u1" },
     );
     const after = await readdir(directory);
+
+    if ("reason" in result) throw new Error(result.reason);
 
     expect(await readFile(source)).toEqual(sourceBytes);
     expect(before).toEqual(["source.jsonl"]);
     expect(after.filter((path) => join(directory, path) !== source)).toEqual([
-      destination.slice(directory.length + 1),
+      basename(result.path),
     ]);
   });
 
@@ -622,26 +690,20 @@ describe("writeSliceFile", () => {
         destinations.push(String(path));
       },
     };
-    const source = "/sessions/source.jsonl";
-    const destination = writeSliceFile(
-      "/sessions",
-      "/project",
-      source,
-      [user("u1", null, "hello")],
-      new Date(TIMESTAMP),
-      () => "recorded-session",
+    const result = sliceSession(
+      sourceSession([user("u1", null, "hello")], "/sessions"),
+      { startId: "u1" },
       recordingFs,
     );
 
-    expect(destinations).toEqual([destination]);
-    expect(destination).not.toBe(source);
+    if ("reason" in result) throw new Error(result.reason);
+
+    expect(destinations).toEqual([result.path]);
+    expect(result.path).not.toBe(SOURCE_PATH);
   });
 
   it("does not change the source when the destination write fails", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "pi-session-slice-source-"));
-
-    temporaryDirectories.push(directory);
-
+    const directory = await makeTemporaryDirectory();
     const source = join(directory, "source.jsonl");
     const sourceBytes = Buffer.from('{"source":true}\n');
     const failingFs: SliceFileSystem = {
@@ -653,53 +715,12 @@ describe("writeSliceFile", () => {
     await writeFile(source, sourceBytes);
 
     expect(() =>
-      writeSliceFile(
-        directory,
-        "/project",
-        source,
-        [user("u1", null, "hello")],
-        new Date(TIMESTAMP),
-        () => "failed-session",
+      sliceSession(
+        sourceSession([user("u1", null, "hello")], directory, source),
+        { startId: "u1" },
         failingFs,
       ),
     ).toThrow("simulated write failure");
     expect(await readFile(source)).toEqual(sourceBytes);
-  });
-
-  it("writes a loadable v3 session with lineage and restored model", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "pi-session-slice-"));
-
-    temporaryDirectories.push(directory);
-
-    const entries: SessionEntry[] = [
-      { ...model("model", null), timestamp: TIMESTAMP },
-      user("u1", "model", "hello"),
-      assistant("a1", "u1", "hi"),
-    ];
-    const destination = writeSliceFile(
-      directory,
-      "/project",
-      "/sessions/source.jsonl",
-      entries,
-      new Date(TIMESTAMP),
-      () => "session-id",
-    );
-    const lines = (await readFile(destination, "utf8")).trim().split("\n");
-    const header = JSON.parse(lines[0] ?? "null") as SessionHeader;
-    const loaded = SessionManager.open(destination);
-
-    expect(header).toEqual({
-      type: "session",
-      version: SUPPORTED_SESSION_VERSION,
-      id: "session-id",
-      timestamp: TIMESTAMP,
-      cwd: "/project",
-      parentSession: "/sessions/source.jsonl",
-    });
-    expect(lines).toHaveLength(entries.length + 1);
-    expect(loaded.buildSessionContext()).toMatchObject({
-      messages: [messageAt(entries, 1), messageAt(entries, 2)],
-      model: { provider: "anthropic", modelId: "claude-test" },
-    });
   });
 });

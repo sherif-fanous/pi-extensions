@@ -25,14 +25,28 @@ import {
   wrapKeyHints,
 } from "@sherif-fanous/pi-extensions-core";
 
-/** Result returned when a boundary picker closes. */
-export type PickerResult =
-  { kind: "cancel" } | { kind: "end" } | { id: string; kind: "message" };
+/** The end picker's result: cancelled, keep to the end, or the chosen message. */
+export type EndPickerResult = PickerCancel | PickerEnd | PickerMessage;
 
-interface PickerItem {
-  candidate?: SliceCandidate;
-  result: PickerResult;
+/** The start picker's result: cancelled, or the chosen message. */
+export type StartPickerResult = PickerCancel | PickerMessage;
+
+interface PickerCancel {
+  kind: "cancel";
+}
+
+interface PickerEnd {
+  kind: "end";
+}
+
+interface PickerItem<Choice extends PickerEnd | PickerMessage> {
+  result: Choice;
   text: string;
+}
+
+interface PickerMessage {
+  candidate: SliceCandidate;
+  kind: "message";
 }
 
 type PickerMode = "end" | "start";
@@ -40,7 +54,9 @@ type PickerMode = "end" | "start";
 /** The most messages a picker shows at once, as in Pi's `/fork` picker. */
 const MAX_VISIBLE_ITEMS = 10;
 
-class BoundaryPicker implements Component {
+class BoundaryPicker<
+  Choice extends PickerEnd | PickerMessage,
+> implements Component {
   private readonly bottom: readonly Component[];
   private readonly hints: readonly (string | undefined)[];
   private readonly top: readonly Component[];
@@ -49,11 +65,11 @@ class BoundaryPicker implements Component {
   constructor(
     title: string,
     description: string,
-    private readonly items: readonly PickerItem[],
+    private readonly items: readonly PickerItem<Choice>[],
     private readonly mode: PickerMode,
     private readonly theme: Theme,
     private readonly keybindings: KeybindingsManager,
-    private readonly onDone: (result: PickerResult) => void,
+    private readonly onDone: (result: Choice | PickerCancel) => void,
     private readonly startOrdinal?: number,
   ) {
     const border = new DynamicBorder((text) => theme.fg("border", text));
@@ -150,11 +166,12 @@ class BoundaryPicker implements Component {
     return lines;
   }
 
-  private renderMetadata(item: PickerItem, width: number): string {
+  private renderMetadata(item: PickerItem<Choice>, width: number): string {
     const editorHint = this.mode === "end" ? " · goes to your editor" : "";
-    const metadata = item.candidate
-      ? `  Message ${item.candidate.ordinal} of ${item.candidate.total} · ${formatAgo(item.candidate.timestamp)}${editorHint}`
-      : "  No end boundary selected";
+    const metadata =
+      item.result.kind === "message"
+        ? `  Message ${item.result.candidate.ordinal} of ${item.result.candidate.total} · ${formatAgo(item.result.candidate.timestamp)}${editorHint}`
+        : "  No end boundary selected";
 
     return this.theme.fg("muted", truncateToWidth(metadata, width, "…"));
   }
@@ -165,20 +182,16 @@ export async function showEndPicker(
   ui: ExtensionUIContext,
   candidates: readonly SliceCandidate[],
   startOrdinal: number,
-): Promise<PickerResult> {
+): Promise<EndPickerResult> {
   const afterStart = candidates.filter(
     (candidate) => candidate.ordinal > startOrdinal,
   );
-  const items: PickerItem[] = [
+  const items: PickerItem<PickerEnd | PickerMessage>[] = [
     {
       text: "Keep everything to the end",
       result: { kind: "end" },
     },
-    ...afterStart.map((candidate) => ({
-      candidate,
-      text: candidate.text,
-      result: { id: candidate.id, kind: "message" } as const,
-    })),
+    ...afterStart.map(messageItem),
   ];
 
   return showPicker(
@@ -195,31 +208,29 @@ export async function showEndPicker(
 export async function showStartPicker(
   ui: ExtensionUIContext,
   candidates: readonly SliceCandidate[],
-): Promise<PickerResult> {
-  const items = candidates.map((candidate) => ({
-    candidate,
-    text: candidate.text,
-    result: { id: candidate.id, kind: "message" } as const,
-  }));
-
+): Promise<StartPickerResult> {
   return showPicker(
     ui,
     "Slice: Start at Message",
     "Select the first message to keep in the new session.",
-    items,
+    candidates.map(messageItem),
     "start",
   );
 }
 
-async function showPicker(
+function messageItem(candidate: SliceCandidate): PickerItem<PickerMessage> {
+  return { result: { candidate, kind: "message" }, text: candidate.text };
+}
+
+async function showPicker<Choice extends PickerEnd | PickerMessage>(
   ui: ExtensionUIContext,
   title: string,
   description: string,
-  items: readonly PickerItem[],
+  items: readonly PickerItem<Choice>[],
   mode: PickerMode,
   startOrdinal?: number,
-): Promise<PickerResult> {
-  return ui.custom<PickerResult>(
+): Promise<Choice | PickerCancel> {
+  return ui.custom<Choice | PickerCancel>(
     (_tui, theme, keybindings, done) =>
       new BoundaryPicker(
         title,

@@ -1,4 +1,4 @@
-/** Builds and writes exact ranges from Pi session branches. */
+/** Slices an exact range of a Pi session branch into a new session file. */
 
 import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
@@ -18,7 +18,13 @@ type LabelEntry = Extract<SessionEntry, { type: "label" }>;
 type ReadonlySessionManager = ExtensionContext["sessionManager"];
 
 /** Session file format understood by this extension. */
-export const SUPPORTED_SESSION_VERSION = 3;
+const SUPPORTED_SESSION_VERSION = 3;
+
+/** The user-message ids that bound a slice; without `endId` it keeps to the end. */
+export interface SliceBoundaries {
+  endId?: string | undefined;
+  startId: string;
+}
 
 /** A user-message boundary shown by the picker. */
 export interface SliceCandidate {
@@ -34,69 +40,17 @@ export interface SliceFileSystem {
   writeFileSync: typeof writeFileSync;
 }
 
-/** Successful or expected-failure result of building a slice. */
-export type BuildSliceResult =
-  { copiedCount: number; entries: SessionEntry[] } | { reason: string };
+/**
+ * The written session's path and the number of source entries copied into it,
+ * or the reason nothing was written.
+ */
+export type SliceSessionResult =
+  { copied: number; path: string } | { reason: string };
+
+type BuildSliceResult =
+  { copied: number; entries: SessionEntry[] } | { reason: string };
 
 const DEFAULT_FILE_SYSTEM: SliceFileSystem = { writeFileSync };
-
-/** Build copied and synthetic entries for the selected boundary ids. */
-export function buildSlice(
-  branch: readonly SessionEntry[],
-  startId: string,
-  endId: string | null,
-  now: Date = new Date(),
-  createEntryId: (ids: ReadonlySet<string>) => string = generateEntryId,
-): BuildSliceResult {
-  const startIndex = branch.findIndex((entry) => entry.id === startId);
-
-  if (startIndex < 0)
-    return { reason: "The start message is no longer available." };
-
-  const endIndex =
-    endId === null
-      ? branch.length
-      : branch.findIndex((entry) => entry.id === endId);
-
-  if (endIndex < 0)
-    return { reason: "The end message is no longer available." };
-
-  if (endIndex <= startIndex) {
-    return { reason: "The end message must come after the start message." };
-  }
-
-  if (!isUserMessageEntry(branch[startIndex])) {
-    return { reason: "The start boundary must be a user message." };
-  }
-
-  if (endId !== null && !isUserMessageEntry(branch[endIndex])) {
-    return { reason: "The end boundary must be a user message." };
-  }
-
-  const ids = new Set(branch.map((entry) => entry.id));
-  const timestamp = now.toISOString();
-  const syntheticEntries = buildStateEntries(
-    branch.slice(0, startIndex),
-    ids,
-    timestamp,
-    createEntryId,
-  );
-  const copiedEntries = copyRange(
-    branch.slice(startIndex, endIndex),
-    syntheticEntries.at(-1)?.id ?? null,
-  );
-
-  if (copiedEntries.length === 0) {
-    return { reason: "The selected range contains no session entries." };
-  }
-
-  const labels = buildLabelEntries(branch, copiedEntries, ids, createEntryId);
-
-  return {
-    copiedCount: copiedEntries.length,
-    entries: [...syntheticEntries, ...copiedEntries, ...labels],
-  };
-}
 
 /** Build picker candidates from Pi's compaction-aware context view. */
 export function listCandidates(
@@ -116,45 +70,59 @@ export function listCandidates(
   }));
 }
 
-/** Write one new versioned session file and return its path. */
-export function writeSliceFile(
-  sessionDir: string,
-  cwd: string,
-  sourcePath: string,
-  entries: readonly SessionEntry[],
-  now: Date = new Date(),
-  createSessionId: () => string = uuidv7,
+/**
+ * Write the branch range between `boundaries` to one new session file in the
+ * session directory. Throws when the write fails or the session has no file.
+ */
+export function sliceSession(
+  sessionManager: Pick<
+    ReadonlySessionManager,
+    "getBranch" | "getCwd" | "getSessionDir" | "getSessionFile"
+  >,
+  boundaries: SliceBoundaries,
   fs: SliceFileSystem = DEFAULT_FILE_SYSTEM,
-): string {
-  const timestamp = now.toISOString();
-  const sessionId = createSessionId();
-  const fileTimestamp = timestamp.replaceAll(/[:.]/g, "-");
-  const destination = join(sessionDir, `${fileTimestamp}_${sessionId}.jsonl`);
-  const header: SessionHeader = {
-    type: "session",
-    version: SUPPORTED_SESSION_VERSION,
-    id: sessionId,
-    timestamp,
-    cwd,
-    parentSession: sourcePath,
-  };
-  const contents = [header, ...entries]
-    .map((entry) => JSON.stringify(entry))
-    .join("\n");
+): SliceSessionResult {
+  const sourcePath = sessionManager.getSessionFile();
 
-  fs.writeFileSync(destination, `${contents}\n`, {
-    encoding: "utf8",
-    flag: "wx",
-  });
+  if (!sourcePath) throw new Error("The session has no session file.");
 
-  return destination;
+  const now = new Date();
+  const result = buildSlice(
+    sessionManager.getBranch(),
+    boundaries.startId,
+    boundaries.endId,
+    now,
+  );
+
+  if ("reason" in result) return result;
+
+  const path = writeSliceFile(
+    sessionManager.getSessionDir(),
+    sessionManager.getCwd(),
+    sourcePath,
+    result.entries,
+    now,
+    fs,
+  );
+
+  return { copied: result.copied, path };
+}
+
+/** Why this extension cannot slice the session, or `undefined` when it can. */
+export function unsupportedSourceReason(
+  sessionManager: Pick<ReadonlySessionManager, "getHeader">,
+): string | undefined {
+  const version = sessionManager.getHeader()?.version;
+
+  if (version === SUPPORTED_SESSION_VERSION) return undefined;
+
+  return `This session uses unsupported format version ${String(version ?? "unknown")}.`;
 }
 
 function buildLabelEntries(
   branch: readonly SessionEntry[],
   copiedEntries: readonly SessionEntry[],
   ids: Set<string>,
-  createEntryId: (ids: ReadonlySet<string>) => string,
 ): LabelEntry[] {
   const labels = new Map<string, { label: string; timestamp: string }>();
 
@@ -178,7 +146,7 @@ function buildLabelEntries(
   for (const [targetId, value] of labels) {
     if (!copiedIds.has(targetId)) continue;
 
-    const id = nextEntryId(ids, createEntryId);
+    const id = nextEntryId(ids);
     const entry: LabelEntry = {
       type: "label",
       id,
@@ -195,11 +163,65 @@ function buildLabelEntries(
   return output;
 }
 
+function buildSlice(
+  branch: readonly SessionEntry[],
+  startId: string,
+  endId: string | undefined,
+  now: Date,
+): BuildSliceResult {
+  const startIndex = branch.findIndex((entry) => entry.id === startId);
+
+  if (startIndex < 0)
+    return { reason: "The start message is no longer available." };
+
+  const endIndex =
+    endId === undefined
+      ? branch.length
+      : branch.findIndex((entry) => entry.id === endId);
+
+  if (endIndex < 0)
+    return { reason: "The end message is no longer available." };
+
+  if (endIndex <= startIndex) {
+    return { reason: "The end message must come after the start message." };
+  }
+
+  if (!isUserMessageEntry(branch[startIndex])) {
+    return { reason: "The start boundary must be a user message." };
+  }
+
+  if (endId !== undefined && !isUserMessageEntry(branch[endIndex])) {
+    return { reason: "The end boundary must be a user message." };
+  }
+
+  const ids = new Set(branch.map((entry) => entry.id));
+  const timestamp = now.toISOString();
+  const syntheticEntries = buildStateEntries(
+    branch.slice(0, startIndex),
+    ids,
+    timestamp,
+  );
+  const copiedEntries = copyRange(
+    branch.slice(startIndex, endIndex),
+    syntheticEntries.at(-1)?.id ?? null,
+  );
+
+  if (copiedEntries.length === 0) {
+    return { reason: "The selected range contains no session entries." };
+  }
+
+  const labels = buildLabelEntries(branch, copiedEntries, ids);
+
+  return {
+    copied: copiedEntries.length,
+    entries: [...syntheticEntries, ...copiedEntries, ...labels],
+  };
+}
+
 function buildStateEntries(
   prefix: readonly SessionEntry[],
   ids: Set<string>,
   timestamp: string,
-  createEntryId: (ids: ReadonlySet<string>) => string,
 ): (ModelChangeEntry | ThinkingLevelChangeEntry)[] {
   let model: ModelChangeEntry | undefined;
   let thinking: ThinkingLevelChangeEntry | undefined;
@@ -213,7 +235,7 @@ function buildStateEntries(
   let parentId: string | null = null;
 
   if (model) {
-    const id = nextEntryId(ids, createEntryId);
+    const id = nextEntryId(ids);
 
     entries.push({
       type: "model_change",
@@ -227,7 +249,7 @@ function buildStateEntries(
   }
 
   if (thinking) {
-    const id = nextEntryId(ids, createEntryId);
+    const id = nextEntryId(ids);
 
     entries.push({
       type: "thinking_level_change",
@@ -298,17 +320,42 @@ function isUserMessageEntry(
   return entry?.type === "message" && entry.message.role === "user";
 }
 
-function nextEntryId(
-  ids: Set<string>,
-  createEntryId: (ids: ReadonlySet<string>) => string,
-): string {
-  const id = createEntryId(ids);
-
-  if (ids.has(id)) {
-    throw new Error(`Entry id generator returned duplicate id ${id}.`);
-  }
+function nextEntryId(ids: Set<string>): string {
+  const id = generateEntryId(ids);
 
   ids.add(id);
 
   return id;
+}
+
+function writeSliceFile(
+  sessionDir: string,
+  cwd: string,
+  sourcePath: string,
+  entries: readonly SessionEntry[],
+  now: Date,
+  fs: SliceFileSystem,
+): string {
+  const timestamp = now.toISOString();
+  const sessionId = uuidv7();
+  const fileTimestamp = timestamp.replaceAll(/[:.]/g, "-");
+  const destination = join(sessionDir, `${fileTimestamp}_${sessionId}.jsonl`);
+  const header: SessionHeader = {
+    type: "session",
+    version: SUPPORTED_SESSION_VERSION,
+    id: sessionId,
+    timestamp,
+    cwd,
+    parentSession: sourcePath,
+  };
+  const contents = [header, ...entries]
+    .map((entry) => JSON.stringify(entry))
+    .join("\n");
+
+  fs.writeFileSync(destination, `${contents}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+  });
+
+  return destination;
 }
