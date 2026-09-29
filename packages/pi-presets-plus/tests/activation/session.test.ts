@@ -335,6 +335,21 @@ describe("assess", () => {
     },
   );
 
+  it("holds Pi to no tools when a preset names only tools Pi lacks", async () => {
+    const harness = makePiHarness();
+
+    await applyPreset(harness, { ...plan, tools: ["web"] });
+
+    expect(assess(harness)?.driftReasons).toEqual([]);
+
+    harness.pi.setActiveTools(["read"]);
+
+    expect(assess(harness)).toMatchObject({
+      driftReasons: ["tools"],
+      overlay: { tools: "user-override" },
+    });
+  });
+
   it("holds a later preset to the tools an earlier one wrote", async () => {
     const harness = makePiHarness();
 
@@ -401,6 +416,55 @@ describe("isApplied", () => {
     expect(harness.session.isApplied(plan, harness.ctx, harness.pi)).toBe(
       false,
     );
+  });
+
+  it("does not hold once the preset is edited, even if Pi still matches", async () => {
+    const harness = makePiHarness();
+
+    await applyPreset(harness, plan);
+    harness.pi.setThinkingLevel("low");
+
+    expect(
+      harness.session.isApplied(
+        { ...plan, thinkingLevel: "low" },
+        harness.ctx,
+        harness.pi,
+      ),
+    ).toBe(false);
+  });
+
+  it("applies a later preset again once the user changes the tools it carried", async () => {
+    const harness = makePiHarness();
+    const write: LoadedPreset = { ...plan, model: "opus", name: "write" };
+
+    await applyPreset(harness, { ...plan, tools: ["read"] });
+    await applyPreset(harness, write);
+    harness.pi.setActiveTools(["bash"]);
+
+    expect(harness.session.isApplied(write, harness.ctx, harness.pi)).toBe(
+      false,
+    );
+
+    const result = await apply(write, harness.ctx, harness.pi, harness.session);
+
+    expect(result).toMatchObject({ applied: true, ok: true });
+    expect(harness.pi.getActiveTools()).toEqual(["bash"]);
+    expect(assess(harness)?.driftReasons).toEqual(["tools"]);
+  });
+
+  it("holds for a preset naming a tool Pi lacks, so activating it again writes nothing", async () => {
+    const harness = makePiHarness();
+    const preset: LoadedPreset = { ...plan, tools: ["read", "web"] };
+
+    await applyPreset(harness, preset);
+
+    expect(harness.session.isApplied(preset, harness.ctx, harness.pi)).toBe(
+      true,
+    );
+
+    expect(
+      await apply(preset, harness.ctx, harness.pi, harness.session),
+    ).toEqual({ applied: false, notices: [], ok: true });
   });
 
   it("never holds for a reattached preset, which has no baseline", () => {

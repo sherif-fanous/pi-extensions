@@ -103,7 +103,9 @@ declared model, its thinking level clamped by
 declared tools.
 
 The comparison SHALL include: model `(provider, id)`; thinking level; and active
-tools as a set, but ONLY when the held tools are a non-empty list. After a
+tools as a set whenever the overlay owns tools, even when it wrote an empty list
+because Pi had none of the preset's tools. A preset reattached without an
+overlay is compared on tools only when it declares a non-empty list. After a
 switch within one overlay, the held tools are the ones carried forward from an
 earlier preset, so a later preset that omits `tools` is still compared against
 them. If any compared field differs and the active preset is currently

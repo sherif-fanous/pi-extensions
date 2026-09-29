@@ -146,16 +146,18 @@ self-trigger guard, so the drift handlers ignore the events those writes fire.
 #### Scenario: Re-apply same preset, state already matches
 
 - **WHEN** the user activates the preset that is already attached with an
-  overlay and current Pi state matches the preset's declared fields (the
-  session's `isApplied`)
+  overlay, the preset's declared fields are unchanged since it was applied, and
+  current Pi state still matches the values that application wrote, including
+  tools carried from an earlier preset (the session's `isApplied`)
 - **THEN** the operation SHALL be a no-op (no baseline change, no writes, no
   session entry, no activation marker)
 - **AND** `apply()` SHALL return `{ ok: true }`
 
 #### Scenario: Re-apply same preset, state has drifted
 
-- **WHEN** the user activates the preset that is already attached but current Pi
-  state does NOT match the preset's declared fields
+- **WHEN** the user activates the preset that is already attached but its
+  declared fields changed since it was applied, or current Pi state does NOT
+  match the values that application wrote
 - **THEN** a full apply SHALL run while preserving the existing baseline
 - **AND** the `written` values and tool ownership SHALL be updated to reflect
   the re-application

@@ -233,18 +233,18 @@ export class ActivePresetSession {
   }
 
   /**
-   * Whether `preset` is attached with a saved baseline and Pi already
-   * holds the values it declares, so applying it again would write
+   * Whether `preset` is attached unedited with a saved baseline and Pi
+   * still holds what applying it wrote, so applying it again would write
    * nothing.
    */
   isApplied(preset: LoadedPreset, ctx: AssessContext, pi: AssessPi): boolean {
     const active = this.active;
 
     return (
-      active !== undefined &&
-      active.overlay !== undefined &&
+      active?.overlay !== undefined &&
       samePresetIdentity(active, preset) &&
-      driftReasons(readPi(ctx, pi), heldByDeclaration(preset, ctx)).length === 0
+      sameDeclaration(active.declared, preset) &&
+      driftReasons(readPi(ctx, pi), active.overlay.written).length === 0
     );
   }
 
@@ -469,11 +469,7 @@ function driftReasons(current: PiState, held: HeldValues): DriftReason[] {
     reasons.push("thinking level");
   }
 
-  if (
-    held.tools !== undefined &&
-    held.tools.length > 0 &&
-    !sameSet(current.tools, held.tools)
-  ) {
+  if (held.tools !== undefined && !sameSet(current.tools, held.tools)) {
     reasons.push("tools");
   }
 
@@ -482,7 +478,8 @@ function driftReasons(current: PiState, held: HeldValues): DriftReason[] {
 
 /**
  * The values a preset declaration holds Pi to, with its thinking level
- * clamped to what the registry's model supports.
+ * clamped to what the registry's model supports. An empty tools list holds
+ * no tools, because a reattached record doesn't know which of them Pi had.
  */
 function heldByDeclaration(
   declared: PresetDeclaration,
@@ -494,7 +491,9 @@ function heldByDeclaration(
       declared,
       ctx.modelRegistry.find(declared.provider, declared.model),
     ),
-    ...(declared.tools === undefined ? {} : { tools: declared.tools }),
+    ...(declared.tools === undefined || declared.tools.length === 0
+      ? {}
+      : { tools: declared.tools }),
   };
 }
 
@@ -524,6 +523,21 @@ async function restoreModel(
   } catch {
     return false;
   }
+}
+
+/** Whether two declarations name the same model, thinking level, and tools. */
+function sameDeclaration(
+  left: PresetDeclaration,
+  right: PresetDeclaration,
+): boolean {
+  return (
+    left.provider === right.provider &&
+    left.model === right.model &&
+    left.thinkingLevel === right.thinkingLevel &&
+    (left.tools === undefined || right.tools === undefined
+      ? left.tools === right.tools
+      : sameSet(left.tools, right.tools))
+  );
 }
 
 /**
