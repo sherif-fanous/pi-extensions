@@ -2,8 +2,11 @@
  * Reads Pi's file-backed startup defaults and compares them with the values
  * observed when preset processing begins.
  */
-import { THINKING_LEVELS, type ThinkingLevel } from "../types.js";
-import { sameModel, type ModelIdentity } from "./same-model.js";
+import {
+  THINKING_LEVELS,
+  type ModelIdentity,
+  type ThinkingLevel,
+} from "../types.js";
 import { clampThinkingLevel } from "@earendil-works/pi-ai";
 import {
   getAgentDir,
@@ -120,11 +123,14 @@ export function startupSelectionMatchesDefaults(
     return false;
   }
 
-  const defaultModel = { id: defaults.model, provider: defaults.provider };
+  if (
+    startup.model?.provider !== defaults.provider ||
+    startup.model.id !== defaults.model
+  ) {
+    return false;
+  }
 
-  if (!sameModel(startup.model ?? null, defaultModel)) return false;
-
-  const model = ctx.modelRegistry.find(defaultModel.provider, defaultModel.id);
+  const model = ctx.modelRegistry.find(defaults.provider, defaults.model);
 
   if (!model) return false;
 

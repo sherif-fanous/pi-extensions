@@ -3,11 +3,12 @@
  * overlays, how the session's current model, thinking level, and tools
  * compare against both, and the state of each configuration file.
  */
-import { assessOverlay } from "../../activation/overlay-assessment.js";
-import type { ActivePresetSession } from "../../activation/session.js";
+import type {
+  ActivePresetSession,
+  OverlayAssessment,
+} from "../../activation/session.js";
 import { findPreset } from "../../preset-identity.js";
 import { loadPresetsConfig } from "../../store/api.js";
-import type { ActivePresetState } from "../../types.js";
 import {
   deliverCommandReport,
   presetsReport,
@@ -63,8 +64,8 @@ export async function statusReport(
   pi: Pick<ExtensionAPI, "getActiveTools" | "getThinkingLevel">,
   session: ActivePresetSession,
 ): Promise<PresetsReport> {
-  const active = session.current();
   const { config, presets } = await loadPresetsConfig(ctx);
+  const assessment = session.assess(ctx, pi);
   const report = (
     rows: readonly ReportRow[],
     severity: PresetsReport["severity"],
@@ -75,7 +76,9 @@ export async function statusReport(
       severity,
     );
 
-  if (!active) return report(["No preset is active."], "info");
+  if (!assessment) return report(["No preset is active."], "info");
+
+  const { active } = assessment;
 
   if (!findPreset(presets, active)) {
     return report(
@@ -84,30 +87,19 @@ export async function statusReport(
     );
   }
 
-  return report(statusRows(active, ctx, pi), "info");
+  return report(statusRows(assessment), "info");
 }
 
 /**
  * The rows for the active preset. A session whose baseline was never
  * captured gets the shorter list that omits the baseline and preset rows.
  */
-function statusRows(
-  active: ActivePresetState,
-  ctx: Pick<ExtensionCommandContext, "model">,
-  pi: Pick<ExtensionAPI, "getActiveTools" | "getThinkingLevel">,
-): ReportRow[] {
-  const currentModel = ctx.model
-    ? { provider: ctx.model.provider, id: ctx.model.id }
-    : null;
-  const currentThinking = pi.getThinkingLevel();
-  const currentTools = pi.getActiveTools();
-  const assessment = assessOverlay(active, {
-    model: currentModel,
-    thinkingLevel: currentThinking,
-    tools: currentTools,
-  });
-
-  if (assessment.kind === "unknown") {
+function statusRows({
+  active,
+  current,
+  overlay,
+}: OverlayAssessment): ReportRow[] {
+  if (!overlay) {
     return [
       [`${PRESET_LABEL}:`, active.name],
       [`${SCOPE_LABEL}:`, formatScopeName(active.scope)],
@@ -115,17 +107,17 @@ function statusRows(
         `${RESTORE_LABEL}:`,
         "No saved baseline. Clear will only turn the preset off.",
       ],
-      [`${CURRENT_MODEL_LABEL}:`, formatModel(currentModel)],
-      [`${CURRENT_THINKING_LABEL}:`, currentThinking],
-      [`${CURRENT_TOOLS_LABEL}:`, formatTools(currentTools)],
+      [`${CURRENT_MODEL_LABEL}:`, formatModel(current.model)],
+      [`${CURRENT_THINKING_LABEL}:`, current.thinkingLevel],
+      [`${CURRENT_TOOLS_LABEL}:`, formatTools(current.tools)],
     ];
   }
 
-  const { baseline, lastApplied } = assessment.restore;
+  const { baseline, written } = overlay;
   const toolsWording =
-    assessment.tools === "not-owned"
+    overlay.tools === "not-owned"
       ? "Not managed by active preset"
-      : OVERLAY_FIELD_WORDING[assessment.tools];
+      : OVERLAY_FIELD_WORDING[overlay.tools];
 
   return [
     [`${PRESET_LABEL}:`, active.name],
@@ -133,23 +125,23 @@ function statusRows(
     [`${BASELINE_MODEL_LABEL}:`, formatModel(baseline.model)],
     [`${BASELINE_THINKING_LABEL}:`, baseline.thinkingLevel],
     [`${BASELINE_TOOLS_LABEL}:`, formatTools(baseline.tools)],
-    [`${PRESET_MODEL_LABEL}:`, formatModel(lastApplied.model)],
-    [`${PRESET_THINKING_LABEL}:`, lastApplied.thinkingLevel],
+    [`${PRESET_MODEL_LABEL}:`, formatModel(written.model)],
+    [`${PRESET_THINKING_LABEL}:`, written.thinkingLevel],
     [
       `${PRESET_TOOLS_LABEL}:`,
-      lastApplied.tools ? formatTools(lastApplied.tools) : "none",
+      written.tools ? formatTools(written.tools) : "none",
     ],
     [
       `${CURRENT_MODEL_LABEL}:`,
-      `${formatModel(currentModel)} (${OVERLAY_FIELD_WORDING[assessment.model]})`,
+      `${formatModel(current.model)} (${OVERLAY_FIELD_WORDING[overlay.model]})`,
     ],
     [
       `${CURRENT_THINKING_LABEL}:`,
-      `${currentThinking} (${OVERLAY_FIELD_WORDING[assessment.thinking]})`,
+      `${current.thinkingLevel} (${OVERLAY_FIELD_WORDING[overlay.thinking]})`,
     ],
     [
       `${CURRENT_TOOLS_LABEL}:`,
-      `${formatTools(currentTools)} (${toolsWording})`,
+      `${formatTools(current.tools)} (${toolsWording})`,
     ],
   ];
 }

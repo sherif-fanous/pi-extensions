@@ -26,9 +26,9 @@ baseline-managed overlay or capture a fresh baseline of current Pi state, (b)
 setting the model via `pi.setModel`, the thinking level via
 `pi.setThinkingLevel` (using the effective level), and (when the preset
 specifies a non-empty `tools` array) the active tools via `pi.setActiveTools`,
-and (c) recording the applied preset's name and scope together with the
-baseline, the just-applied values as `lastApplied`, an `owned` bookkeeping
-record, and an incremented `applyCount`.
+and (c) recording, in one record on the session, the applied preset's name and
+scope, the fields it declared, the baseline, and the values just written (the
+`written` values).
 
 `apply()` SHALL return one of two shapes:
 
@@ -51,31 +51,31 @@ the startup warning collection.
 
 Baseline capture rules:
 
-- If no preset is currently attached, OR the currently attached preset has
-  `restore.kind === "unknown"`, the package SHALL capture a fresh baseline from
-  current Pi state (model, thinking level, active tools) and set `applyCount`
-  to 1.
-- If the currently attached preset has `restore.kind === "baseline"`, the
-  package SHALL preserve the existing baseline unchanged and set `applyCount` to
-  the previous `applyCount + 1`.
+- If no preset is currently attached, OR the currently attached preset was
+  reattached without a baseline (`priorUnknown`), the package SHALL capture a
+  fresh baseline from current Pi state (model, thinking level, active tools).
+- If the currently attached preset has an overlay (a baseline), the package
+  SHALL preserve the existing baseline unchanged.
 
 Ownership rules:
 
-- `owned.model` and `owned.thinkingLevel` SHALL always be true in the
-  baseline-managed shape.
-- `owned.tools` SHALL be sticky-true across preset switches within the same
-  overlay: once any preset in the overlay has declared a non-empty `tools`
-  array, `owned.tools` SHALL remain true for the lifetime of that overlay.
+- The overlay SHALL always own the model and the thinking level.
+- The overlay SHALL own tools from the first preset in it that declares a
+  non-empty `tools` array until the overlay is cleared, across preset switches.
+  It owns tools exactly when its `written` values include tools.
 
-`lastApplied` rules:
+`written` rules:
 
-- `lastApplied.model` SHALL be the provider and id the package just wrote via
+- `written.model` SHALL be the provider and id the package just wrote via
   `pi.setModel`.
-- `lastApplied.thinkingLevel` SHALL be the effective thinking level the package
-  just wrote via `pi.setThinkingLevel`.
-- `lastApplied.tools` SHALL be updated to the filtered tool list when the
-  current preset declares a non-empty `tools` array, and SHALL otherwise carry
-  forward the previous overlay's `lastApplied.tools` value (if any).
+- `written.thinkingLevel` SHALL be the effective thinking level the package just
+  wrote via `pi.setThinkingLevel`.
+- `written.tools` SHALL be updated to the filtered tool list when the current
+  preset declares a non-empty `tools` array, and SHALL otherwise carry forward
+  the previous overlay's `written.tools` value (if any).
+
+The session SHALL make the model, thinking level, and tools writes inside its
+self-trigger guard, so the drift handlers ignore the events those writes fire.
 
 #### Scenario: First activation while no preset is attached
 
@@ -83,12 +83,11 @@ Ownership rules:
   attached
 - **THEN** the package SHALL capture current Pi model, thinking level, and
   active tools as the baseline
-- **AND** `applyCount` SHALL be 1
-- **AND** `owned.tools` SHALL be true if and only if the preset declares a
+- **AND** the overlay SHALL own tools if and only if the preset declares a
   non-empty `tools` array
 - **AND** the model, effective thinking level, and (when declared) filtered
   tools SHALL be written to Pi
-- **AND** the active preset SHALL be set with `restore.kind === "baseline"`
+- **AND** the active preset's record SHALL carry the overlay
 - **AND** `apply()` SHALL return `{ ok: true }`
 
 #### Scenario: Switching from one baseline-managed preset to another
@@ -96,21 +95,19 @@ Ownership rules:
 - **WHEN** preset A is the currently attached baseline-managed preset and the
   user activates preset B
 - **THEN** the baseline SHALL be preserved unchanged from the A-era overlay
-- **AND** `applyCount` SHALL be incremented
-- **AND** `owned.tools` SHALL become true if it was already true OR if B
-  declares a non-empty `tools` array, and SHALL otherwise remain false
-- **AND** `lastApplied.model` and `lastApplied.thinkingLevel` SHALL reflect B's
+- **AND** the overlay SHALL own tools if it already did OR if B declares a
+  non-empty `tools` array, and SHALL otherwise not own them
+- **AND** `written.model` and `written.thinkingLevel` SHALL reflect B's
   just-applied values
-- **AND** `lastApplied.tools` SHALL be B's filtered tool list when B declares
-  tools, and SHALL carry forward the prior `lastApplied.tools` otherwise
+- **AND** `written.tools` SHALL be B's filtered tool list when B declares tools,
+  and SHALL carry forward the prior `written.tools` otherwise
 
 #### Scenario: Apply after a priorUnknown attachment
 
-- **WHEN** the currently attached preset has `restore.kind === "unknown"`
+- **WHEN** the currently attached preset was reattached without a baseline
   (session-restored) and the user activates any available preset
 - **THEN** the package SHALL capture a fresh baseline from current Pi state
-- **AND** `applyCount` SHALL be 1
-- **AND** the attachment SHALL transition from `unknown` to `baseline`
+- **AND** the record SHALL carry an overlay from then on
 
 #### Scenario: Apply unavailable preset returns structured refusal
 
@@ -148,9 +145,9 @@ Ownership rules:
 
 #### Scenario: Re-apply same preset, state already matches
 
-- **WHEN** the user activates the preset that is already attached with
-  `restore.kind === "baseline"` and current Pi state matches the preset's
-  declared fields
+- **WHEN** the user activates the preset that is already attached with an
+  overlay and current Pi state matches the preset's declared fields (the
+  session's `isApplied`)
 - **THEN** the operation SHALL be a no-op (no baseline change, no writes, no
   session entry, no activation marker)
 - **AND** `apply()` SHALL return `{ ok: true }`
@@ -160,9 +157,8 @@ Ownership rules:
 - **WHEN** the user activates the preset that is already attached but current Pi
   state does NOT match the preset's declared fields
 - **THEN** a full apply SHALL run while preserving the existing baseline
-- **AND** `applyCount` SHALL be incremented
-- **AND** `lastApplied` and `owned` SHALL be updated to reflect the
-  re-application
+- **AND** the `written` values and tool ownership SHALL be updated to reflect
+  the re-application
 
 #### Scenario: Unknown-tools warning during otherwise successful apply
 
@@ -290,19 +286,20 @@ The package SHALL provide a clear operation that detaches the active preset and
 attempts to return Pi to the overlay's baseline state, respecting manual user
 overrides made after activation.
 
-When the active preset has `restore.kind === "baseline"`, clear SHALL evaluate
-each of the fields model, thinking level, and tools independently using the
-following decision rule (tools additionally requires `owned.tools === true`; if
-`owned.tools` is false, clear SHALL leave tools unchanged):
+When the active preset's record has an overlay, clear SHALL evaluate each of the
+fields model, thinking level, and tools independently using the following
+decision rule, read from the session's `assess` (tools additionally requires the
+overlay to own tools; if it does not, clear SHALL leave tools unchanged):
 
 1. If the current Pi value equals the baseline value, perform no write for that
    field (already at baseline).
-2. Otherwise, if the current Pi value equals `lastApplied` for that field, write
-   the baseline value.
+2. Otherwise, if the current Pi value equals the `written` value for that field,
+   write the baseline value.
 3. Otherwise, leave the current Pi value unchanged (user override).
 
-When the active preset has `restore.kind === "unknown"`, clear SHALL perform a
-soft clear: detach the active preset without writing model, thinking, or tools.
+When the active preset was reattached without a baseline (`priorUnknown`), clear
+SHALL perform a soft clear: detach the active preset without writing model,
+thinking, or tools.
 
 Equality comparisons: model equality compares `provider` and `id` exactly (a
 `null` baseline model only equals a `null` current model); thinking equality
@@ -323,7 +320,7 @@ the partial outcome.
 #### Scenario: Clear after single activation from baseline
 
 - **WHEN** preset A is applied while no preset was attached and then the user
-  clears while current Pi state still equals `lastApplied`
+  clears while current Pi state still equals the `written` values
 - **THEN** model, thinking, and (if owned) tools SHALL be restored to the
   baseline values captured before A was applied
 - **AND** the active preset SHALL be detached and one result SHALL describe the
@@ -334,7 +331,7 @@ the partial outcome.
 
 - **WHEN** preset A is applied from baseline S0, then preset B is applied while
   A is attached, then clear is invoked while current Pi state still equals B's
-  `lastApplied`
+  `written` values
 - **THEN** model, thinking, and (if owned) tools SHALL be restored to S0 (the
   original baseline), not to A's state
 - **AND** the active preset SHALL be detached
@@ -342,19 +339,19 @@ the partial outcome.
 #### Scenario: Clear respects manual model override
 
 - **WHEN** preset A is applied and the user then manually changes the model
-  (e.g. via `/model`) so that current model differs from `lastApplied.model`
+  (e.g. via `/model`) so that current model differs from `written.model`
 - **AND** the user runs `/presets clear`
 - **THEN** the model SHALL NOT be modified by clear
 - **AND** the result notification SHALL state that model was left unchanged
   because it changed after activation
-- **AND** other fields that still equal `lastApplied` SHALL be restored to
-  baseline
+- **AND** other fields that still equal their `written` value SHALL be restored
+  to baseline
 
 #### Scenario: Clear respects manual tools override
 
 - **WHEN** preset A (with non-empty `tools`) is applied and the user then
   manually changes active tools so that current tools differ from
-  `lastApplied.tools` as a set
+  `written.tools` as a set
 - **AND** the user runs `/presets clear`
 - **THEN** tools SHALL NOT be modified by clear
 - **AND** the result notification SHALL state that tools were left unchanged
@@ -363,10 +360,10 @@ the partial outcome.
 #### Scenario: Clear when tools channel is not owned
 
 - **WHEN** no preset in the active overlay declared a non-empty `tools` array
-  (so `owned.tools === false`)
+  (so the overlay does not own tools)
 - **AND** the user runs `/presets clear`
-- **THEN** tools SHALL be left unchanged regardless of
-  current/baseline/lastApplied comparisons
+- **THEN** tools SHALL be left unchanged regardless of current/baseline/written
+  comparisons
 - **AND** the result notification SHALL state that tools were unchanged
 
 #### Scenario: Field already at baseline
@@ -413,6 +410,23 @@ the partial outcome.
   `pi.setActiveTools`
 - **AND** the result notification SHALL name the dropped tools
 
+### Requirement: Deleting the active preset keeps it attached
+
+Deleting the active preset from its configuration file SHALL NOT detach it: the
+session SHALL keep its record so `/presets clear` can still restore the
+overlay's baseline. The footer badge SHALL keep naming the preset,
+`/presets status` SHALL report that the active preset is no longer loaded, and
+its instructions SHALL no longer be appended, since they can no longer be read.
+
+#### Scenario: Clear after deleting the active preset
+
+- **WHEN** preset `plan` is applied and then deleted from its configuration file
+- **THEN** the footer badge SHALL still read `Preset: plan`
+- **AND** `/presets status` SHALL report
+  `Active preset "plan" is no longer loaded.` at warning severity
+- **AND** `/presets clear` SHALL restore the baseline values under the clear
+  rules and detach the preset
+
 ### Requirement: Inject preset instructions into the system prompt by appending
 
 While a preset with a non-empty `instructions` field is active, the package
@@ -457,8 +471,8 @@ When a preset is applied or cleared, the package SHALL append a custom session
 entry of type `presets-plus:active` recording the payload version `1`, the new
 active preset name (or `null` on clear), and the active scope, so that session
 restore can recover the active state. The entry type and the payload version are
-named constants. The package SHALL NOT persist the overlay baseline,
-`lastApplied`, `owned`, or `applyCount`: those are in-memory only.
+named constants. The package SHALL NOT persist the overlay baseline or the
+`written` values: those are in-memory only.
 
 #### Scenario: Apply persists name and scope
 
@@ -479,16 +493,15 @@ recent `presets-plus:active` entry. A payload without `version` SHALL read as
 version 1; a payload with any other version SHALL be treated as no active
 preset. If a non-null name is present and the named preset still loads
 successfully and is available, the package SHALL set the in-memory active preset
-state to a `priorUnknown` shape (`restore.kind === "unknown"`) and SHALL NOT
-invoke `pi.setModel`, `pi.setThinkingLevel`, or `pi.setActiveTools`, and SHALL
-NOT fabricate an overlay baseline.
+record to a `priorUnknown` shape (the preset's declared fields and no overlay)
+and SHALL NOT invoke `pi.setModel`, `pi.setThinkingLevel`, or
+`pi.setActiveTools`, and SHALL NOT fabricate an overlay baseline.
 
 #### Scenario: Session resumes with previously active preset
 
 - **WHEN** a session is resumed and the most recent `presets-plus:active` entry
   names `plan` and `plan` is still loaded and available
-- **THEN** the active preset SHALL be set to
-  `{ name: "plan", scope, restore: { kind: "unknown" } }`
+- **THEN** the active preset SHALL be `plan` in its scope, with no overlay
 - **AND** no model, thinking, or tools change SHALL be triggered as a side
   effect of restore
 - **AND** the next turn SHALL still append the preset's instructions per the
@@ -618,7 +631,7 @@ surfaces (the same formatter feeds both); only the rendering chrome differs.
 #### Scenario: User override respected in report
 
 - **WHEN** clear leaves a field unchanged because current value differs from
-  both baseline and `lastApplied`
+  both baseline and the `written` value
 - **THEN** the report SHALL explicitly state that that field was left unchanged
   because it changed after activation, regardless of delivery surface
 - **AND** the result SHALL use info severity unless another clear outcome
@@ -662,10 +675,10 @@ in-memory overlay baseline across sessions.
 
 - **WHEN** the user runs `/fork` while preset `plan` is active with a
   baseline-managed overlay
-- **THEN** the forked session's active preset SHALL be `plan` attached with
-  `restore.kind === "unknown"`
-- **AND** the forked session SHALL NOT inherit the parent overlay's baseline,
-  `lastApplied`, or `owned`
+- **THEN** the forked session's active preset SHALL be `plan` attached without
+  an overlay
+- **AND** the forked session SHALL NOT inherit the parent overlay's baseline or
+  `written` values
 
 ### Requirement: Compact preset footer indicator
 
@@ -743,22 +756,23 @@ introduced in change 2:
   report, the same way as the `status` report below; when no preset is active,
   the package SHALL instead notify `No preset is active.` at `info` severity.
 - `status`: produce a read-only command report of active state including
-  baseline, `lastApplied`, current Pi values, per-field ownership classification
-  (extension-owned / user override / already at baseline), `applyCount`, and the
-  attachment kind (`baseline` vs. `priorUnknown`). In TUI mode, the prompt
-  invocation SHALL append a durable TUI-only report in the conversation without
-  adding it to LLM context. The report SHALL apply its theme when rendered and
-  SHALL NOT persist ANSI styling. In RPC mode, it SHALL use the RPC-compatible
-  notification path. JSON and print modes are out of scope. Row labels SHALL be
-  aligned to the longest label in the report. After the rows and a blank line,
-  the report SHALL show the `Config:` block from core's config outcome: a
-  `User:` and a `Project:` row with each file's state (`loaded`, `not found`,
-  `invalid: <reason>`, or `skipped (untrusted)`) and its path on the next line.
-  Warnings about values in the loaded files SHALL follow as a `Warnings:` line
-  and one `- <warning>` line per warning; file problems shown in the `Config:`
-  block SHALL NOT be repeated there. The report SHALL be styled by the
-  command-report rules: its first line is a bold accent-colored heading, the
-  `Warnings:` line and every line after it are warning-colored, and on every
+  baseline, the `written` values (the `Preset` rows), current Pi values, and
+  per-field ownership classification (extension-owned / user override / already
+  at baseline), from the session's `assess`. A `priorUnknown` attachment shows a
+  `Restore:` row instead of the baseline and preset rows. In TUI mode, the
+  prompt invocation SHALL append a durable TUI-only report in the conversation
+  without adding it to LLM context. The report SHALL apply its theme when
+  rendered and SHALL NOT persist ANSI styling. In RPC mode, it SHALL use the
+  RPC-compatible notification path. JSON and print modes are out of scope. Row
+  labels SHALL be aligned to the longest label in the report. After the rows and
+  a blank line, the report SHALL show the `Config:` block from core's config
+  outcome: a `User:` and a `Project:` row with each file's state (`loaded`,
+  `not found`, `invalid: <reason>`, or `skipped (untrusted)`) and its path on
+  the next line. Warnings about values in the loaded files SHALL follow as a
+  `Warnings:` line and one `- <warning>` line per warning; file problems shown
+  in the `Config:` block SHALL NOT be repeated there. The report SHALL be styled
+  by the command-report rules: its first line is a bold accent-colored heading,
+  the `Warnings:` line and every line after it are warning-colored, and on every
   other line the label up to and including the first colon is muted.
 
 The picker provides additional in-overlay paths to `clear` and `status` whose
@@ -801,23 +815,22 @@ info-dialog overlay (see the picker capability for those scenarios).
 #### Scenario: Status with baseline-managed attachment from prompt
 
 - **WHEN** the user runs `/presets status` from the prompt in TUI mode and a
-  preset is active with `restore.kind === "baseline"`
+  preset is active with an overlay
 - **THEN** a durable command report SHALL appear in the conversation without
   entering LLM context
-- **AND** the output SHALL show the active name and scope, the attachment kind
-  with `applyCount`, the baseline values, `lastApplied` values, and current Pi
-  values for model, thinking, and tools
+- **AND** the output SHALL show the active name and scope, the baseline values,
+  the `written` values, and current Pi values for model, thinking, and tools
 - **AND** each field SHALL be classified as extension-owned, user-overridden,
   already at baseline, or (tools only) not owned by the overlay
 
 #### Scenario: Status with priorUnknown attachment from prompt
 
 - **WHEN** the user runs `/presets status` from the prompt in TUI mode and a
-  preset is active with `restore.kind === "unknown"`
+  preset is active without an overlay (`priorUnknown`)
 - **THEN** a durable command report SHALL appear in the conversation without
   entering LLM context
-- **AND** the output SHALL indicate
-  `priorUnknown (no restore baseline — clear will only un-attach)`
+- **AND** the output SHALL show
+  `Restore: No saved baseline. Clear will only turn the preset off.`
 - **AND** SHALL show current Pi values for model, thinking, and tools
 
 #### Scenario: Status from the prompt

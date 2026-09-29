@@ -65,7 +65,6 @@ function activeState(
     declared: preset,
     dirty: options.dirty ?? false,
     name: preset.name,
-    restore: { kind: "unknown" },
     scope: preset.scope,
   };
 }

@@ -6,10 +6,8 @@
  */
 import { join } from "node:path";
 
-import {
-  ActivePresetSession,
-  type ActivePresetStartOptions,
-} from "../../../src/activation/session.js";
+import { apply } from "../../../src/activation/apply.js";
+import { ActivePresetSession } from "../../../src/activation/session.js";
 import {
   runStatus,
   statusReport,
@@ -17,6 +15,7 @@ import {
 import { toPersistedPreset } from "../../../src/store/api.js";
 import type { LoadedPreset } from "../../../src/types.js";
 import { makeStubModelRegistry } from "../../helpers/model-registry.js";
+import { makePiHarness, type PiHarness } from "../../helpers/pi-state.js";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import {
   createPlainTheme,
@@ -34,6 +33,20 @@ const preset: LoadedPreset = {
 };
 
 let dirs: TempConfigDirs;
+
+/**
+ * A fake Pi on `anthropic/old`, thinking `medium`, and `bash`, with
+ * `preset` applied over it.
+ */
+async function appliedHarness(
+  applied: LoadedPreset = preset,
+): Promise<PiHarness> {
+  const harness = makePiHarness({ cwd: dirs.cwd });
+
+  await apply(applied, harness.ctx, harness.pi, harness.session);
+
+  return harness;
+}
 
 /** A context outside the TUI whose current model is `current`. */
 function context(current?: Model<Api>) {
@@ -79,21 +92,6 @@ function restoredSession(): ActivePresetSession {
     ] as never,
     [preset],
     context().ctx,
-  );
-
-  return session;
-}
-
-/** A session that started `preset` over the given baseline. */
-function startedSession(
-  options: Omit<ActivePresetStartOptions, "applyCount" | "preset">,
-): ActivePresetSession {
-  const session = new ActivePresetSession();
-
-  session.start(
-    { ...options, applyCount: 1, preset },
-    context().ctx,
-    pi("high", []),
   );
 
   return session;
@@ -175,23 +173,11 @@ describe("statusReport", () => {
   it("shows the baseline, the preset's values, and the managed current values", async () => {
     await writePreset();
 
-    const session = startedSession({
-      baseline: {
-        model: { provider: "anthropic", id: "old" },
-        thinkingLevel: "medium",
-        tools: ["bash"],
-      },
-      lastApplied: {
-        model: { provider: "anthropic", id: "claude" },
-        thinkingLevel: "high",
-        tools: ["read"],
-      },
-      owned: { model: true, thinkingLevel: true, tools: true },
-    });
+    const harness = await appliedHarness({ ...preset, tools: ["read"] });
     const { body, severity } = await statusReport(
-      context(model("anthropic", "claude")).ctx,
-      pi("high", ["read"]),
-      session,
+      harness.ctx,
+      harness.pi,
+      harness.session,
     );
 
     expect(body).toContain("Preset:                  plan");
@@ -219,22 +205,16 @@ describe("statusReport", () => {
   it("flags user overrides and tools the preset does not manage", async () => {
     await writePreset();
 
-    const session = startedSession({
-      baseline: {
-        model: { provider: "anthropic", id: "old" },
-        thinkingLevel: "medium",
-        tools: ["bash"],
-      },
-      lastApplied: {
-        model: { provider: "anthropic", id: "claude" },
-        thinkingLevel: "high",
-      },
-      owned: { model: true, thinkingLevel: true, tools: false },
-    });
+    const harness = await appliedHarness();
+
+    harness.selectModel("openai", "gpt");
+    harness.pi.setThinkingLevel("low");
+    harness.pi.setActiveTools(["foo"]);
+
     const { body } = await statusReport(
-      context(model("openai", "gpt")).ctx,
-      pi("low", ["foo"]),
-      session,
+      harness.ctx,
+      harness.pi,
+      harness.session,
     );
 
     expect(body).toContain(

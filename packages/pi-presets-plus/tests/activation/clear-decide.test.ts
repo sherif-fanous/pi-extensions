@@ -1,61 +1,71 @@
 /**
  * Covers the per-field decision table that clear uses to choose what to
- * restore, calling the pure helper without driving `pi` or `ctx.ui`.
+ * restore, calling the pure helper on an assessment without driving `pi`
+ * or `ctx.ui`.
  */
-import { decideClear, type ClearSnapshot } from "../../src/activation/clear.js";
-import type { ActivePresetState } from "../../src/types.js";
+import { decideClear } from "../../src/activation/clear.js";
+import type {
+  OverlayAssessment,
+  OverlayComparison,
+} from "../../src/activation/session.js";
+import type { PiState } from "../../src/types.js";
 import { describe, expect, it } from "vitest";
 
-const declaredSnapshot = {
-  model: "claude",
-  provider: "anthropic",
-  thinkingLevel: "high" as const,
-};
-
-const baselineActive: ActivePresetState = {
-  declared: declaredSnapshot,
-  dirty: false,
-  name: "plan",
-  scope: "project",
-  restore: {
-    applyCount: 1,
-    baseline: {
-      model: { provider: "anthropic", id: "old" },
-      thinkingLevel: "medium",
-      tools: ["bash"],
-    },
-    kind: "baseline",
-    lastApplied: {
-      model: { provider: "anthropic", id: "claude" },
-      thinkingLevel: "high",
-      tools: ["read"],
-    },
-    owned: { model: true, thinkingLevel: true, tools: true },
+const managed: OverlayComparison = {
+  baseline: {
+    model: { provider: "anthropic", id: "old" },
+    thinkingLevel: "medium",
+    tools: ["bash"],
+  },
+  model: "matches-last-applied",
+  thinking: "matches-last-applied",
+  tools: "matches-last-applied",
+  written: {
+    model: { provider: "anthropic", id: "claude" },
+    thinkingLevel: "high",
+    tools: ["read"],
   },
 };
 
-const priorUnknownActive: ActivePresetState = {
-  declared: declaredSnapshot,
-  dirty: false,
-  name: "plan",
-  restore: { kind: "unknown" },
-  scope: "project",
-};
+/**
+ * An assessment of preset `plan` over `managed`, with Pi on the values it
+ * wrote unless `current` says otherwise. `overlay: undefined` stands for a
+ * preset reattached without a baseline.
+ */
+function assessment(
+  options: {
+    readonly current?: Partial<PiState>;
+    readonly overlay?: Partial<OverlayComparison> | undefined;
+  } = {},
+): OverlayAssessment {
+  const overlay =
+    "overlay" in options && options.overlay === undefined
+      ? undefined
+      : { ...managed, ...options.overlay };
 
-function snapshot(overrides: Partial<ClearSnapshot> = {}): ClearSnapshot {
   return {
-    active: baselineActive,
-    allTools: ["bash", "read"],
-    currentModel: { provider: "anthropic", id: "claude" },
-    currentThinking: "high",
-    currentTools: ["read"],
-    ...overrides,
+    active: {
+      declared: { model: "claude", provider: "anthropic" },
+      dirty: false,
+      name: "plan",
+      scope: "project",
+    },
+    current: {
+      model: { provider: "anthropic", id: "claude" },
+      thinkingLevel: "high",
+      tools: ["read"],
+      ...options.current,
+    },
+    driftReasons: [],
+    ...(overlay ? { overlay } : {}),
   };
 }
 
+const ALL_TOOLS = ["bash", "read"];
+
 describe("decideClear", () => {
   it("restores baseline for fully extension-owned state", () => {
-    const decision = decideClear(snapshot());
+    const decision = decideClear(assessment(), ALL_TOOLS);
 
     expect(decision.writes).toEqual({
       model: { provider: "anthropic", id: "old" },
@@ -63,95 +73,86 @@ describe("decideClear", () => {
       tools: ["bash"],
     });
 
-    expect(decision.parts.map((part) => [part.field, part.action])).toEqual([
-      ["model", "restored"],
-      ["thinking", "restored"],
-      ["tools", "restored"],
+    expect(decision.parts).toEqual([
+      { action: "restored", field: "model", value: "anthropic/old" },
+      { action: "restored", field: "thinking", value: "medium" },
+      { action: "restored", dropped: undefined, field: "tools", value: "bash" },
     ]);
   });
 
-  it("treats user model override as left-unchanged", () => {
+  it("leaves a user model override alone and reports the current model", () => {
     const decision = decideClear(
-      snapshot({ currentModel: { provider: "openai", id: "gpt" } }),
+      assessment({
+        current: { model: { provider: "openai", id: "gpt" } },
+        overlay: { model: "user-override" },
+      }),
+      ALL_TOOLS,
     );
 
     expect(decision.writes.model).toBeUndefined();
-    expect(decision.parts.find((part) => part.field === "model")?.action).toBe(
-      "user-override",
-    );
+    expect(decision.parts.find((part) => part.field === "model")).toEqual({
+      action: "user-override",
+      field: "model",
+      value: "openai/gpt",
+    });
   });
 
   it("restores a max thinking baseline", () => {
-    const active: ActivePresetState = {
-      ...baselineActive,
-      restore: {
-        ...baselineActive.restore,
-        baseline: {
-          ...baselineActive.restore.baseline,
-          thinkingLevel: "max",
-        },
-      },
-    };
-
-    const decision = decideClear(snapshot({ active }));
+    const decision = decideClear(
+      assessment({
+        overlay: { baseline: { ...managed.baseline, thinkingLevel: "max" } },
+      }),
+      ALL_TOOLS,
+    );
 
     expect(decision.writes.thinkingLevel).toBe("max");
   });
 
-  it("treats user thinking override as left-unchanged", () => {
-    const decision = decideClear(snapshot({ currentThinking: "low" }));
+  it("leaves a user thinking override alone", () => {
+    const decision = decideClear(
+      assessment({
+        current: { thinkingLevel: "low" },
+        overlay: { thinking: "user-override" },
+      }),
+      ALL_TOOLS,
+    );
 
     expect(decision.writes.thinkingLevel).toBeUndefined();
-    expect(
-      decision.parts.find((part) => part.field === "thinking")?.action,
-    ).toBe("user-override");
+    expect(decision.parts.find((part) => part.field === "thinking")).toEqual({
+      action: "user-override",
+      field: "thinking",
+      value: "low",
+    });
   });
 
-  it("treats user tools override as left-unchanged", () => {
-    const decision = decideClear(snapshot({ currentTools: ["bash", "read"] }));
-
-    expect(decision.writes.tools).toBeUndefined();
-    expect(decision.parts.find((part) => part.field === "tools")?.action).toBe(
-      "user-override",
-    );
-  });
-
-  it("does not let duplicate current tools hide a user override", () => {
-    const active: ActivePresetState = {
-      ...baselineActive,
-      restore: {
-        applyCount: 1,
-        baseline: {
-          model: { provider: "anthropic", id: "old" },
-          thinkingLevel: "medium",
-          tools: ["grep"],
-        },
-        kind: "baseline",
-        lastApplied: {
-          model: { provider: "anthropic", id: "claude" },
-          thinkingLevel: "high",
-          tools: ["read", "bash"],
-        },
-        owned: { model: true, thinkingLevel: true, tools: true },
-      },
-    };
+  it("leaves a user tools override alone", () => {
     const decision = decideClear(
-      snapshot({ active, currentTools: ["read", "read"] }),
+      assessment({
+        current: { tools: ["bash", "read"] },
+        overlay: { tools: "user-override" },
+      }),
+      ALL_TOOLS,
     );
 
     expect(decision.writes.tools).toBeUndefined();
-    expect(decision.parts.find((part) => part.field === "tools")?.action).toBe(
-      "user-override",
-    );
+    expect(decision.parts.find((part) => part.field === "tools")).toEqual({
+      action: "user-override",
+      field: "tools",
+      value: "bash, read",
+    });
   });
 
   it("marks already-baseline fields without queuing writes", () => {
     const decision = decideClear(
-      snapshot({
-        currentModel: { provider: "anthropic", id: "old" },
-        currentThinking: "medium",
-        currentTools: ["bash"],
+      assessment({
+        current: managed.baseline,
+        overlay: {
+          model: "already-baseline",
+          thinking: "already-baseline",
+          tools: "already-baseline",
+        },
       }),
+      ALL_TOOLS,
     );
 
     expect(decision.writes).toEqual({});
@@ -161,36 +162,24 @@ describe("decideClear", () => {
   });
 
   it("leaves tools alone when the overlay never owned them", () => {
-    const active: ActivePresetState = {
-      declared: declaredSnapshot,
-      dirty: false,
-      name: "plan",
-      scope: "project",
-      restore: {
-        applyCount: 1,
-        baseline: {
-          model: { provider: "anthropic", id: "old" },
-          thinkingLevel: "medium",
-          tools: ["bash"],
-        },
-        kind: "baseline",
-        lastApplied: {
-          model: { provider: "anthropic", id: "claude" },
-          thinkingLevel: "high",
-        },
-        owned: { model: true, thinkingLevel: true, tools: false },
-      },
-    };
-    const decision = decideClear(snapshot({ active, currentTools: ["foo"] }));
+    const decision = decideClear(
+      assessment({
+        current: { tools: ["foo"] },
+        overlay: { tools: "not-owned" },
+      }),
+      ALL_TOOLS,
+    );
 
     expect(decision.writes.tools).toBeUndefined();
-    expect(decision.parts.find((part) => part.field === "tools")?.action).toBe(
-      "not-owned",
-    );
+    expect(decision.parts.find((part) => part.field === "tools")).toEqual({
+      action: "not-owned",
+      field: "tools",
+      value: "foo",
+    });
   });
 
   it("filters unavailable baseline tools and emits restored-partial", () => {
-    const decision = decideClear(snapshot({ allTools: ["read"] }));
+    const decision = decideClear(assessment(), ["read"]);
 
     expect(decision.writes.tools).toEqual([]);
 
@@ -200,35 +189,30 @@ describe("decideClear", () => {
     expect(toolsPart?.dropped).toEqual(["bash"]);
   });
 
-  it("returns baseline-null when current matches lastApplied but baseline.model is null", () => {
-    const active: ActivePresetState = {
-      ...baselineActive,
-      restore: {
-        applyCount: 1,
-        baseline: { model: null, thinkingLevel: "medium", tools: ["bash"] },
-        kind: "baseline",
-        lastApplied: {
-          model: { provider: "anthropic", id: "claude" },
-          thinkingLevel: "high",
-          tools: ["read"],
-        },
-        owned: { model: true, thinkingLevel: true, tools: true },
-      },
-    };
-    const decision = decideClear(snapshot({ active }));
+  it("returns baseline-null when Pi holds the written model but no baseline model was saved", () => {
+    const decision = decideClear(
+      assessment({
+        overlay: { baseline: { ...managed.baseline, model: null } },
+      }),
+      ALL_TOOLS,
+    );
 
     expect(decision.writes.model).toBeUndefined();
-    expect(decision.parts.find((part) => part.field === "model")?.action).toBe(
-      "baseline-null",
-    );
+    expect(decision.parts.find((part) => part.field === "model")).toEqual({
+      action: "baseline-null",
+      field: "model",
+      value: "anthropic/claude",
+    });
   });
 
-  it("emits all-unknown parts and no writes for priorUnknown", () => {
-    const decision = decideClear(snapshot({ active: priorUnknownActive }));
+  it("emits all-unknown parts and no writes without an overlay", () => {
+    const decision = decideClear(assessment({ overlay: undefined }), ALL_TOOLS);
 
     expect(decision.writes).toEqual({});
-    expect(decision.parts.every((part) => part.action === "unknown")).toBe(
-      true,
-    );
+    expect(decision.parts).toEqual([
+      { action: "unknown", field: "model", value: "anthropic/claude" },
+      { action: "unknown", field: "thinking", value: "high" },
+      { action: "unknown", field: "tools", value: "read" },
+    ]);
   });
 });

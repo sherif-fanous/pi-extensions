@@ -8,6 +8,22 @@ import type { CompiledPolicyRule } from "./store/policy.js";
 import type { ConfigFile } from "@sherif-fanous/pi-extensions-core";
 
 /**
+ * The record of the preset attached to the session, held in memory only.
+ *
+ * `overlay` is absent when the preset was reattached from the session
+ * branch on resume or reload, which saves no baseline, so clearing can only
+ * turn the preset off.
+ */
+export interface ActivePresetState {
+  readonly declared: PresetDeclaration;
+  /** Whether Pi no longer holds the preset's values. */
+  readonly dirty: boolean;
+  readonly name: string;
+  readonly overlay?: PresetOverlay;
+  readonly scope: PresetScope;
+}
+
+/**
  * A parsed version 2 configuration document, including unknown fields. A
  * document without `version` reads as version 2.
  */
@@ -50,6 +66,19 @@ export interface LoadedPreset extends Preset {
   hotkeyShadowsBuiltin?: true | undefined;
 }
 
+/** A model named by its provider and id. */
+export interface ModelIdentity {
+  readonly provider: string;
+  readonly id: string;
+}
+
+/** Pi's model, thinking level, and active tools at one moment. */
+export interface PiState {
+  readonly model: ModelIdentity | null;
+  readonly thinkingLevel: ThinkingLevel;
+  readonly tools: readonly string[];
+}
+
 /**
  * A preset definition as it appears in either scope's JSON file.
  *
@@ -78,24 +107,31 @@ export interface Preset {
   order?: number;
 }
 
-/**
- * Snapshot of the preset fields that drift detection compares against.
- *
- * Cached on `ActivePresetState` when a preset is applied or restored so
- * per-turn drift detection never re-reads the preset files from disk.
- */
-export interface PresetDriftSnapshot {
-  provider: string;
-  model: string;
-  thinkingLevel?: ThinkingLevel;
-  tools?: readonly string[];
+/** The model, thinking level, and tools a preset declared when attached. */
+export interface PresetDeclaration {
+  readonly provider: string;
+  readonly model: string;
+  readonly thinkingLevel?: ThinkingLevel;
+  readonly tools?: readonly string[];
 }
 
-/** Baseline Pi state captured before a preset overlay starts. */
-export interface PresetOverlayBaseline {
-  model: { provider: string; id: string } | null;
-  thinkingLevel: ThinkingLevel;
-  tools: string[];
+/**
+ * What the presets applied since the last clear wrote to Pi, over the Pi
+ * values they replaced.
+ */
+export interface PresetOverlay {
+  /** Pi's values before the first of those presets, which clear restores. */
+  readonly baseline: PiState;
+  /**
+   * The values last written. `tools` carries over from an earlier preset
+   * when a later one declares none, and is absent while no preset has
+   * written tools, which leaves them outside the overlay.
+   */
+  readonly written: {
+    readonly model: ModelIdentity;
+    readonly thinkingLevel: ThinkingLevel;
+    readonly tools?: readonly string[];
+  };
 }
 
 /** Result of loading one consolidated configuration scope. */
@@ -128,35 +164,6 @@ export interface ScopeWarnings {
 }
 
 /**
- * In-memory state for the preset applied to the current session.
- *
- * The `"baseline"` restore kind carries everything `/presets clear` needs
- * to put Pi back the way it was; `"unknown"` means no baseline was
- * captured and clearing can only turn the preset off.
- */
-export type ActivePresetState =
-  | {
-      name: string;
-      scope: PresetScope;
-      restore: {
-        kind: "baseline";
-        baseline: PresetOverlayBaseline;
-        lastApplied: LastAppliedPresetEffects;
-        owned: PresetOverlayOwnership;
-        applyCount: number;
-      };
-      dirty: boolean;
-      declared: PresetDriftSnapshot;
-    }
-  | {
-      name: string;
-      scope: PresetScope;
-      restore: { kind: "unknown" };
-      dirty: boolean;
-      declared: PresetDriftSnapshot;
-    };
-
-/**
  * Origin scope for a loaded preset. `"user"` is the global file under
  * `<agent-dir>/presets-plus/config.json`, and `"project"` is the per-cwd file
  * under `<cwd>/.pi/presets-plus/config.json`.
@@ -183,17 +190,3 @@ export const THINKING_LEVELS = [
 
 /** Reasoning level recorded on a preset. */
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
-
-/** Last values written by presets-plus inside the active overlay. */
-interface LastAppliedPresetEffects {
-  model: { provider: string; id: string };
-  thinkingLevel: ThinkingLevel;
-  tools?: string[];
-}
-
-/** Tracks which Pi channels are owned by the active preset overlay. */
-interface PresetOverlayOwnership {
-  model: true;
-  thinkingLevel: true;
-  tools: boolean;
-}

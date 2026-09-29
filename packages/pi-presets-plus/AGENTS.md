@@ -28,3 +28,15 @@ presets you can switch between. The family rules are in the root `AGENTS.md` and
   which decides the wording and where warnings go. A name alone resolves through
   `findPresetByName`, the one project-then-user rule, which `show-prompt` uses
   too. Callers keep only their parsing and their own UI.
+- `ActivePresetSession` in `src/activation/session.ts` holds the one record of
+  the active preset: what it declared and, unless it was reattached from the
+  session branch, the baseline and the values its overlay wrote. It makes every
+  model, thinking level, and tools write (`apply`, `clear`) inside its
+  self-trigger guard, which the drift handlers check. `assess(ctx, pi)` reads Pi
+  once and is the one comparison with the active preset: drift reasons for the
+  badge and the picker, and each field's classification for status and clear.
+  Read Pi's state through it rather than comparing it by hand; `decideClear`
+  stays a pure function of the assessment.
+- Deleting the active preset leaves the session attached on purpose:
+  `/presets clear` still needs the record to restore the baseline. The badge
+  keeps the name and status reports the preset as no longer loaded.

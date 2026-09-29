@@ -1,42 +1,84 @@
 /**
  * Covers the handlers that flip the active preset between clean and dirty
- * when the model, thinking level, or tool set changes, including their
- * contract of reading only in-memory state.
+ * on Pi's model, thinking level, and turn events: which events they act
+ * on, and that the session's own writes never count as drift.
  */
+import { apply } from "../../src/activation/apply.js";
 import {
   handleModelSelectDrift,
+  handleThinkingLevelSelectDrift,
   syncDirtyFromCurrentState,
 } from "../../src/activation/drift-handlers.js";
-import { ActivePresetSession } from "../../src/activation/session.js";
-import type { LoadedPreset, ThinkingLevel } from "../../src/types.js";
-import { makeStubModelRegistry } from "../helpers/model-registry.js";
-import type { Api, Model } from "@earendil-works/pi-ai";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createFakeContext } from "@sherif-fanous/pi-extensions-testing";
+import type { LoadedPreset } from "../../src/types.js";
+import { makePiHarness, type PiHarness } from "../helpers/pi-state.js";
 import { describe, expect, it } from "vitest";
 
-describe("handleModelSelectDrift", () => {
-  it("ignores self-triggered model_select events", async () => {
-    const harness = makeHarness();
+const plan: LoadedPreset = {
+  model: "claude",
+  name: "plan",
+  provider: "anthropic",
+  scope: "project",
+  thinkingLevel: "high",
+};
 
-    restoreActive(harness, { dirty: false });
-    await harness.session.withSelfTriggeredModelSet(() =>
-      handleModelSelectDrift(
-        { model: { id: "gpt", provider: "openai" }, source: "set" },
-        harness.ctx,
-        harness.pi,
-        harness.session,
-      ),
+const write: LoadedPreset = {
+  ...plan,
+  model: "opus",
+  name: "write",
+  thinkingLevel: "low",
+};
+
+/** Apply `preset` through the harness. */
+async function applyPreset(
+  harness: PiHarness,
+  preset: LoadedPreset,
+): Promise<void> {
+  await apply(preset, harness.ctx, harness.pi, harness.session);
+}
+
+describe("handleModelSelectDrift", () => {
+  it("ignores the model_select the session's own write fires", async () => {
+    const dirtyDuringWrite: (boolean | undefined)[] = [];
+    const harness: PiHarness = makePiHarness({
+      onModelSet() {
+        handleModelSelectDrift(
+          { model: { id: "opus", provider: "anthropic" }, source: "set" },
+          harness.ctx,
+          harness.pi,
+          harness.session,
+        );
+        dirtyDuringWrite.push(harness.session.current()?.dirty);
+      },
+    });
+
+    await applyPreset(harness, plan);
+    await applyPreset(harness, write);
+
+    expect(dirtyDuringWrite).toEqual([undefined, false]);
+  });
+
+  it("marks dirty when the user picks another model", async () => {
+    const harness = makePiHarness();
+
+    await applyPreset(harness, plan);
+    harness.selectModel("openai", "gpt");
+    handleModelSelectDrift(
+      { model: { id: "gpt", provider: "openai" }, source: "cycle" },
+      harness.ctx,
+      harness.pi,
+      harness.session,
     );
 
-    expect(harness.session.current()).toMatchObject({ dirty: false });
+    expect(harness.session.current()).toMatchObject({ dirty: true });
+    expect(harness.status["presets-plus"]).toBe("Preset: plan!");
   });
 
   it("ignores restore model_select events", async () => {
-    const harness = makeHarness();
+    const harness = makePiHarness();
 
-    restoreActive(harness, { dirty: false });
-    await handleModelSelectDrift(
+    await applyPreset(harness, plan);
+    harness.selectModel("openai", "gpt");
+    handleModelSelectDrift(
       { model: { id: "gpt", provider: "openai" }, source: "restore" },
       harness.ctx,
       harness.pi,
@@ -46,10 +88,10 @@ describe("handleModelSelectDrift", () => {
     expect(harness.session.current()).toMatchObject({ dirty: false });
   });
 
-  it("no-ops when no preset is active", async () => {
-    const harness = makeHarness();
+  it("no-ops when no preset is active", () => {
+    const harness = makePiHarness();
 
-    await handleModelSelectDrift(
+    handleModelSelectDrift(
       { model: { id: "gpt", provider: "openai" }, source: "set" },
       harness.ctx,
       harness.pi,
@@ -58,172 +100,50 @@ describe("handleModelSelectDrift", () => {
 
     expect(harness.session.current()).toBeUndefined();
   });
+});
 
-  it("marks dirty when the selected model differs from the cached snapshot", async () => {
-    const harness = makeHarness({
-      ctxModel: { id: "gpt", provider: "openai" },
+describe("handleThinkingLevelSelectDrift", () => {
+  it("ignores the thinking_level_select the session's own write fires", async () => {
+    const dirtyDuringWrite: (boolean | undefined)[] = [];
+    const harness: PiHarness = makePiHarness({
+      onThinkingLevelSet() {
+        handleThinkingLevelSelectDrift(
+          harness.ctx,
+          harness.pi,
+          harness.session,
+        );
+        dirtyDuringWrite.push(harness.session.current()?.dirty);
+      },
     });
 
-    restoreActive(harness, { dirty: false });
-    await handleModelSelectDrift(
-      { model: { id: "gpt", provider: "openai" }, source: "cycle" },
-      harness.ctx,
-      harness.pi,
-      harness.session,
-    );
+    await applyPreset(harness, plan);
+    await applyPreset(harness, write);
 
-    expect(harness.session.current()).toMatchObject({ dirty: true });
+    expect(dirtyDuringWrite).toEqual([undefined, false]);
   });
 
-  it("marks clean when re-selecting the preset's model resyncs every dimension", async () => {
-    const harness = makeHarness();
+  it("marks dirty when the user picks another level", async () => {
+    const harness = makePiHarness();
 
-    restoreActive(harness, { dirty: true });
-    await handleModelSelectDrift(
-      { model: { id: "claude", provider: "anthropic" }, source: "set" },
-      harness.ctx,
-      harness.pi,
-      harness.session,
-    );
-
-    expect(harness.session.current()).toMatchObject({ dirty: false });
-  });
-
-  it("keeps dirty when the model matches but thinking is still drifted", async () => {
-    const harness = makeHarness({ piThinking: "low" });
-
-    restoreActive(harness, { dirty: true });
-    await handleModelSelectDrift(
-      { model: { id: "claude", provider: "anthropic" }, source: "set" },
-      harness.ctx,
-      harness.pi,
-      harness.session,
-    );
+    await applyPreset(harness, plan);
+    harness.pi.setThinkingLevel("low");
+    handleThinkingLevelSelectDrift(harness.ctx, harness.pi, harness.session);
 
     expect(harness.session.current()).toMatchObject({ dirty: true });
   });
 });
 
 describe("syncDirtyFromCurrentState", () => {
-  it("marks dirty immediately for thinking-level drift", async () => {
-    const harness = makeHarness({ piThinking: "low" });
+  it("marks the preset clean once Pi is back on its values", async () => {
+    const harness = makePiHarness();
 
-    restoreActive(harness, { dirty: false });
-    await syncDirtyFromCurrentState(harness.ctx, harness.pi, harness.session);
-
-    expect(harness.session.current()).toMatchObject({ dirty: true });
-  });
-
-  it("marks clean immediately when thinking level is re-synced", async () => {
-    const harness = makeHarness({ piThinking: "high" });
-
-    restoreActive(harness, { dirty: true });
-    await syncDirtyFromCurrentState(harness.ctx, harness.pi, harness.session);
+    await applyPreset(harness, plan);
+    harness.pi.setThinkingLevel("low");
+    syncDirtyFromCurrentState(harness.ctx, harness.pi, harness.session);
+    harness.pi.setThinkingLevel("high");
+    syncDirtyFromCurrentState(harness.ctx, harness.pi, harness.session);
 
     expect(harness.session.current()).toMatchObject({ dirty: false });
-  });
-
-  it("marks dirty for tools drift when the preset declares tools", async () => {
-    const harness = makeHarness({ piTools: ["bash"] });
-
-    restoreActive(harness, { dirty: false, tools: ["read"] });
-    await syncDirtyFromCurrentState(harness.ctx, harness.pi, harness.session);
-
-    expect(harness.session.current()).toMatchObject({ dirty: true });
-  });
-
-  it("does not flip dirty for a tools change when the preset omits tools", async () => {
-    const harness = makeHarness({ piTools: ["bash", "grep"] });
-
-    restoreActive(harness, { dirty: false });
-    await syncDirtyFromCurrentState(harness.ctx, harness.pi, harness.session);
-
-    expect(harness.session.current()).toMatchObject({ dirty: false });
-  });
-
-  it("treats tools as order-independent sets", async () => {
-    const harness = makeHarness({ piTools: ["bash", "read"] });
-
-    restoreActive(harness, { dirty: false, tools: ["read", "bash"] });
-    await syncDirtyFromCurrentState(harness.ctx, harness.pi, harness.session);
-
-    expect(harness.session.current()).toMatchObject({ dirty: false });
-  });
-
-  it("is a no-op when already clean and no dimensions have drifted", async () => {
-    const harness = makeHarness();
-
-    restoreActive(harness, { dirty: false });
-
-    const before = harness.session.current();
-
-    await syncDirtyFromCurrentState(harness.ctx, harness.pi, harness.session);
-
-    expect(harness.session.current()).toEqual(before);
+    expect(harness.status["presets-plus"]).toBe("Preset: plan");
   });
 });
-
-interface ActiveStateOptions {
-  dirty: boolean;
-  thinkingLevel?: ThinkingLevel;
-  tools?: readonly string[];
-}
-
-interface HarnessOptions {
-  ctxModel?: { id: string; provider: string };
-  piThinking?: ThinkingLevel;
-  piTools?: string[];
-}
-
-function makeHarness(options: HarnessOptions = {}): {
-  ctx: Pick<ExtensionContext, "model" | "modelRegistry" | "ui">;
-  pi: { getActiveTools(): string[]; getThinkingLevel(): ThinkingLevel };
-  session: ActivePresetSession;
-} {
-  const ctxModel = options.ctxModel ?? { id: "claude", provider: "anthropic" };
-
-  return {
-    ctx: createFakeContext({
-      model: { ...ctxModel, reasoning: true } as Model<Api>,
-      modelRegistry: makeStubModelRegistry({
-        models: {
-          anthropic: { claude: { hasKey: true, reasoning: true } },
-          openai: { gpt: { hasKey: true, reasoning: true } },
-        },
-      }),
-    }),
-    pi: {
-      getActiveTools: () => options.piTools ?? [],
-      getThinkingLevel: () => options.piThinking ?? "high",
-    },
-    session: new ActivePresetSession(),
-  };
-}
-
-function restoreActive(
-  harness: ReturnType<typeof makeHarness>,
-  options: ActiveStateOptions,
-): void {
-  const preset: LoadedPreset = {
-    model: "claude",
-    name: "plan",
-    provider: "anthropic",
-    scope: "project",
-    thinkingLevel: options.thinkingLevel ?? "high",
-    ...(options.tools !== undefined ? { tools: [...options.tools] } : {}),
-  };
-
-  harness.session.restoreFromBranch(
-    [
-      {
-        customType: "presets-plus:active",
-        data: { name: preset.name, scope: preset.scope },
-        type: "custom",
-      },
-    ] as never,
-    [preset],
-    harness.ctx,
-  );
-
-  if (options.dirty) harness.session.markDirty(harness.ctx);
-}

@@ -8,6 +8,7 @@ import { ActivePresetSession } from "../../src/activation/session.js";
 import { HotkeyRegistry } from "../../src/hotkey-registry.js";
 import type { LoadedPreset } from "../../src/types.js";
 import type { PickerCommandHost } from "../../src/ui/picker-commands.js";
+import { makeStubModelRegistry } from "../helpers/model-registry.js";
 import type { Component, OverlayHandle } from "@earendil-works/pi-tui";
 import {
   createFakeCustom,
@@ -121,6 +122,7 @@ function makeCtx(
     getActiveTools: () => [],
     getAllTools: () => [],
     getThinkingLevel: () => "medium",
+    modelRegistry: makeStubModelRegistry({ models: {} }),
     ui: {
       custom: createFakeCustom({
         keybindings: createPiKeybindings(),

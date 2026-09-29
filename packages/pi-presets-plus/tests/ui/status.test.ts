@@ -16,7 +16,6 @@ function active(dirty: boolean): ActivePresetState {
     declared: { model: "claude", provider: "anthropic" },
     dirty,
     name: "plan",
-    restore: { kind: "unknown" },
     scope: "project",
   };
 }

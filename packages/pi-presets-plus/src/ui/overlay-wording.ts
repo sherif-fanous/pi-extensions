@@ -2,7 +2,7 @@
  * Wording the clear and status reports share: model and tool values, and
  * the phrase for each way a current value relates to the preset overlay.
  */
-import type { OverlayFieldClassification } from "../activation/classify-overlay-field.js";
+import type { OverlayFieldClassification } from "../activation/session.js";
 
 /** The phrase a report row uses for each {@link OverlayFieldClassification}. */
 export const OVERLAY_FIELD_WORDING: Record<OverlayFieldClassification, string> =

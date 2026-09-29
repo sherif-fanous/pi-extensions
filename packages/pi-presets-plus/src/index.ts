@@ -7,6 +7,7 @@
 import { activateAtStartup } from "./activation/activate.js";
 import {
   handleModelSelectDrift,
+  handleThinkingLevelSelectDrift,
   syncDirtyFromCurrentState,
 } from "./activation/drift-handlers.js";
 import { ActivePresetSession } from "./activation/session.js";
@@ -147,22 +148,22 @@ export default function presetsPlus(pi: ExtensionAPI): void {
 
   pi.on(
     "model_select",
-    guardEvent(EXTENSION_NAME, "model_select", async (event, ctx) => {
-      await handleModelSelectDrift(event, ctx, pi, session);
+    guardEvent(EXTENSION_NAME, "model_select", (event, ctx) => {
+      handleModelSelectDrift(event, ctx, pi, session);
     }),
   );
 
   pi.on(
     "thinking_level_select",
-    guardEvent(EXTENSION_NAME, "thinking_level_select", async (_event, ctx) => {
-      await syncDirtyFromCurrentState(ctx, pi, session);
+    guardEvent(EXTENSION_NAME, "thinking_level_select", (_event, ctx) => {
+      handleThinkingLevelSelectDrift(ctx, pi, session);
     }),
   );
 
   pi.on(
     "turn_start",
-    guardEvent(EXTENSION_NAME, "turn_start", async (_event, ctx) => {
-      await syncDirtyFromCurrentState(ctx, pi, session);
+    guardEvent(EXTENSION_NAME, "turn_start", (_event, ctx) => {
+      syncDirtyFromCurrentState(ctx, pi, session);
     }),
   );
 }

@@ -1,12 +1,8 @@
 /**
- * Activates a preset by writing its model, thinking level, and tools to Pi,
- * capturing the baseline those writes replaced, and attaching the preset to
- * the session.
+ * Activates a preset: refuses one Pi can't run, works out the model,
+ * thinking level, and tools to write, and hands them to the session.
  */
-import { samePresetIdentity } from "../preset-identity.js";
 import type { LoadedPreset } from "../types.js";
-import { captureBaseline } from "./baseline.js";
-import { detectDriftReasons, snapshotPresetForDrift } from "./drift.js";
 import type { ActivePresetSession } from "./session.js";
 import { effectiveThinkingLevel } from "./thinking.js";
 import type {
@@ -58,15 +54,8 @@ export async function apply(
     return { ok: false, kind, reason: failureReason(kind, preset) };
   }
 
-  const current = session.current();
-
-  if (
-    current &&
-    samePresetIdentity(current, preset) &&
-    current.restore.kind === "baseline" &&
-    detectDriftReasons(snapshotPresetForDrift(preset), pi, ctx).length === 0
-  ) {
-    if (current.dirty) session.markClean(ctx);
+  if (session.isApplied(preset, ctx, pi)) {
+    session.markClean(ctx);
 
     return { applied: false, notices: [], ok: true };
   }
@@ -81,41 +70,23 @@ export async function apply(
     };
   }
 
-  const previousBaseline =
-    current?.restore.kind === "baseline" ? current.restore : undefined;
-  const baseline = previousBaseline?.baseline ?? captureBaseline(pi, ctx);
-  const applyCount = (previousBaseline?.applyCount ?? 0) + 1;
-  const previousAppliedTools = previousBaseline?.lastApplied.tools;
-  const previousOwnedTools = previousBaseline?.owned.tools ?? false;
-
-  if (!(await setModelGuarded(pi, model, session))) {
-    return {
-      ok: false,
-      kind: "key-revoked",
-      reason: failureReason("key-revoked", preset),
-    };
-  }
-
-  const effective = effectiveThinkingLevel(preset, model);
+  const thinkingLevel = effectiveThinkingLevel(preset, model);
   const declared = preset.thinkingLevel ?? "off";
   const notices: ApplyNotice[] = [];
 
-  pi.setThinkingLevel(effective);
-
-  if (effective !== declared) {
+  if (thinkingLevel !== declared) {
     notices.push({
-      message: `Thinking level changed from ${declared} to ${effective} for preset "${preset.name}".`,
+      message: `Thinking level changed from ${declared} to ${thinkingLevel} for preset "${preset.name}".`,
       severity: "info",
     });
   }
 
-  let appliedTools = previousAppliedTools;
-  let ownedTools = previousOwnedTools;
+  let tools: string[] | undefined;
 
   if (preset.tools && preset.tools.length > 0) {
-    const validTools = filterValidTools(preset.tools, pi.getAllTools());
+    const valid = filterValidTools(preset.tools, pi.getAllTools());
     const dropped = preset.tools.filter(
-      (toolName) => !validTools.includes(toolName),
+      (toolName) => !valid.includes(toolName),
     );
 
     if (dropped.length > 0) {
@@ -125,28 +96,20 @@ export async function apply(
       });
     }
 
-    pi.setActiveTools(validTools);
-    appliedTools = validTools;
-    ownedTools = true;
+    tools = valid;
   }
 
-  // Commit active state before callers present the apply outcome so the
-  // footer and any related UI already show the new preset.
-  session.start(
-    {
-      applyCount,
-      baseline,
-      lastApplied: {
-        ...(appliedTools !== undefined ? { tools: appliedTools } : {}),
-        model: { id: preset.model, provider: preset.provider },
-        thinkingLevel: effective,
-      },
-      owned: { model: true, thinkingLevel: true, tools: ownedTools },
-      preset,
-    },
-    ctx,
-    pi,
-  );
+  // The session commits the record before callers present the outcome, so
+  // the footer and any related UI already show the new preset.
+  if (
+    !(await session.apply(preset, { model, thinkingLevel, tools }, ctx, pi))
+  ) {
+    return {
+      ok: false,
+      kind: "key-revoked",
+      reason: failureReason("key-revoked", preset),
+    };
+  }
 
   return { applied: true, notices, ok: true };
 }
@@ -180,13 +143,4 @@ function filterValidTools(
   const available = new Set(allTools.map((tool) => tool.name));
 
   return desired.filter((toolName) => available.has(toolName));
-}
-
-/** Set the model inside the self-trigger guard so drift handlers ignore it. */
-async function setModelGuarded(
-  pi: Pick<ExtensionAPI, "setModel">,
-  model: NonNullable<ReturnType<ExtensionContext["modelRegistry"]["find"]>>,
-  session: ActivePresetSession,
-): Promise<boolean> {
-  return session.withSelfTriggeredModelSet(() => pi.setModel(model));
 }

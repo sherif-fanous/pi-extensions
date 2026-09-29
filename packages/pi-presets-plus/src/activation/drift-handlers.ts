@@ -1,9 +1,8 @@
 /**
  * Turns Pi model, thinking level, and turn events into dirty-state updates
- * for the active preset, comparing against the snapshot cached on
- * `ActivePresetState` so the per-turn work stays in memory.
+ * for the active preset, from the session's in-memory assessment so the
+ * per-turn work never reads the preset files.
  */
-import { detectDriftReasons } from "./drift.js";
 import type { ActivePresetSession } from "./session.js";
 import type {
   ExtensionAPI,
@@ -26,43 +25,52 @@ type DriftHandlerContext = Pick<
 type DriftHandlerPi = Pick<ExtensionAPI, "getActiveTools" | "getThinkingLevel">;
 
 /**
- * Handle `model_select` by re-evaluating drift against the cached snapshot.
+ * Handle `model_select` by re-evaluating drift, ignoring the session's own
+ * writes and session restores.
  *
  * The recheck covers every dimension even when the chosen model matches the
  * preset, because a drifted thinking level or tool set would otherwise show
  * a clean badge until the next `turn_start`.
  */
-export async function handleModelSelectDrift(
+export function handleModelSelectDrift(
   event: ModelSelectLikeEvent,
   ctx: DriftHandlerContext,
   pi: DriftHandlerPi,
   session: ActivePresetSession,
-): Promise<void> {
+): void {
   if (session.isSelfTriggered()) return;
   if (event.source === "restore") return;
 
-  await syncDirtyFromCurrentState(ctx, pi, session);
+  syncDirtyFromCurrentState(ctx, pi, session);
 }
 
-/** Recompute all drift reasons and update the dirty flag if needed. */
-export async function syncDirtyFromCurrentState(
+/**
+ * Handle `thinking_level_select` by re-evaluating drift, ignoring the
+ * session's own writes.
+ */
+export function handleThinkingLevelSelectDrift(
   ctx: DriftHandlerContext,
   pi: DriftHandlerPi,
   session: ActivePresetSession,
-): Promise<void> {
-  const active = session.current();
+): void {
+  if (session.isSelfTriggered()) return;
 
-  if (!active) return;
+  syncDirtyFromCurrentState(ctx, pi, session);
+}
 
-  const reasons = detectDriftReasons(active.declared, pi, ctx);
+/** Set the dirty flag from the session's current drift reasons. */
+export function syncDirtyFromCurrentState(
+  ctx: DriftHandlerContext,
+  pi: DriftHandlerPi,
+  session: ActivePresetSession,
+): void {
+  const assessment = session.assess(ctx, pi);
 
-  if (reasons.length === 0) {
-    if (active.dirty) session.markClean(ctx);
+  if (!assessment) return;
 
-    return;
+  if (assessment.driftReasons.length === 0) {
+    session.markClean(ctx);
+  } else {
+    session.markDirty(ctx);
   }
-
-  if (!active.dirty) session.markDirty(ctx);
-
-  await Promise.resolve();
 }

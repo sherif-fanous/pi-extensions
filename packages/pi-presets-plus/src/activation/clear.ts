@@ -2,12 +2,14 @@
  * Detaches the active preset and restores Pi to the baseline captured at
  * activation, leaving any field the user changed since then untouched.
  */
-import type { ActivePresetState, ThinkingLevel } from "../types.js";
 import { clearReport } from "../ui/clear-report.js";
 import type { PresetsReport } from "../ui/command-report.js";
 import { formatModel, formatTools } from "../ui/overlay-wording.js";
-import { assessOverlay } from "./overlay-assessment.js";
-import type { ActivePresetSession } from "./session.js";
+import type {
+  ActivePresetSession,
+  BaselineWrites,
+  OverlayAssessment,
+} from "./session.js";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
@@ -16,7 +18,7 @@ import type {
 /** What a clear will write to Pi and how it will report each field. */
 export interface ClearDecision {
   readonly parts: readonly ClearPart[];
-  readonly writes: ClearWrites;
+  readonly writes: BaselineWrites;
 }
 
 /** One field's outcome in a clear, ready for the summary renderer. */
@@ -33,22 +35,6 @@ export interface ClearPart {
    * carries the baseline value the clear could not reach.
    */
   readonly value: string;
-}
-
-/** Active preset plus the Pi values a clear decision compares it against. */
-export interface ClearSnapshot {
-  readonly active: ActivePresetState;
-  readonly allTools: readonly string[];
-  readonly currentModel: { provider: string; id: string } | null;
-  readonly currentThinking: ThinkingLevel;
-  readonly currentTools: readonly string[];
-}
-
-/** Values a clear writes back to Pi, omitting the fields it leaves alone. */
-export interface ClearWrites {
-  readonly model?: { provider: string; id: string };
-  readonly thinkingLevel?: ThinkingLevel;
-  readonly tools?: readonly string[];
 }
 
 /** What the clear did to one field, which the summary turns into prose. */
@@ -74,53 +60,43 @@ export async function clear(
   pi: ExtensionAPI,
   session: ActivePresetSession,
 ): Promise<PresetsReport | undefined> {
-  const active = session.current();
+  const assessment = session.assess(ctx, pi);
 
-  if (!active) return undefined;
+  if (!assessment) return undefined;
 
-  const currentModel = ctx.model
-    ? { provider: ctx.model.provider, id: ctx.model.id }
-    : null;
-  const currentThinking = pi.getThinkingLevel();
-  const decision = decideClear({
-    active,
-    allTools: pi.getAllTools().map((tool) => tool.name),
-    currentModel,
-    currentThinking,
-    currentTools: pi.getActiveTools(),
-  });
-  const finalParts = await executeClear(
-    decision,
-    currentThinking,
-    ctx,
-    pi,
-    session,
+  const decision = decideClear(
+    assessment,
+    pi.getAllTools().map((tool) => tool.name),
   );
+  const modelRestored = await session.clear(decision.writes, ctx, pi);
 
-  session.clear(ctx, pi);
-
-  return clearReport(active.name, finalParts);
+  return clearReport(
+    assessment.active.name,
+    modelRestored ? decision.parts : withModelRestoreFailed(decision),
+  );
 }
 
-/** Decide the writes and per-field outcomes for a clear, writing nothing. */
-export function decideClear(snapshot: ClearSnapshot): ClearDecision {
-  const { active } = snapshot;
-  const currentModelDisplay = formatModel(snapshot.currentModel);
-  const currentToolsDisplay = formatTools(snapshot.currentTools);
-  const assessment = assessOverlay(active, {
-    model: snapshot.currentModel,
-    thinkingLevel: snapshot.currentThinking,
-    tools: snapshot.currentTools,
-  });
+/**
+ * Decide the writes and per-field outcomes for a clear from `assessment`,
+ * writing nothing. `allTools` names the tools Pi has now, which a tools
+ * restore is limited to.
+ */
+export function decideClear(
+  assessment: OverlayAssessment,
+  allTools: readonly string[],
+): ClearDecision {
+  const { current, overlay } = assessment;
+  const currentModelDisplay = formatModel(current.model);
+  const currentToolsDisplay = formatTools(current.tools);
 
-  if (assessment.kind === "unknown") {
+  if (!overlay) {
     return {
       parts: [
         { action: "unknown", field: "model", value: currentModelDisplay },
         {
           action: "unknown",
           field: "thinking",
-          value: snapshot.currentThinking,
+          value: current.thinkingLevel,
         },
         { action: "unknown", field: "tools", value: currentToolsDisplay },
       ],
@@ -130,11 +106,11 @@ export function decideClear(snapshot: ClearSnapshot): ClearDecision {
 
   const parts: ClearPart[] = [];
   const writes: {
-    -readonly [K in keyof ClearWrites]: ClearWrites[K];
+    -readonly [K in keyof BaselineWrites]: BaselineWrites[K];
   } = {};
-  const { baseline } = assessment.restore;
+  const { baseline } = overlay;
 
-  switch (assessment.model) {
+  switch (overlay.model) {
     case "already-baseline":
       parts.push({
         action: "already-baseline",
@@ -173,7 +149,7 @@ export function decideClear(snapshot: ClearSnapshot): ClearDecision {
       break;
   }
 
-  switch (assessment.thinking) {
+  switch (overlay.thinking) {
     case "already-baseline":
       parts.push({
         action: "already-baseline",
@@ -195,20 +171,20 @@ export function decideClear(snapshot: ClearSnapshot): ClearDecision {
       parts.push({
         action: "user-override",
         field: "thinking",
-        value: snapshot.currentThinking,
+        value: current.thinkingLevel,
       });
 
       break;
   }
 
-  if (assessment.tools === "not-owned") {
+  if (overlay.tools === "not-owned") {
     parts.push({
       action: "not-owned",
       field: "tools",
       value: currentToolsDisplay,
     });
   } else {
-    switch (assessment.tools) {
+    switch (overlay.tools) {
       case "already-baseline":
         parts.push({
           action: "already-baseline",
@@ -219,7 +195,7 @@ export function decideClear(snapshot: ClearSnapshot): ClearDecision {
         break;
 
       case "matches-last-applied": {
-        const available = new Set(snapshot.allTools);
+        const available = new Set(allTools);
         const filtered = baseline.tools.filter((toolName) =>
           available.has(toolName),
         );
@@ -252,59 +228,17 @@ export function decideClear(snapshot: ClearSnapshot): ClearDecision {
   return { parts, writes };
 }
 
-async function executeClear(
-  decision: ClearDecision,
-  currentThinking: ThinkingLevel,
-  ctx: Pick<ExtensionCommandContext, "modelRegistry">,
-  pi: Pick<ExtensionAPI, "setActiveTools" | "setModel" | "setThinkingLevel">,
-  session: ActivePresetSession,
-): Promise<ClearPart[]> {
-  const parts = decision.parts.map((part) => ({ ...part }));
-  let modelRestored = false;
+/** The decision's parts with the model row reporting a failed restore. */
+function withModelRestoreFailed(decision: ClearDecision): ClearPart[] {
+  const target = decision.writes.model;
 
-  if (decision.writes.model) {
-    const target = decision.writes.model;
-    const model = ctx.modelRegistry.find(target.provider, target.id);
-    let restored = false;
-
-    if (model) {
-      try {
-        restored = await session.withSelfTriggeredModelSet(() =>
-          pi.setModel(model),
-        );
-      } catch {
-        restored = false;
-      }
-    }
-
-    if (restored) {
-      modelRestored = true;
-    } else {
-      const index = parts.findIndex((part) => part.field === "model");
-
-      if (index >= 0) {
-        parts[index] = {
+  return decision.parts.map((part) =>
+    part.field === "model" && target
+      ? {
           action: "restore-failed",
           field: "model",
           value: `${target.provider}/${target.id}`,
-        };
-      }
-    }
-  }
-
-  // Pi resets the thinking level when the model changes, so a successful
-  // model restore has to rewrite the level the user is on.
-  const targetThinking =
-    decision.writes.thinkingLevel ??
-    (modelRestored ? currentThinking : undefined);
-
-  if (targetThinking !== undefined) {
-    pi.setThinkingLevel(targetThinking);
-  }
-
-  if (decision.writes.tools !== undefined) {
-    pi.setActiveTools([...decision.writes.tools]);
-  }
-
-  return parts;
+        }
+      : part,
+  );
 }

@@ -261,34 +261,55 @@ or mutate the attachment.
 
 The class SHALL own:
 
-1. The in-memory active-preset cell (the value previously held in the deleted
-   `src/activation/active-state.ts`).
-2. The self-triggered-`pi.setModel` re-entry counter (the value previously held
-   at the top of `src/activation/apply.ts`), exposed as
-   `withSelfTriggeredModelSet(fn)` and `isSelfTriggered()`.
-3. The persistent session-entry writes for the `presets-plus:active` channel
+1. The active preset's record (`ActivePresetState`): its name, scope, dirty
+   flag, the fields it declared, and, unless it was reattached from the session
+   branch, its overlay: the baseline and the values written to Pi. There is one
+   record per application; nothing else keeps a copy of what was declared or
+   written.
+2. Every write to Pi's model, thinking level, and tools, made inside its
+   self-trigger guard and exposed through `isSelfTriggered()`:
+   `apply(preset, writes, ctx, pi)` writes an activation's values, carries the
+   baseline and tool ownership over from an attached overlay or captures a fresh
+   baseline, and records the result; `clear(writes, ctx, pi)` writes the
+   baseline values a clear chose, then detaches.
+3. The one comparison of Pi with the active preset: `assess(ctx, pi)` reads Pi
+   once and returns the drift reasons and, for a record with an overlay, how
+   each field relates to the baseline and the written values. Status, clear, the
+   drift handlers, and the picker SHALL read Pi's state through it rather than
+   comparing it themselves. `isApplied(preset, ctx, pi)` answers apply's fast
+   path: the preset is attached with an overlay and Pi holds the values it
+   declares.
+4. The persistent session-entry writes for the `presets-plus:active` channel
    (`pi.appendEntry("presets-plus:active", { version: 1, name, scope } | { version: 1, name: null })`).
    The shape of the persisted payload SHALL be
    `{ version: 1; name: string; scope: PresetScope } | { version: 1; name: null }`
    — the class encapsulates the channel name, the payload version, and the
    null-clear marker so no other module references them.
-4. The status-badge refresh: the class is the single writer of
+5. The status-badge refresh: the class is the single writer of
    `ctx.ui.setStatus("presets-plus", …)` in the codebase.
-5. The dirty / clean transitions previously in `src/activation/dirty.ts`.
-6. Session-restore reconstruction from a session branch: a method
+6. The dirty / clean transitions (`markDirty`, `markClean`).
+7. Session-restore reconstruction from a session branch: a method
    `restoreFromBranch(branch, presets)` SHALL return
    `{ state: ActivePresetState | undefined; warnings: string[] }` so the UI
    boundary in `src/index.ts` can add the warnings to the startup warning
    collection, which it shows through one `notifyWarnings` call.
 
-The session class SHALL NOT contain the apply or clear decision logic; those
-stay in `src/activation/apply.ts` and `src/activation/clear.ts` respectively,
-and they SHALL invoke `session.start({ preset, baseline, lastApplied, owned })`
-and `session.clear(ctx, pi)` rather than calling `pi.appendEntry`,
-`ctx.ui.setStatus`, or mutating the cell directly.
+The comparison helpers (same model, same tool set, the per-field classification)
+SHALL be private to `src/activation/session.ts`.
 
-The deleted modules `src/activation/active-state.ts` and
-`src/activation/dirty.ts` SHALL NOT exist after this change.
+The session class SHALL NOT contain the apply or clear decisions: which values
+an activation writes, its refusals and notices, and clear's per-field decision
+(the pure `decideClear(assessment, allTools)`) stay in `src/activation/apply.ts`
+and `src/activation/clear.ts`. Those modules SHALL hand their writes to
+`session.apply` and `session.clear` rather than calling `pi.setModel`,
+`pi.setThinkingLevel`, `pi.setActiveTools`, `pi.appendEntry`, or
+`ctx.ui.setStatus` themselves.
+
+The modules `src/activation/active-state.ts`, `src/activation/dirty.ts`,
+`src/activation/baseline.ts`, `src/activation/drift.ts`,
+`src/activation/overlay-assessment.ts`,
+`src/activation/classify-overlay-field.ts`, `src/activation/same-model.ts`, and
+`src/activation/same-set.ts` SHALL NOT exist.
 
 #### Scenario: Session class is the only writer of the active-preset cell
 
@@ -302,23 +323,24 @@ The deleted modules `src/activation/active-state.ts` and
 
 #### Scenario: Apply and clear go through the session class
 
-- **WHEN** `apply(preset, ctx, pi, session)` succeeds
-- **THEN** it SHALL call `session.start(...)` exactly once
-- **AND** it SHALL NOT call `pi.appendEntry` directly
-- **AND** it SHALL NOT call `ctx.ui.setStatus` directly
+- **WHEN** `apply(preset, ctx, pi, session)` gets past its refusals
+- **THEN** it SHALL call `session.apply(...)` exactly once
+- **AND** it SHALL NOT write to Pi, call `pi.appendEntry`, or call
+  `ctx.ui.setStatus` directly
 
 - **WHEN** `clear(ctx, pi, session)` clears an active preset
-- **THEN** it SHALL call `session.clear(ctx, pi)` exactly once
-- **AND** it SHALL NOT call `pi.appendEntry` directly
-- **AND** it SHALL NOT call `ctx.ui.setStatus` directly
+- **THEN** it SHALL call `session.assess(ctx, pi)` once and
+  `session.clear(writes, ctx, pi)` exactly once
+- **AND** it SHALL NOT write to Pi, call `pi.appendEntry`, or call
+  `ctx.ui.setStatus` directly
 
-#### Scenario: Self-triggered model set guard lives on the session
+#### Scenario: Self-trigger guard lives on the session
 
 - **WHEN** the source tree is inspected after the change
 - **THEN** no file outside `src/activation/session.ts` SHALL define
-  module-scoped state for the self-triggered-`pi.setModel` counter
-- **AND** `src/activation/drift-handlers.ts` SHALL consult
-  `session.isSelfTriggered()` rather than a free function
+  module-scoped state for the self-trigger counter
+- **AND** the `model_select` and `thinking_level_select` handlers in
+  `src/activation/drift-handlers.ts` SHALL consult `session.isSelfTriggered()`
 
 #### Scenario: Restore returns warnings instead of notifying
 
@@ -506,7 +528,8 @@ a module-scoped accessor. Concretely:
 
 - `apply(preset, ctx, pi, session)` in `src/activation/apply.ts`.
 - `clear(ctx, pi, session)` in `src/activation/clear.ts`.
-- `handleModelSelectDrift(event, ctx, pi, session)` and
+- `handleModelSelectDrift(event, ctx, pi, session)`,
+  `handleThinkingLevelSelectDrift(ctx, pi, session)`, and
   `syncDirtyFromCurrentState(ctx, pi, session)` in
   `src/activation/drift-handlers.ts`.
 - `activate(ctx, pi, session, request)` and
@@ -522,7 +545,8 @@ consumer for the lifetime of the extension.
 #### Scenario: Functions declare their session dependency
 
 - **WHEN** the signatures of `apply`, `clear`, `handleModelSelectDrift`,
-  `syncDirtyFromCurrentState`, `activate`, and `activateAtStartup` are inspected
+  `handleThinkingLevelSelectDrift`, `syncDirtyFromCurrentState`, `activate`, and
+  `activateAtStartup` are inspected
 - **THEN** each SHALL accept an `ActivePresetSession` parameter
 - **AND** none SHALL import a free `getActive()` / `setActive()` /
   `clearActive()` from a module-scoped cell

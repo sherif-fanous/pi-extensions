@@ -3,7 +3,6 @@
  * edit, and activate presets.
  */
 import type { ActivationOutcome } from "../activation/activate.js";
-import { detectDriftReasons } from "../activation/drift.js";
 import type { ActivePresetSession } from "../activation/session.js";
 import { EXTENSION_NAME } from "../extension-name.js";
 import type { HotkeyRegistry } from "../hotkey-registry.js";
@@ -127,9 +126,9 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
   /**
    * Memoized drift reasons for the currently-active preset.
    *
-   * `refreshPresets` clears the cache, so `detectDriftReasons` does not
+   * `refreshPresets` clears the cache, so the session's assessment does not
    * re-run on every keystroke or scroll. The picker lives inside a single
-   * agent turn, so the snapshot the reasons compare against cannot change
+   * agent turn, so the record the reasons compare against cannot change
    * between renders.
    */
   private driftReasonsCache:
@@ -360,8 +359,8 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
    *
    * The cache key is the active identity (`scope:name:dirty`), so a tools
    * toggle or a scope change invalidates it while a filter keystroke or a
-   * page scroll does not. The compared snapshot lives on
-   * `active.declared`, so the lookup does no disk I/O.
+   * page scroll does not. The session compares against its in-memory
+   * record, so the lookup does no disk I/O.
    */
   private computeDriftReasons(
     active: NonNullable<ReturnType<ActivePresetSession["current"]>>,
@@ -373,7 +372,7 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
       return this.driftReasonsCache.reasons;
     }
 
-    const reasons = detectDriftReasons(active.declared, pi, this.ctx);
+    const reasons = this.session.assess(this.ctx, pi)?.driftReasons ?? [];
 
     this.driftReasonsCache = { reasons, signature };
 

@@ -14,22 +14,21 @@ values (dirty clears) or re-applying the preset from the picker (dirty clears
 and state snaps back). Model drift is detected immediately on `model_select`,
 thinking drift immediately on `thinking_level_select`, and all three dimensions
 are rechecked at every `turn_start` as a safety net (also the primary detection
-path for tool changes). Drift detection is in-memory only: it compares current
-Pi values against a snapshot captured on the active state at apply / restore
-time and never re-reads the on-disk preset files per turn. The dirty flag does
-not persist across sessions; restored attachments start clean and the next
-`turn_start` re-evaluates.
+path for tool changes). Drift detection is in-memory only: the session's
+`assess` compares current Pi values against the active preset's record, kept
+from apply or restore, and never re-reads the on-disk preset files per turn. The
+dirty flag does not persist across sessions; restored attachments start clean
+and the next `turn_start` re-evaluates.
 
 ## Requirements
 
 ### Requirement: Active preset carries a dirty flag
 
-The `ActivePresetState` SHALL include a boolean `dirty` field as a sibling of
-`restore` on both variants (the `restore: { kind: "baseline" }` variant and the
-`restore: { kind: "unknown" }` variant). Apply SHALL initialize `dirty: false`.
-Session restore SHALL initialize `dirty: false` on the resulting
-`restore: { kind: "unknown" }` attachment. Clear SHALL set the active preset to
-`undefined` regardless of the dirty value.
+The active preset's record (`ActivePresetState`) SHALL include a boolean `dirty`
+field, whether or not it carries an overlay. Apply SHALL initialize
+`dirty: false`. Session restore SHALL initialize `dirty: false` on the resulting
+attachment without an overlay. Clear SHALL set the active preset to `undefined`
+regardless of the dirty value.
 
 #### Scenario: Apply produces clean state
 
@@ -38,8 +37,7 @@ Session restore SHALL initialize `dirty: false` on the resulting
 
 #### Scenario: Restore produces clean state
 
-- **WHEN** a session is restored and a preset is re-attached as
-  `restore: { kind: "unknown" }`
+- **WHEN** a session is restored and a preset is re-attached without an overlay
 - **THEN** the resulting active state SHALL have `dirty: false`
 
 #### Scenario: Clear ignores dirty
@@ -52,9 +50,9 @@ Session restore SHALL initialize `dirty: false` on the resulting
 
 The `model_select` event handler SHALL mark the active preset dirty when all of
 the following hold: a preset is currently active, the event's `source` is
-`"set"` or `"cycle"`, the event was not produced by the package's own `setModel`
-calls (self-call guard), and the new model differs from the active preset's
-`(provider, model)`. When the new model matches the active preset's
+`"set"` or `"cycle"`, the event was not produced by the package's own writes to
+Pi (the session's self-trigger guard), and the new model differs from the active
+preset's `(provider, model)`. When the new model matches the active preset's
 `(provider, model)` and the preset is currently dirty, the handler SHALL mark it
 clean.
 
@@ -73,9 +71,10 @@ clean.
 
 #### Scenario: Self-triggered model change
 
-- **WHEN** the package itself calls `pi.setModel` as part of activating a preset
-- **THEN** the resulting `model_select` event SHALL NOT mark the just-activated
-  preset dirty
+- **WHEN** the package itself calls `pi.setModel` or `pi.setThinkingLevel` as
+  part of activating or clearing a preset
+- **THEN** the resulting `model_select` or `thinking_level_select` event SHALL
+  NOT change the dirty flag
 
 #### Scenario: Session-restore model_select
 
@@ -90,18 +89,27 @@ clean.
 
 ### Requirement: Drift detection on thinking_level_select and turn_start
 
-On each `thinking_level_select`, the package SHALL compare current pi state
-against the active preset's declared fields and update the dirty flag
-immediately. On each `turn_start`, the package SHALL repeat the same comparison
-as a safety net and to catch dimensions that do not have dedicated extension
-events, such as active tools. The comparison SHALL include: model
-`(provider, id)`; thinking level (against
-`effectiveThinkingLevel(preset, currentModel)`); and active tools as a set, but
-ONLY when the preset specifies a non-empty `tools` array. If any compared field
-differs and the active preset is currently `dirty: false`, the handler SHALL set
-`dirty: true`. If no compared field differs and the active preset is currently
-`dirty: true`, the handler SHALL set `dirty: false`. Drift detection SHALL NEVER
-auto-clear the active preset.
+On each `thinking_level_select` the package's own writes did not fire, the
+package SHALL compare current pi state against the values the active preset
+holds Pi to and update the dirty flag immediately. On each `turn_start`, the
+package SHALL repeat the same comparison as a safety net and to catch dimensions
+that do not have dedicated extension events, such as active tools. Both use the
+session's `assess`, which reads Pi once.
+
+The values a preset holds Pi to are the overlay's `written` values when the
+record has an overlay. For a preset reattached without one, they are its
+declared model, its thinking level clamped by
+`effectiveThinkingLevel(preset, model)` for the registry's model, and its
+declared tools.
+
+The comparison SHALL include: model `(provider, id)`; thinking level; and active
+tools as a set, but ONLY when the held tools are a non-empty list. After a
+switch within one overlay, the held tools are the ones carried forward from an
+earlier preset, so a later preset that omits `tools` is still compared against
+them. If any compared field differs and the active preset is currently
+`dirty: false`, the handler SHALL set `dirty: true`. If no compared field
+differs and the active preset is currently `dirty: true`, the handler SHALL set
+`dirty: false`. Drift detection SHALL NEVER auto-clear the active preset.
 
 #### Scenario: Manual thinking-level change
 
@@ -120,10 +128,16 @@ auto-clear the active preset.
 
 #### Scenario: Tool change on a preset that omits tools
 
-- **WHEN** preset `plan` (no `tools` field) is active and the user changes
-  active tools
+- **WHEN** preset `plan` (no `tools` field) is active, no earlier preset in its
+  overlay wrote tools, and the user changes active tools
 - **THEN** drift detection SHALL NOT consider tools and SHALL NOT mark dirty for
   that change alone
+
+#### Scenario: Tool change after an earlier preset wrote tools
+
+- **WHEN** preset `a` (with `tools: ["read"]`) is applied, then preset `b` (no
+  `tools` field), and the user changes active tools away from `["read"]`
+- **THEN** the next `turn_start` SHALL mark `b` dirty
 
 #### Scenario: Manual re-sync clears dirty
 
@@ -147,19 +161,20 @@ auto-clear the active preset.
 
 - **WHEN** a preset declares `thinkingLevel: "high"` for a non-reasoning model
   and pi's actual thinking level is `"off"` (because pi clamped on apply)
-- **THEN** the comparison SHALL use `effectiveThinkingLevel`, treat them as
-  equal, and SHALL NOT mark dirty
+- **THEN** the comparison SHALL use the level apply wrote (the effective level),
+  treat them as equal, and SHALL NOT mark dirty
 
 ### Requirement: Re-apply clears dirty
 
 The apply flow SHALL set `dirty: false` whenever it constructs a new active
 preset state, including the re-apply-when-drifted branch reached by selecting
 the active preset in the picker and pressing `Enter`. When apply takes its
-idempotent fast-path early return (the requested preset is already active with
-`restore.kind === "baseline"` and `stateMatches(preset, pi, ctx)` is true), and
-the existing active state has `dirty: true`, the fast-path SHALL also transition
-the flag to `dirty: false` (e.g. via `markClean`) before returning so the dirty
-marker clears immediately rather than waiting for the next `turn_start`.
+idempotent fast-path early return (the session's `isApplied(preset, ctx, pi)`:
+the requested preset is already active with an overlay and Pi holds the values
+it declares), and the existing active state has `dirty: true`, the fast-path
+SHALL also transition the flag to `dirty: false` (e.g. via `markClean`) before
+returning so the dirty marker clears immediately rather than waiting for the
+next `turn_start`.
 
 #### Scenario: Re-apply after drift from picker
 
@@ -172,7 +187,7 @@ marker clears immediately rather than waiting for the next `turn_start`.
 
 - **WHEN** the active preset is dirty, the user has manually re-synced pi state
   to match the preset, and apply is invoked again before the next `turn_start`
-  runs (so `stateMatches` is already true)
+  runs (so `isApplied` is already true)
 - **THEN** the apply fast-path SHALL return ok and SHALL leave `dirty: false`
 
 ### Requirement: Status badge renders the dirty marker

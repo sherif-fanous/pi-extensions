@@ -36,7 +36,6 @@ function active(name = "plan", scope: "project" | "user" = "project") {
     declared: { model: "claude", provider: "anthropic" },
     dirty: false,
     name,
-    restore: { kind: "unknown" },
     scope,
   } satisfies ActivePresetState;
 }
