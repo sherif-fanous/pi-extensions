@@ -178,67 +178,95 @@ for (const mode of ["polling", "subscription"] as const) {
   });
 }
 
-// The subscription cycle's drift check reads Pi's theme outside the guard
-// around applying one, so a throwing theme reaches the cycle's failure
-// handling. The polling cycle reads it only inside that guard.
-test("recurring non-detector failures still release the cycle guard", async () => {
-  const colorScheme = fakePollingDetector("Terminal Color Scheme", "light");
-  const session = await startRuntime({
-    polling: [colorScheme],
-    subscription: [fakeSubscriptionDetector()],
-  });
-  const originalTheme = session.ctx.ui.theme;
-
-  try {
-    Object.defineProperty(session.ctx.ui, "theme", {
-      configurable: true,
-      get: () => {
-        throw new Error("expected theme access failure");
-      },
+for (const mode of ["polling", "subscription"] as const) {
+  // The drift check reads Pi's theme outside the guard around applying one,
+  // so a throwing theme reaches the cycle's failure handling.
+  test(`${mode} runtime reports a recurring non-detector failure and releases the cycle guard`, async () => {
+    const colorScheme = fakePollingDetector("Terminal Color Scheme", "light");
+    const session = await startRuntime({
+      polling: [colorScheme],
+      subscription: mode === "subscription" ? [fakeSubscriptionDetector()] : [],
     });
-    session.runCycle();
-    await flushPromises();
-    Object.defineProperty(session.ctx.ui, "theme", {
-      configurable: true,
-      value: originalTheme,
-      writable: true,
-    });
+    const originalTheme = session.ctx.ui.theme;
 
-    expect(session.status().warnings).toEqual([
-      "A recurring appearance update failed. Retrying on the next cycle.",
-    ]);
+    try {
+      Object.defineProperty(session.ctx.ui, "theme", {
+        configurable: true,
+        get: () => {
+          throw new Error("expected theme access failure");
+        },
+      });
+      session.runCycle();
+      await flushPromises();
+      Object.defineProperty(session.ctx.ui, "theme", {
+        configurable: true,
+        value: originalTheme,
+        writable: true,
+      });
 
-    session.runCycle();
-    await flushPromises();
-    expect(colorScheme.detect).toHaveBeenCalledTimes(4);
-    expect(session.status().currentAppearance).toBe("light");
-  } finally {
-    session.runtime.dispose();
-  }
-});
+      expect(session.status().warnings).toEqual([
+        "A recurring appearance update failed. Retrying on the next cycle.",
+      ]);
 
-test("a subscription cycle reapplies the mapped theme after a manual change", async () => {
-  const session = await startRuntime({
-    polling: [fakePollingDetector("Terminal Color Scheme", "light")],
-    subscription: [fakeSubscriptionDetector()],
+      session.runCycle();
+      await flushPromises();
+      expect(colorScheme.detect).toHaveBeenCalledTimes(4);
+      expect(session.status().currentAppearance).toBe("light");
+    } finally {
+      session.runtime.dispose();
+    }
   });
 
-  try {
-    Object.assign(session.ctx.ui.theme, { name: "chosen-by-hand" });
-    session.runCycle();
-    await flushPromises();
-
-    expect(session.ctx.appliedThemes).toEqual(["light", "light"]);
-    expect(session.status()).toMatchObject({
-      appliedTheme: "light",
-      currentAppearance: "light",
-      detectionStrategy: "Terminal Color Scheme (subscription)",
-      lastEvent: "Drift corrected: reapplied light theme",
+  test(`${mode} runtime reapplies the mapped theme after a manual change`, async () => {
+    const session = await startRuntime({
+      polling: [fakePollingDetector("Terminal Color Scheme", "light")],
+      subscription: mode === "subscription" ? [fakeSubscriptionDetector()] : [],
     });
-  } finally {
-    session.runtime.dispose();
-  }
-});
+
+    try {
+      Object.assign(session.ctx.ui.theme, { name: "chosen-by-hand" });
+      session.runCycle();
+      await flushPromises();
+
+      expect(session.ctx.appliedThemes).toEqual(["light", "light"]);
+      expect(session.status()).toMatchObject({
+        appliedTheme: "light",
+        currentAppearance: "light",
+        detectionStrategy:
+          mode === "subscription"
+            ? "Terminal Color Scheme (subscription)"
+            : "Terminal Color Scheme",
+        lastEvent: "Drift corrected: reapplied light theme",
+      });
+    } finally {
+      session.runtime.dispose();
+    }
+  });
+
+  test(`${mode} runtime records no event when a poll finds the same appearance`, async () => {
+    const session = await startRuntime({
+      polling: [fakePollingDetector("Terminal Color Scheme", "light")],
+      subscription: mode === "subscription" ? [fakeSubscriptionDetector()] : [],
+    });
+
+    try {
+      const before = session.status();
+
+      vi.useFakeTimers({ now: Date.now() + 60_000, toFake: ["Date"] });
+      session.runCycle();
+      await flushPromises();
+      vi.useRealTimers();
+
+      expect(session.ctx.appliedThemes).toEqual(["light"]);
+      expect(session.status()).toMatchObject({
+        lastEvent: before.lastEvent,
+        lastUpdateAt: before.lastUpdateAt,
+      });
+    } finally {
+      session.runtime.dispose();
+    }
+  });
+}
 
 test("subscription reports retain grace recovery and one-way demotion", async () => {
   const colorScheme = fakePollingDetector("Terminal Color Scheme");

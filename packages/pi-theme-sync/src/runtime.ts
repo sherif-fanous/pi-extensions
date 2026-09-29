@@ -255,18 +255,7 @@ export function createThemeSyncRuntime({
 
           lastPolledDetector = detector;
 
-          // Without a subscription, every known appearance is shown again,
-          // which also reapplies a drifted theme.
-          if (detectionMode === "polling") {
-            if (appearance !== "unknown") {
-              detectionStrategy = pollingStrategyLabel();
-              showAppearance(appearance);
-            }
-
-            return;
-          }
-
-          if (detectionMode === "demoted") {
+          if (detectionMode === "polling" || detectionMode === "demoted") {
             detectionStrategy = pollingStrategyLabel();
           }
 

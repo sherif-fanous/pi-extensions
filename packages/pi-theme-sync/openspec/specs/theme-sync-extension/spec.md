@@ -53,6 +53,16 @@ active Pi theme for the last known appearance while the extension is running.
   longer matches the configured mapping for that appearance
 - **THEN** the extension restores the configured theme mapping for that
   appearance
+- **AND** the status report's last event reads
+  `Drift corrected: reapplied <appearance> theme`, whether detection polls or
+  uses a subscription
+
+#### Scenario: Poll finds the same appearance
+
+- **WHEN** a detection cycle finds the last known appearance and Pi's active
+  theme still matches its mapping
+- **THEN** the extension changes nothing, and the status report's last update
+  and last event stay as they were
 
 ### Requirement: Theme sync status remains available while inactive
 
