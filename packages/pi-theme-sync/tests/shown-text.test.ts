@@ -1,9 +1,5 @@
 import path from "node:path";
 
-import { detectAppearanceViaColorScheme } from "../src/detectors/pi/color-scheme.js";
-import { detectAppearanceViaSystem } from "../src/detectors/system/appearance.js";
-import { probeDecMode2031Support } from "../src/detectors/terminal/dec-mode-2031.js";
-import { detectAppearanceViaOsc11Background } from "../src/detectors/terminal/osc-11.js";
 import { EXTENSION_NAME } from "../src/extension-name.js";
 import registerThemeSync from "../src/index.js";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
@@ -22,23 +18,27 @@ import {
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-vi.mock("../src/detectors/pi/color-scheme.js", () => ({
-  detectAppearanceViaColorScheme: vi.fn(),
-  enableColorSchemeSubscription: vi.fn(),
-  hasColorSchemeApi: () => false,
-}));
+// Theme Sync's own detectors and their text, with every probe finding
+// nothing, so the startup warnings are the same on every machine.
+vi.mock("../src/detectors/index.js", async (importOriginal) => {
+  const detectors =
+    await importOriginal<typeof import("../src/detectors/index.js")>();
+  const { polling, subscription } = detectors.THEME_SYNC_DETECTORS;
 
-vi.mock("../src/detectors/system/appearance.js", () => ({
-  detectAppearanceViaSystem: vi.fn(),
-}));
-
-vi.mock("../src/detectors/terminal/dec-mode-2031.js", () => ({
-  probeDecMode2031Support: vi.fn(),
-}));
-
-vi.mock("../src/detectors/terminal/osc-11.js", () => ({
-  detectAppearanceViaOsc11Background: vi.fn(),
-}));
+  return {
+    ...detectors,
+    THEME_SYNC_DETECTORS: {
+      polling: polling.map((detector) => ({
+        ...detector,
+        detect: () => Promise.resolve("unknown"),
+      })),
+      subscription: subscription.map((detector) => ({
+        ...detector,
+        isSupported: () => Promise.resolve(false),
+      })),
+    },
+  };
+});
 
 let dirs: TempConfigDirs;
 
@@ -55,14 +55,9 @@ beforeEach(async () => {
     path.join(dirs.cwd, ".pi", "theme-sync", "config.json"),
     {},
   );
-  vi.mocked(detectAppearanceViaColorScheme).mockResolvedValue("unknown");
-  vi.mocked(detectAppearanceViaOsc11Background).mockResolvedValue("unknown");
-  vi.mocked(detectAppearanceViaSystem).mockResolvedValue("unknown");
-  vi.mocked(probeDecMode2031Support).mockResolvedValue("unsupported");
 });
 
 afterEach(async () => {
-  vi.resetAllMocks();
   await dirs.cleanup();
 });
 
@@ -117,6 +112,7 @@ test("everything Theme Sync shows follows the family text standard", async () =>
       ),
       expect.stringContaining("Skipped project configuration at "),
       expect.stringContaining('User setting "syncEnabled"'),
+      expect.stringContaining("Terminal color-scheme API is unavailable"),
       expect.stringContaining("Config:"),
       expect.stringContaining(
         "Saved 1 changed setting to User. Press Ctrl+R to reload and apply.",

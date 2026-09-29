@@ -1,134 +1,49 @@
-import {
-  probeAvailablePollingDetectors,
-  probeAvailableSubscriptionDetectors,
-} from "../src/detectors/index.js";
-import { detectAppearanceViaColorScheme } from "../src/detectors/pi/color-scheme.js";
-import { detectAppearanceViaSystem } from "../src/detectors/system/appearance.js";
-import { probeDecMode2031Support } from "../src/detectors/terminal/dec-mode-2031.js";
-import { detectAppearanceViaOsc11Background } from "../src/detectors/terminal/osc-11.js";
 import { createThemeSyncRuntime } from "../src/runtime.js";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
-  createFakeContext,
-  createPlainTheme,
-} from "@sherif-fanous/pi-extensions-testing";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+  createRuntimeContext,
+  fakePollingDetector,
+  fakeSubscriptionDetector,
+} from "./helpers/fake-detectors.js";
+import { createDeferred } from "@sherif-fanous/pi-extensions-testing";
+import { expect, test, vi } from "vitest";
 
-vi.mock("../src/detectors/pi/color-scheme.js", () => ({
-  detectAppearanceViaColorScheme: vi.fn(),
-  enableColorSchemeSubscription: vi.fn(),
-  hasColorSchemeApi: () => true,
-}));
+function createDetectors() {
+  const colorScheme = fakePollingDetector("Terminal Color Scheme", "light");
+  const osc11 = fakePollingDetector("OSC 11", "dark");
+  const system = fakePollingDetector("System Appearance", "dark");
+  const subscription = fakeSubscriptionDetector();
 
-vi.mock("../src/detectors/system/appearance.js", () => ({
-  detectAppearanceViaSystem: vi.fn(),
-}));
+  subscription.isSupported.mockResolvedValue(false);
 
-vi.mock("../src/detectors/terminal/dec-mode-2031.js", () => ({
-  probeDecMode2031Support: vi.fn(),
-}));
-
-vi.mock("../src/detectors/terminal/osc-11.js", () => ({
-  detectAppearanceViaOsc11Background: vi.fn(),
-}));
-
-beforeEach(() => {
-  vi.mocked(detectAppearanceViaColorScheme).mockResolvedValue("light");
-  vi.mocked(detectAppearanceViaOsc11Background).mockResolvedValue("dark");
-  vi.mocked(detectAppearanceViaSystem).mockResolvedValue("dark");
-  vi.mocked(probeDecMode2031Support).mockResolvedValue("unsupported");
-});
-
-afterEach(() => {
-  vi.resetAllMocks();
-  vi.restoreAllMocks();
-});
-
-test("a rejected first detector does not block lower-priority probes", async () => {
-  vi.mocked(detectAppearanceViaColorScheme).mockRejectedValue(
-    new Error("query failed"),
-  );
-
-  const reportFailure = vi.fn();
-
-  expect(
-    await probeAvailablePollingDetectors(
-      createContext(),
-      undefined,
-      reportFailure,
-    ),
-  ).toEqual(["osc-11", "system"]);
-  expect(reportFailure).toHaveBeenCalledExactlyOnceWith("color-scheme");
-  expect(
-    vi.mocked(detectAppearanceViaColorScheme).mock.invocationCallOrder[0],
-  ).toBeLessThan(
-    vi.mocked(detectAppearanceViaOsc11Background).mock.invocationCallOrder[0] ??
-      0,
-  );
-
-  expect(
-    vi.mocked(detectAppearanceViaOsc11Background).mock.invocationCallOrder[0],
-  ).toBeLessThan(
-    vi.mocked(detectAppearanceViaSystem).mock.invocationCallOrder[0] ?? 0,
-  );
-});
-
-test("synchronous detector failure still permits the system fallback", async () => {
-  vi.mocked(detectAppearanceViaColorScheme).mockResolvedValue("unknown");
-  vi.mocked(detectAppearanceViaOsc11Background).mockImplementation(() => {
-    throw new Error("terminal failed");
-  });
-
-  const reportFailure = vi.fn();
-
-  expect(
-    await probeAvailablePollingDetectors(
-      createContext(),
-      undefined,
-      reportFailure,
-    ),
-  ).toEqual(["system"]);
-  expect(reportFailure).toHaveBeenCalledExactlyOnceWith("osc-11");
-});
-
-test("a failed subscription probe returns no subscriptions", async () => {
-  vi.mocked(probeDecMode2031Support).mockRejectedValue(
-    new Error("probe failed"),
-  );
-
-  const reportFailure = vi.fn();
-
-  expect(
-    await probeAvailableSubscriptionDetectors(
-      createContext(),
-      undefined,
-      reportFailure,
-    ),
-  ).toEqual([]);
-
-  expect(reportFailure).toHaveBeenCalledExactlyOnceWith(
-    "color-scheme-subscription",
-  );
-});
+  return {
+    colorScheme,
+    detectors: {
+      polling: [colorScheme, osc11, system],
+      subscription: [subscription],
+    },
+    osc11,
+    subscription,
+    system,
+  };
+}
 
 test("startup survives polling and subscription probe failures", async () => {
-  vi.mocked(detectAppearanceViaColorScheme).mockRejectedValue(
-    new Error("query failed"),
-  );
+  const { colorScheme, detectors, osc11, subscription, system } =
+    createDetectors();
 
-  vi.mocked(probeDecMode2031Support).mockRejectedValue(
-    new Error("probe failed"),
-  );
+  colorScheme.detect.mockRejectedValue(new Error("query failed"));
+  subscription.isSupported.mockRejectedValue(new Error("probe failed"));
 
-  const ctx = createContext();
-  const runtime = createThemeSyncRuntime();
+  const ctx = createRuntimeContext();
   const schedule = vi.fn(() => vi.fn());
+  const runtime = createThemeSyncRuntime({ detectors, schedule });
 
   try {
-    await runtime.startSession(ctx, schedule);
+    await runtime.startSession(ctx);
 
     expect(schedule).toHaveBeenCalledOnce();
     expect(runtime.getStatus(ctx)).toMatchObject({
+      availableDetectors: ["OSC 11", "System Appearance"],
       currentAppearance: "dark",
       detectionStrategy: "OSC 11",
       warnings: [
@@ -136,36 +51,71 @@ test("startup survives polling and subscription probe failures", async () => {
         "Terminal Color Scheme (subscription) query failed. Using the other available detectors.",
       ],
     });
+
+    expect(colorScheme.detect.mock.invocationCallOrder[0]).toBeLessThan(
+      osc11.detect.mock.invocationCallOrder[0] ?? 0,
+    );
+
+    expect(osc11.detect.mock.invocationCallOrder[0]).toBeLessThan(
+      system.detect.mock.invocationCallOrder[0] ?? 0,
+    );
+  } finally {
+    runtime.dispose();
+  }
+});
+
+test("synchronous detector failure still permits the system fallback", async () => {
+  const { colorScheme, detectors, osc11 } = createDetectors();
+
+  colorScheme.detect.mockResolvedValue("unknown");
+  osc11.detect.mockImplementation(() => {
+    throw new Error("terminal failed");
+  });
+
+  const ctx = createRuntimeContext();
+  const runtime = createThemeSyncRuntime({
+    detectors,
+    schedule: () => () => {},
+  });
+
+  try {
+    await runtime.startSession(ctx);
+
+    expect(runtime.getStatus(ctx)).toMatchObject({
+      availableDetectors: ["System Appearance"],
+      detectionStrategy: "System Appearance",
+      warnings: ["OSC 11 query failed. Using the other available detectors."],
+    });
   } finally {
     runtime.dispose();
   }
 });
 
 test("a detector failing after discovery falls back and reports only one warning", async () => {
-  vi.mocked(detectAppearanceViaColorScheme)
+  const { colorScheme, detectors, osc11 } = createDetectors();
+
+  colorScheme.detect
     .mockResolvedValueOnce("light")
     .mockRejectedValue(new Error("query failed"));
 
-  const ctx = createContext();
-  const runtime = createThemeSyncRuntime();
+  const ctx = createRuntimeContext();
   let cycle = () => {};
-
-  try {
-    await runtime.startSession(ctx, (callback) => {
+  const runtime = createThemeSyncRuntime({
+    detectors,
+    schedule: (callback) => {
       cycle = callback;
 
       return () => {};
-    });
+    },
+  });
+
+  try {
+    await runtime.startSession(ctx);
 
     expect(runtime.getStatus(ctx).currentAppearance).toBe("dark");
     cycle();
-    await vi.waitFor(() =>
-      expect(detectAppearanceViaColorScheme).toHaveBeenCalledTimes(3),
-    );
-
-    await vi.waitFor(() =>
-      expect(detectAppearanceViaOsc11Background).toHaveBeenCalledTimes(3),
-    );
+    await vi.waitFor(() => expect(colorScheme.detect).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(osc11.detect).toHaveBeenCalledTimes(3));
 
     expect(runtime.getStatus(ctx).warnings).toEqual([
       "Terminal Color Scheme query failed. Using the other available detectors.",
@@ -176,30 +126,31 @@ test("a detector failing after discovery falls back and reports only one warning
 });
 
 test("setup notifies its warnings once and leaves later cycle warnings to status", async () => {
-  vi.mocked(detectAppearanceViaColorScheme).mockRejectedValue(
-    new Error("query failed"),
-  );
+  const { colorScheme, detectors, osc11 } = createDetectors();
 
-  const ctx = createContext();
+  colorScheme.detect.mockRejectedValue(new Error("query failed"));
+
+  const ctx = createRuntimeContext();
   const notify = vi.spyOn(ctx.ui, "notify");
-  const runtime = createThemeSyncRuntime();
   let cycle = () => {};
-
-  try {
-    await runtime.startSession(ctx, (callback) => {
+  const runtime = createThemeSyncRuntime({
+    detectors,
+    schedule: (callback) => {
       cycle = callback;
 
       return () => {};
-    });
+    },
+  });
+
+  try {
+    await runtime.startSession(ctx);
 
     expect(notify).toHaveBeenCalledExactlyOnceWith(
       "Theme Sync: 1 warning\n- Terminal Color Scheme query failed. Using the other available detectors.",
       "warning",
     );
 
-    vi.mocked(detectAppearanceViaOsc11Background).mockRejectedValue(
-      new Error("query failed"),
-    );
+    osc11.detect.mockRejectedValue(new Error("query failed"));
     cycle();
     await vi.waitFor(() =>
       expect(runtime.getStatus(ctx).warnings).toContain(
@@ -216,40 +167,37 @@ test("setup notifies its warnings once and leaves later cycle warnings to status
 test.each(["reject", "unknown", "light"] as const)(
   "dispose during a startup probe prevents further work after %s",
   async (outcome) => {
-    let finishProbe = () => {};
-    const pendingProbe = new Promise<"unknown" | "light">((resolve, reject) => {
-      finishProbe = () => {
-        if (outcome === "reject") {
-          reject(new Error("late query failure"));
-        } else {
-          resolve(outcome);
-        }
-      };
-    });
+    const { colorScheme, detectors, osc11, subscription, system } =
+      createDetectors();
+    const pendingProbe = createDeferred<"unknown" | "light">();
 
-    vi.mocked(detectAppearanceViaColorScheme).mockReturnValue(pendingProbe);
+    colorScheme.detect.mockReturnValue(pendingProbe.promise);
 
-    const ctx = createContext();
-    const runtime = createThemeSyncRuntime();
+    const finishProbe = () => {
+      if (outcome === "reject") {
+        pendingProbe.reject(new Error("late query failure"));
+      } else {
+        pendingProbe.resolve(outcome);
+      }
+    };
+    const ctx = createRuntimeContext();
     const schedule = vi.fn(() => vi.fn());
-    const setTheme = vi.spyOn(ctx.ui, "setTheme");
+    const runtime = createThemeSyncRuntime({ detectors, schedule });
     const notify = vi.spyOn(ctx.ui, "notify");
-    const setup = runtime.startSession(ctx, schedule);
+    const setup = runtime.startSession(ctx);
 
     try {
-      await vi.waitFor(() =>
-        expect(detectAppearanceViaColorScheme).toHaveBeenCalledOnce(),
-      );
+      await vi.waitFor(() => expect(colorScheme.detect).toHaveBeenCalledOnce());
 
       runtime.dispose();
       finishProbe();
       await setup;
 
-      expect(detectAppearanceViaOsc11Background).not.toHaveBeenCalled();
-      expect(detectAppearanceViaSystem).not.toHaveBeenCalled();
-      expect(probeDecMode2031Support).not.toHaveBeenCalled();
+      expect(osc11.detect).not.toHaveBeenCalled();
+      expect(system.detect).not.toHaveBeenCalled();
+      expect(subscription.isSupported).not.toHaveBeenCalled();
       expect(schedule).not.toHaveBeenCalled();
-      expect(setTheme).not.toHaveBeenCalled();
+      expect(ctx.appliedThemes).toEqual([]);
       expect(runtime.getStatus(ctx).warnings).toEqual([]);
       expect(notify).not.toHaveBeenCalled();
     } finally {
@@ -260,50 +208,36 @@ test.each(["reject", "unknown", "light"] as const)(
   },
 );
 
-test("all failed probes leave startup alive with no recurring timer", async () => {
-  vi.mocked(detectAppearanceViaColorScheme).mockRejectedValue(
-    new Error("query failed"),
-  );
+test("all failed probes report no available detectors and start no recurring timer", async () => {
+  const { colorScheme, detectors, osc11, system } = createDetectors();
 
-  vi.mocked(detectAppearanceViaOsc11Background).mockRejectedValue(
-    new Error("query failed"),
-  );
+  for (const detector of [colorScheme, osc11, system]) {
+    detector.detect.mockRejectedValue(new Error("query failed"));
+  }
 
-  vi.mocked(detectAppearanceViaSystem).mockRejectedValue(
-    new Error("query failed"),
-  );
-
-  const ctx = createContext();
-  const runtime = createThemeSyncRuntime();
+  const ctx = createRuntimeContext();
   const schedule = vi.fn(() => vi.fn());
+  const runtime = createThemeSyncRuntime({ detectors, schedule });
 
   try {
-    await runtime.startSession(ctx, schedule);
+    await runtime.startSession(ctx);
 
     expect(schedule).not.toHaveBeenCalled();
-    expect(runtime.getStatus(ctx).currentAppearance).toBe("unknown");
-    expect(
-      runtime
-        .getStatus(ctx)
-        .warnings.filter((warning) => warning.includes("query failed")),
-    ).toHaveLength(3);
+    expect(ctx.appliedThemes).toEqual([]);
+    expect(runtime.getStatus(ctx)).toMatchObject({
+      availableDetectors: [],
+      currentAppearance: "unknown",
+      detectionStrategy: "No available detectors",
+      lastEvent: "Appearance detection failed",
+      warnings: [
+        "Terminal Color Scheme query failed. Using the other available detectors.",
+        "OSC 11 query failed. Using the other available detectors.",
+        "System Appearance query failed. Using the other available detectors.",
+        "No appearance detectors are available on this terminal.",
+        "Sync is on but the appearance is unknown. Did not apply a theme.",
+      ],
+    });
   } finally {
     runtime.dispose();
   }
 });
-
-function createContext(): ExtensionContext {
-  return createFakeContext({
-    cwd: "/unused-detector-fallback-test",
-    ui: {
-      getAllThemes: () => [
-        { name: "light", path: undefined },
-        { name: "dark", path: undefined },
-      ],
-      notify: vi.fn(),
-      setTheme: vi.fn(),
-      setWidget: vi.fn(),
-      theme: Object.assign(createPlainTheme(), { name: "initial" }),
-    },
-  });
-}

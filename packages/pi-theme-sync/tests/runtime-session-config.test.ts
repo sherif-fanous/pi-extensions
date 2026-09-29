@@ -1,11 +1,8 @@
 import path from "node:path";
 
-import { detectAppearanceViaColorScheme } from "../src/detectors/pi/color-scheme.js";
-import { detectAppearanceViaSystem } from "../src/detectors/system/appearance.js";
-import { probeDecMode2031Support } from "../src/detectors/terminal/dec-mode-2031.js";
-import { detectAppearanceViaOsc11Background } from "../src/detectors/terminal/osc-11.js";
 import { createThemeSyncRuntime } from "../src/runtime.js";
 import { formatStatusReport } from "../src/ui/status-report.js";
+import { fakePollingDetector } from "./helpers/fake-detectors.js";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   createTempConfigDirs,
@@ -13,36 +10,13 @@ import {
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-vi.mock("../src/detectors/pi/color-scheme.js", () => ({
-  detectAppearanceViaColorScheme: vi.fn(),
-  enableColorSchemeSubscription: vi.fn(),
-  hasColorSchemeApi: () => true,
-}));
-
-vi.mock("../src/detectors/system/appearance.js", () => ({
-  detectAppearanceViaSystem: vi.fn(),
-}));
-
-vi.mock("../src/detectors/terminal/dec-mode-2031.js", () => ({
-  probeDecMode2031Support: vi.fn(),
-}));
-
-vi.mock("../src/detectors/terminal/osc-11.js", () => ({
-  detectAppearanceViaOsc11Background: vi.fn(),
-}));
-
 let dirs: TempConfigDirs;
 
 beforeEach(async () => {
   dirs = await createTempConfigDirs();
-  vi.mocked(detectAppearanceViaColorScheme).mockResolvedValue("dark");
-  vi.mocked(detectAppearanceViaOsc11Background).mockResolvedValue("dark");
-  vi.mocked(detectAppearanceViaSystem).mockResolvedValue("dark");
-  vi.mocked(probeDecMode2031Support).mockResolvedValue("unsupported");
 });
 
 afterEach(async () => {
-  vi.resetAllMocks();
   await dirs.cleanup();
 });
 
@@ -98,6 +72,23 @@ test("lists file warnings before invalid values and keeps file problems out of s
   ]);
 });
 
+test("sync turned off detects the appearance once and applies no theme", async () => {
+  await dirs.writeJson(userPath(), { syncEnabled: false, version: 2 });
+
+  const session = await startSession(true);
+
+  expect(session.schedule).not.toHaveBeenCalled();
+  expect(session.setTheme).not.toHaveBeenCalled();
+  expect(session.status()).toMatchObject({
+    currentAppearance: "dark",
+    desiredTheme: "dark",
+    detectionStrategy: "Inactive",
+    lastEvent: "Detected dark appearance",
+    syncEnabled: false,
+    warnings: [],
+  });
+});
+
 test("stays silent in an untrusted project without a project file", async () => {
   const session = await startSession(false);
 
@@ -117,6 +108,7 @@ function settingsPath(): string {
 
 async function startSession(trusted: boolean) {
   const notify = vi.fn();
+  const setTheme = vi.fn();
   // The runtime reads only these members of the session context.
   const ctx: ExtensionContext = {
     cwd: dirs.cwd,
@@ -126,16 +118,23 @@ async function startSession(trusted: boolean) {
     ui: {
       getAllThemes: () => [{ name: "light" }, { name: "dark" }],
       notify,
-      setTheme: vi.fn(),
-      theme: { name: "dark" },
+      setTheme,
+      theme: { name: "initial" },
     },
   } as never;
-  const runtime = createThemeSyncRuntime();
+  const schedule = vi.fn(() => () => {});
+  const runtime = createThemeSyncRuntime({
+    detectors: {
+      polling: [fakePollingDetector("System Appearance", "dark")],
+      subscription: [],
+    },
+    schedule,
+  });
 
-  await runtime.startSession(ctx, () => () => {});
+  await runtime.startSession(ctx);
   runtime.dispose();
 
-  return { notify, status: () => runtime.getStatus(ctx) };
+  return { notify, schedule, setTheme, status: () => runtime.getStatus(ctx) };
 }
 
 function userPath(): string {

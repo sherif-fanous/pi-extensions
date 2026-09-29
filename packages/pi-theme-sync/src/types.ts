@@ -29,9 +29,6 @@ export type LoadedRuntimeConfig = {
   runtimeConfigSources: RuntimeConfigSources;
 };
 
-/** Detector strategies that read appearance on demand. */
-export type PollingDetector = "color-scheme" | "osc-11" | "system";
-
 /** Effective configuration used by the runtime. */
 export type RuntimeConfig = {
   syncEnabled: boolean;
@@ -78,6 +75,3 @@ export type RuntimeStatus = {
   lastUpdateAt?: number;
   lastEvent: string;
 };
-
-/** Detector strategies that receive appearance change reports. */
-export type SubscriptionDetector = "color-scheme-subscription";
