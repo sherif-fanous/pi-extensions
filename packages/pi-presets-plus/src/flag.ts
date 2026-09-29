@@ -1,65 +1,26 @@
 /**
- * Registers the `--preset` command-line flag and activates the preset it
- * names when the session starts.
+ * Registers the `--preset` command-line flag and reads the preset name it
+ * was given.
  */
-import { requestActivation } from "./activation/request.js";
-import type { ActivePresetSession } from "./activation/session.js";
-import type { PresetsConfig } from "./store/api.js";
-import type { LoadedPreset } from "./types.js";
-import { notifyApplyResult } from "./ui/apply-result.js";
-import { reportWarnings } from "./warnings.js";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 /** Name of the command-line flag, without the leading dashes. */
 const PRESET_FLAG = "preset";
 
 /**
- * Activate the preset named by `--preset` and report whether it took
- * effect. Returns `false` when the flag is absent, names a preset that
- * does not exist, or the user cancels the activation prompt.
- *
- * Warnings go into `warnings` when the caller collects them, and otherwise
- * out as one warning notification per step.
+ * The preset name `--preset` was given, trimmed, or `undefined` when the
+ * flag is absent or blank.
  */
-export async function applyPresetFlag(
-  pi: ExtensionAPI,
-  ctx: ExtensionContext,
-  { policy, presets }: Pick<PresetsConfig, "policy" | "presets">,
-  session: ActivePresetSession,
-  warnings?: string[],
-): Promise<boolean> {
+export function readPresetFlag(
+  pi: Pick<ExtensionAPI, "getFlag">,
+): string | undefined {
   const value = pi.getFlag(PRESET_FLAG);
 
-  if (typeof value !== "string") return false;
+  if (typeof value !== "string") return undefined;
 
   const name = value.trim();
 
-  if (name.length === 0) return false;
-
-  const preset = findPresetForFlag(presets, name);
-
-  if (!preset) {
-    reportWarnings(
-      ctx,
-      [
-        `Unknown preset "${name}" for --preset. Available: ${formatAvailableNames(presets)}.`,
-      ],
-      warnings,
-    );
-
-    return false;
-  }
-
-  const result = await requestActivation(preset, policy, ctx, pi, session);
-
-  if (!result.ok && result.kind === "cancelled") return false;
-
-  notifyApplyResult(ctx, preset, result, { unprompted: true, warnings });
-
-  return result.ok;
+  return name.length === 0 ? undefined : name;
 }
 
 /** Declare the `--preset` flag so Pi accepts and parses it. */
@@ -70,45 +31,4 @@ export function registerPresetFlag(
     description: "Activate the named Presets Plus preset at startup",
     type: "string",
   });
-}
-
-/**
- * Find the preset a flag value names, preferring the project scope over
- * the user scope and skipping shadowed entries.
- */
-function findPresetForFlag(
-  presets: readonly LoadedPreset[],
-  name: string,
-): LoadedPreset | undefined {
-  return (
-    presets.find(
-      (preset) =>
-        preset.name === name && preset.scope === "project" && !preset.shadowed,
-    ) ??
-    presets.find(
-      (preset) =>
-        preset.name === name && preset.scope === "user" && !preset.shadowed,
-    )
-  );
-}
-
-/** List one entry per preset name for the unknown-preset warning. */
-function formatAvailableNames(presets: readonly LoadedPreset[]): string {
-  const byName = new Map<string, LoadedPreset>();
-
-  for (const preset of presets) {
-    const existing = byName.get(preset.name);
-
-    if (!existing || existing.shadowed) byName.set(preset.name, preset);
-  }
-
-  if (byName.size === 0) return "none";
-
-  return [...byName.values()]
-    .map((preset) =>
-      preset.unavailable
-        ? `${preset.name} (Unavailable: ${preset.unavailable})`
-        : preset.name,
-    )
-    .join(", ");
 }

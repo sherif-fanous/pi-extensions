@@ -22,14 +22,8 @@ import {
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { openPickerMock, requestActivationMock } = vi.hoisted(() => ({
-  openPickerMock: vi.fn(),
-  requestActivationMock: vi.fn(),
-}));
+const { openPickerMock } = vi.hoisted(() => ({ openPickerMock: vi.fn() }));
 
-vi.mock("../../../src/activation/request.js", () => ({
-  requestActivation: requestActivationMock,
-}));
 vi.mock("../../../src/ui/picker.js", () => ({ openPicker: openPickerMock }));
 
 let dirs: TempConfigDirs;
@@ -66,8 +60,6 @@ beforeEach(async () => {
   dirs = await createTempConfigDirs();
   agentDir = dirs.agentDir;
   openPickerMock.mockReset();
-  requestActivationMock.mockReset();
-  requestActivationMock.mockResolvedValue({ ok: true });
 });
 
 afterEach(async () => {
@@ -236,7 +228,6 @@ describe("runPresetsCommand", () => {
         "warning",
       );
       expect(openPickerMock).not.toHaveBeenCalled();
-      expect(requestActivationMock).not.toHaveBeenCalled();
     },
   );
 
@@ -256,61 +247,6 @@ describe("runPresetsCommand", () => {
     },
   );
 
-  it("requests an exact-name activation", async () => {
-    const { ctx } = makeStubCtx();
-    const pi = makeStubPi();
-    const session = new ActivePresetSession();
-    const preset = {
-      model: "claude-opus",
-      name: "plan",
-      provider: "anthropic",
-    };
-
-    await mkdir(join(agentDir, "presets-plus"), { recursive: true });
-    await writeFile(
-      join(agentDir, "presets-plus", "config.json"),
-      JSON.stringify({ presets: [preset], version: 2 }),
-    );
-
-    await runPresetsCommand("plan", ctx, {
-      hotkeys: new HotkeyRegistry(),
-      pi,
-      session,
-    });
-
-    expect(requestActivationMock).toHaveBeenCalledWith(
-      expect.objectContaining(preset),
-      { rules: [] },
-      ctx,
-      pi,
-      session,
-    );
-  });
-
-  it("does not repeat load warnings when the named preset is loaded", async () => {
-    const { ctx, notify } = makeStubCtx();
-    const preset = {
-      model: "claude-opus",
-      name: "plan",
-      provider: "anthropic",
-    };
-
-    await mkdir(join(agentDir, "presets-plus"), { recursive: true });
-    await writeFile(
-      join(agentDir, "presets-plus", "config.json"),
-      JSON.stringify({ presets: [preset, { name: "broken" }], version: 2 }),
-    );
-
-    await runPresetsCommand("plan", ctx, {
-      hotkeys: new HotkeyRegistry(),
-      pi: makeStubPi(),
-      session: new ActivePresetSession(),
-    });
-
-    expect(requestActivationMock).toHaveBeenCalledOnce();
-    expect(notify).not.toHaveBeenCalledWith(expect.anything(), "warning");
-  });
-
   it("shows the load warnings when the named preset is not loaded", async () => {
     const { ctx, notify } = makeStubCtx();
 
@@ -326,7 +262,6 @@ describe("runPresetsCommand", () => {
       session: new ActivePresetSession(),
     });
 
-    expect(requestActivationMock).not.toHaveBeenCalled();
     expect(notify.mock.calls.map(([message]) => message)).toEqual([
       expect.stringMatching(
         /^Presets Plus: 1 warning\n- Skipped preset "plan"/u,
@@ -335,55 +270,6 @@ describe("runPresetsCommand", () => {
         /^Presets Plus: 1 warning\n- Unknown subcommand "plan"\./u,
       ),
     ]);
-  });
-
-  it("routes picker activation through the shared request", async () => {
-    const { ctx } = makeStubCtx();
-    const pi = makeStubPi();
-    const selected = {
-      model: "claude-opus",
-      name: "plan",
-      provider: "anthropic",
-      scope: "user" as const,
-    };
-
-    await runPresetsCommand("", ctx, {
-      hotkeys: new HotkeyRegistry(),
-      pi,
-      session: new ActivePresetSession(),
-    });
-
-    const options = openPickerMock.mock.calls[0]?.[1] as {
-      onActivate: (preset: typeof selected) => Promise<unknown>;
-    };
-
-    requestActivationMock.mockResolvedValueOnce({
-      kind: "cancelled",
-      ok: false,
-      reason: "Activation cancelled.",
-    });
-
-    // Written after the picker opened, so activation must read it.
-    await dirs.writeJson(join(agentDir, "presets-plus", "config.json"), {
-      version: 2,
-      policy: { rules: [{ match: "work" }] },
-    });
-
-    await expect(options.onActivate(selected)).resolves.toEqual({
-      kind: "cancelled",
-      ok: false,
-      reason: "Activation cancelled.",
-    });
-
-    expect(requestActivationMock).toHaveBeenCalledWith(
-      selected,
-      {
-        rules: [expect.objectContaining({ match: "work" })],
-      },
-      ctx,
-      pi,
-      expect.any(ActivePresetSession),
-    );
   });
 
   it("dispatches `clear` and says when no preset is active", async () => {
@@ -444,7 +330,6 @@ describe("runPresetsCommand", () => {
       "Focus on one task.",
       "info",
     );
-    expect(requestActivationMock).not.toHaveBeenCalled();
   });
 
   it.each([

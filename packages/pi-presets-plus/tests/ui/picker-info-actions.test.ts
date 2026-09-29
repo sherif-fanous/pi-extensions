@@ -3,7 +3,7 @@
  * activation. Each test drives a keypress through the picker and checks the
  * dialog it opens, the overlay focus it restores, and how failures surface.
  */
-import type { ApplyResult } from "../../src/activation/apply.js";
+import type { ActivationOutcome } from "../../src/activation/activate.js";
 import { ActivePresetSession } from "../../src/activation/session.js";
 import { HotkeyRegistry } from "../../src/hotkey-registry.js";
 import type { LoadedPreset } from "../../src/types.js";
@@ -18,10 +18,13 @@ import {
 } from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const loadPresetsConfig = vi.fn();
-const openConfirm = vi.fn();
-const openInfoDialog = vi.fn();
-const reorderWithinScope = vi.fn();
+const { loadPresetsConfig, openConfirm, openInfoDialog, reorderWithinScope } =
+  vi.hoisted(() => ({
+    loadPresetsConfig: vi.fn(),
+    openConfirm: vi.fn(),
+    openInfoDialog: vi.fn(),
+    reorderWithinScope: vi.fn(),
+  }));
 
 vi.mock("../../src/store/api.js", async (importOriginal) => {
   const actual =
@@ -67,7 +70,7 @@ interface PickerHarness {
 
 interface RunPickerOptions {
   readonly active?: boolean;
-  readonly onActivate?: (preset: LoadedPreset) => Promise<ApplyResult>;
+  readonly onActivate?: (preset: LoadedPreset) => Promise<ActivationOutcome>;
   readonly presets?: LoadedPreset[];
   /** Replaces the status action's load, which follows the picker's own. */
   readonly statusLoad?: () => Promise<unknown>;
@@ -152,7 +155,7 @@ async function runPicker(
 ): Promise<PickerHarness> {
   const {
     active = false,
-    onActivate = () => Promise.resolve({ ok: true } as const),
+    onActivate = () => Promise.resolve({ kind: "applied", warnings: [] }),
     presets = [selected],
     statusLoad,
     statusWarnings = [],
@@ -213,11 +216,11 @@ describe("openPicker info actions", () => {
     const ctx = await runPicker("\r", {
       onActivate: () =>
         Promise.resolve({
-          kind: "no-key",
-          ok: false,
+          kind: "refused",
           reason:
             'Preset "plan" is unavailable: missing API key. Activation skipped.',
-        } as const),
+          warnings: [],
+        }),
     });
 
     expect(openInfoDialog).toHaveBeenCalledWith(ctx, {
@@ -335,7 +338,9 @@ describe("openPicker info actions", () => {
   it("reports a thrown action, ignores pending input, and accepts a later action", async () => {
     let rejectStatus: ((reason?: unknown) => void) | undefined;
     const next = { ...selected, name: "ship" };
-    const onActivate = vi.fn().mockResolvedValue({ ok: true });
+    const onActivate = vi
+      .fn()
+      .mockResolvedValue({ kind: "applied", warnings: [] });
 
     const ctx = await runPicker("s", {
       onActivate,

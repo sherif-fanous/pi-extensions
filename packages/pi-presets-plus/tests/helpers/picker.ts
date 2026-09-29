@@ -62,7 +62,9 @@ export function pickerMounter(
     const { openPicker } = await import("../../src/ui/picker.js");
     let component: Component | undefined;
     const session = new ActivePresetSession();
-    const onActivate = vi.fn().mockResolvedValue({ ok: true } as const);
+    const onActivate = vi
+      .fn()
+      .mockResolvedValue({ kind: "applied", warnings: [] });
     const ctx = {
       getActiveTools: () => [],
       ui: {

@@ -17,6 +17,14 @@ presets you can switch between. The family rules are in the root `AGENTS.md` and
   `src/store/api.ts`. The result holds the merged presets, the settings, the
   compiled user policy's rules, and every warning (settings, presets, and both
   policies) in `config`, which session start, `/presets reload`, status, and
-  `/presets policy` show. Activation never reports policy warnings. Pass its
-  `policy` to activation instead of reading the file again. A save reads only
-  its own scope, and refuses when any section of that file has a warning.
+  `/presets policy` show. Activation never reports policy warnings. A caller
+  that already holds the result passes it to `activate` as `config` instead of
+  reading the file again. A save reads only its own scope, and refuses when any
+  section of that file has a warning.
+- Every activation goes through `activate(ctx, pi, session, request)` in
+  `src/activation/activate.ts`, and session start's restore, `--preset`, and
+  policy default through `activateAtStartup` there. The request gives the
+  preset, or its name, and the trigger (`command`, `flag`, `hotkey`, `picker`),
+  which decides the wording and where warnings go. A name alone resolves through
+  `findPresetByName`, the one project-then-user rule, which `show-prompt` uses
+  too. Callers keep only their parsing and their own UI.

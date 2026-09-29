@@ -1,6 +1,6 @@
 /**
- * Identifies a preset by its name and scope, and compares or looks up
- * presets on that pair.
+ * Identifies a preset by its name and scope, compares or looks up presets
+ * on that pair, and looks one up by its name alone.
  */
 import type { PresetScope } from "./types.js";
 
@@ -16,6 +16,23 @@ export function findPreset<T extends PresetIdentity>(
   identity: PresetIdentity,
 ): T | undefined {
   return presets.find((preset) => samePresetIdentity(preset, identity));
+}
+
+/**
+ * Find the preset a bare name means: the project preset of that name, then
+ * the user one, skipping shadowed presets.
+ */
+export function findPresetByName<
+  T extends PresetIdentity & { readonly shadowed?: boolean },
+>(presets: readonly T[], name: string): T | undefined {
+  const named = presets.filter(
+    (preset) => preset.name === name && preset.shadowed !== true,
+  );
+
+  return (
+    named.find((preset) => preset.scope === "project") ??
+    named.find((preset) => preset.scope === "user")
+  );
 }
 
 /** Compare two optional preset identities by name and scope. */

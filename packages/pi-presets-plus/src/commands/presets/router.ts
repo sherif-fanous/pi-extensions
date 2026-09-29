@@ -3,12 +3,10 @@
  * activation by preset name, and answers the host's autocomplete requests
  * for the same argument.
  */
-import { requestActivation } from "../../activation/request.js";
+import { activate } from "../../activation/activate.js";
 import type { ActivePresetSession } from "../../activation/session.js";
 import { EXTENSION_NAME } from "../../extension-name.js";
 import type { HotkeyRegistry } from "../../hotkey-registry.js";
-import { loadPresetsConfig } from "../../store/api.js";
-import { notifyApplyResult } from "../../ui/apply-result.js";
 import { openPicker } from "../../ui/picker.js";
 import { runClear } from "./clear.js";
 import { runPolicy } from "./policy.js";
@@ -153,37 +151,14 @@ export async function runPresetsCommand(
     return;
   }
 
-  if (await activateNamedPreset(trimmedArgs, ctx, deps)) return;
+  const outcome = await activate(ctx, deps.pi, deps.session, {
+    name: trimmedArgs,
+    trigger: "command",
+  });
+
+  if (outcome.kind !== "unknown") return;
 
   notifyUsageWarning(ctx, EXTENSION_NAME, trimmedArgs, USAGE_FORMS);
-}
-
-/** Activate a preset by name, returning false when no such preset exists. */
-async function activateNamedPreset(
-  name: string,
-  ctx: ExtensionCommandContext,
-  { pi, session }: PresetsCommandDeps,
-): Promise<boolean> {
-  const { config, policy, presets } = await loadPresetsConfig(ctx);
-  const preset = presets.find(
-    (candidate) => candidate.name === name && !candidate.shadowed,
-  );
-
-  // Load warnings show at session start and on /presets reload. They are
-  // repeated only when the name is not loaded, since one may explain why.
-  if (!preset) {
-    config.notify(ctx);
-
-    return false;
-  }
-
-  const result = await requestActivation(preset, policy, ctx, pi, session);
-
-  if (!result.ok && result.kind === "cancelled") return true;
-
-  notifyApplyResult(ctx, preset, result);
-
-  return true;
 }
 
 async function runPicker(
@@ -197,14 +172,8 @@ async function runPicker(
   await openPicker(ctx, {
     hotkeys,
     inheritedTools: pi.getActiveTools(),
-    onActivate: async (preset) => {
-      const { policy } = await loadPresetsConfig(ctx);
-      const result = await requestActivation(preset, policy, ctx, pi, session);
-
-      if (result.ok) notifyApplyResult(ctx, preset, result);
-
-      return result;
-    },
+    onActivate: (preset) =>
+      activate(ctx, pi, session, { preset, trigger: "picker" }),
     pi,
     session,
   });

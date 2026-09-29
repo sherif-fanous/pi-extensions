@@ -4,11 +4,11 @@
  * active preset applied and tracked across a session.
  */
 
+import { activateAtStartup } from "./activation/activate.js";
 import {
   handleModelSelectDrift,
   syncDirtyFromCurrentState,
 } from "./activation/drift-handlers.js";
-import { maybeApplyPolicyDefault } from "./activation/policy-default.js";
 import { ActivePresetSession } from "./activation/session.js";
 import { captureStartupSelection } from "./activation/startup-selection.js";
 import {
@@ -16,7 +16,7 @@ import {
   runPresetsCommand,
 } from "./commands/presets/router.js";
 import { EXTENSION_NAME } from "./extension-name.js";
-import { applyPresetFlag, registerPresetFlag } from "./flag.js";
+import { registerPresetFlag } from "./flag.js";
 import { HotkeyRegistry } from "./hotkey-registry.js";
 import { findPreset } from "./preset-identity.js";
 import { loadPresetsConfig } from "./store/api.js";
@@ -75,32 +75,11 @@ export default function presetsPlus(pi: ExtensionAPI): void {
 
         config = loaded.config.withMigrations(migration);
         session.setShowInactiveStatus(showInactiveStatus, ctx);
-
-        const restoreResult = session.restoreFromBranch(
-          ctx.sessionManager.getBranch(),
-          presets,
-          ctx,
-        );
-
-        startupWarnings.push(...restoreResult.warnings);
-
-        const flagApplied = await applyPresetFlag(
-          pi,
-          ctx,
-          loaded,
-          session,
-          startupWarnings,
-        );
-
-        await maybeApplyPolicyDefault(
-          loaded,
+        await activateAtStartup(
           ctx,
           pi,
           session,
-          {
-            flagApplied,
-            restored: restoreResult.state !== undefined,
-          },
+          loaded,
           startupSelection,
           startupWarnings,
         );
@@ -120,7 +99,6 @@ export default function presetsPlus(pi: ExtensionAPI): void {
           hotkeyAnalysis,
           ctx,
           pi,
-          loadPresetsConfig,
           session,
           startupWarnings,
         );

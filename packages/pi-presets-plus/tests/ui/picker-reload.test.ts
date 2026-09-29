@@ -13,9 +13,11 @@ import {
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const loadPresetsConfig = vi.fn();
-const removePreset = vi.fn();
-const openConfirm = vi.fn();
+const { loadPresetsConfig, removePreset, openConfirm } = vi.hoisted(() => ({
+  loadPresetsConfig: vi.fn(),
+  removePreset: vi.fn(),
+  openConfirm: vi.fn(),
+}));
 
 vi.mock("../../src/store/api.js", async (importOriginal) => {
   const actual =
@@ -88,11 +90,6 @@ async function runDelete(
     analyzeHotkeys(baseline),
     { ui: { notify: () => undefined } } as never,
     { registerShortcut: () => undefined } as never,
-    () =>
-      Promise.resolve({
-        policy: { rules: [], warnings: [] },
-        presets: baseline,
-      }),
     {} as never,
   );
 
@@ -104,7 +101,7 @@ async function runDelete(
 
   const opened = openPicker(ctx as never, {
     hotkeys,
-    onActivate: () => Promise.resolve({ ok: true }),
+    onActivate: () => Promise.resolve({ kind: "applied", warnings: [] }),
     pi: ctx as never,
     session: new ActivePresetSession(),
   });

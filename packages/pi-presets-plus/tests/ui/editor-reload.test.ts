@@ -14,11 +14,14 @@ import {
 } from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const addPreset = vi.fn();
-const loadPresetsConfig = vi.fn();
-const movePreset = vi.fn();
-const updatePreset = vi.fn();
-const openConfirm = vi.fn();
+const { addPreset, loadPresetsConfig, movePreset, updatePreset, openConfirm } =
+  vi.hoisted(() => ({
+    addPreset: vi.fn(),
+    loadPresetsConfig: vi.fn(),
+    movePreset: vi.fn(),
+    updatePreset: vi.fn(),
+    openConfirm: vi.fn(),
+  }));
 
 vi.mock("../../src/store/api.js", async (importOriginal) => {
   const actual =
@@ -106,11 +109,6 @@ async function runSave(options: {
     analyzeHotkeys(baseline),
     { ui: { notify: () => undefined } } as never,
     { registerShortcut: () => undefined } as never,
-    () =>
-      Promise.resolve({
-        policy: { rules: [], warnings: [] },
-        presets: baseline,
-      }),
     {} as never,
   );
 

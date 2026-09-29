@@ -4,7 +4,7 @@
  */
 import type { ActivePresetSession } from "../../activation/session.js";
 import { EXTENSION_NAME } from "../../extension-name.js";
-import { findPreset } from "../../preset-identity.js";
+import { findPreset, findPresetByName } from "../../preset-identity.js";
 import { loadPresetsConfig } from "../../store/api.js";
 import type { ActivePresetState, LoadedPreset } from "../../types.js";
 import { openInfoDialog } from "../../ui/info-dialog.js";
@@ -47,7 +47,7 @@ export function findPresetForShowPrompt(
   loaded: readonly LoadedPreset[],
 ): ShowPromptResult {
   if (name !== undefined) {
-    const preset = findPresetByNameWithScopePrecedence(loaded, name);
+    const preset = findPresetByName(loaded, name);
 
     if (!preset) return { kind: "unknown", name };
 
@@ -138,16 +138,6 @@ export async function runShowPrompt(
     body: notification.body,
     title: PROMPT_DIALOG_TITLE,
   });
-}
-
-function findPresetByNameWithScopePrecedence(
-  loaded: readonly LoadedPreset[],
-  name: string,
-): LoadedPreset | undefined {
-  return (
-    findPreset(loaded, { name, scope: "project" }) ??
-    findPreset(loaded, { name, scope: "user" })
-  );
 }
 
 /** Narrow a preset to one with a non-empty prompt, or return undefined. */

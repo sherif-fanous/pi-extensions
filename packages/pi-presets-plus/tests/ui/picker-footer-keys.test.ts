@@ -20,8 +20,10 @@ import {
 } from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const loadPresetsConfig = vi.fn();
-const reorderWithinScope = vi.fn();
+const { loadPresetsConfig, reorderWithinScope } = vi.hoisted(() => ({
+  loadPresetsConfig: vi.fn(),
+  reorderWithinScope: vi.fn(),
+}));
 
 vi.mock("../../src/store/api.js", async (importOriginal) => {
   const actual =
@@ -75,7 +77,9 @@ function open(
   } = {},
 ): OpenedPicker {
   const rendered: string[] = [];
-  const onActivate = vi.fn().mockResolvedValue({ ok: true });
+  const onActivate = vi
+    .fn()
+    .mockResolvedValue({ kind: "applied", warnings: [] });
   let mounted: Component | undefined;
   const custom = vi.fn(
     createFakeCustom({

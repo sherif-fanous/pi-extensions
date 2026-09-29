@@ -17,7 +17,9 @@ import {
 } from "@sherif-fanous/pi-extensions-testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const loadPresetsConfig = vi.fn();
+const { loadPresetsConfig } = vi.hoisted(() => ({
+  loadPresetsConfig: vi.fn(),
+}));
 
 /** Raw terminal byte sequences for the arrow keys these tests drive. */
 const KEY_BYTES = {

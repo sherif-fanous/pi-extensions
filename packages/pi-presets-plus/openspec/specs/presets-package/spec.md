@@ -146,7 +146,7 @@ requirement is that no two surfaces hold their own copy of the same string.
 #### Scenario: Notify-surfaced messages from non-overlay paths follow the convention
 
 - **WHEN** the package emits a `ctx.ui.notify` or `notifyWarnings` call from
-  `hotkeys.ts`, `flag.ts`, `index.ts` (session restore),
+  `hotkeys.ts`, `activation/activate.ts`, `index.ts` (session restore),
   `commands/presets/router.ts`, `commands/presets/reload.ts`, or
   `commands/presets/status.ts`
 - **THEN** the message SHALL be sentence-case English with a terminal period
@@ -375,9 +375,11 @@ The class SHALL replace and consolidate the deleted modules
    `LoadedPreset.hotkeyConflict` and `LoadedPreset.hotkeyShadowsBuiltin` as a
    side effect for downstream UI read sites, and returns the analysis. Called by
    `loadPresetsConfig` on every storage read.
-2. `bindForSession(presets, analysis, ctx, pi, loadCurrent): void` — registers
-   `pi` shortcuts, emits session-start conflict/shadow/invalid notifications,
-   and captures the runtime baseline internally. Called once at `session_start`.
+2. `bindForSession(presets, analysis, ctx, pi, session, warnings?): void` —
+   registers `pi` shortcuts, emits session-start conflict/shadow/invalid
+   notifications, and captures the runtime baseline internally. Each shortcut
+   activates its preset's name and scope through `activate` with the `hotkey`
+   trigger. Called once at `session_start`.
 3. `saveNeedsReload(initial, saved): boolean` — query for the editor's post-Save
    reload prompt.
 4. `deleteNeedsReload(identity): boolean` — query for the picker's post-Delete
@@ -413,7 +415,7 @@ and `src/hotkeys.ts` SHALL NOT exist after this change.
 
 #### Scenario: bindForSession captures the baseline internally
 
-- **WHEN** `bindForSession(presets, analysis, ctx, pi, loadCurrent)` completes
+- **WHEN** `bindForSession(presets, analysis, ctx, pi, session)` completes
 - **THEN** the registry's runtime baseline SHALL reflect the hotkeys that were
   just registered
 - **AND** there SHALL NOT be a separate public method to set the baseline
@@ -431,7 +433,9 @@ lookup helpers in `src/preset-identity.ts`, exporting:
 
 1. `interface PresetIdentity { readonly name: string; readonly scope: PresetScope }`.
 2. `findPreset<T extends PresetIdentity>(presets, identity): T | undefined`.
-3. `samePresetIdentity(a, b): boolean`.
+3. `findPresetByName(presets, name)`, the one rule for a bare preset name: the
+   project preset of that name, then the user one, skipping shadowed presets.
+4. `samePresetIdentity(a, b): boolean`.
 
 The previously-defined `PresetIdentity` interface in `src/hotkey-conflicts.ts`
 SHALL be deleted; the new `hotkey-registry.ts` SHALL import the type from
@@ -454,8 +458,8 @@ Every existing call site that performs the identity-equality lookup
 #### Scenario: PresetIdentity is no longer hotkey-shaped
 
 - **WHEN** `src/preset-identity.ts` is inspected after the change
-- **THEN** it SHALL export `PresetIdentity`, `findPreset`, and
-  `samePresetIdentity`
+- **THEN** it SHALL export `PresetIdentity`, `findPreset`, `findPresetByName`,
+  and `samePresetIdentity`
 - **AND** `src/hotkey-conflicts.ts` SHALL NOT exist
 
 ### Requirement: Clear and status return finished reports
@@ -494,7 +498,7 @@ SHALL live in one module, `src/ui/overlay-wording.ts`, which both reports read.
 - **AND** `tests/ui/clear-report.test.ts` SHALL import `clearReport` from
   `src/ui/clear-report.ts`
 
-### Requirement: Apply, clear, drift, and flag take session as an explicit parameter
+### Requirement: Apply, clear, drift, and activation take session as an explicit parameter
 
 Functions that mutate or read the active-preset attachment SHALL declare
 `session: ActivePresetSession` as an explicit parameter rather than reaching for
@@ -505,7 +509,9 @@ a module-scoped accessor. Concretely:
 - `handleModelSelectDrift(event, ctx, pi, session)` and
   `syncDirtyFromCurrentState(ctx, pi, session)` in
   `src/activation/drift-handlers.ts`.
-- `applyPresetFlag(pi, ctx, presets, session)` in `src/flag.ts`.
+- `activate(ctx, pi, session, request)` and
+  `activateAtStartup(ctx, pi, session, config, startup, warnings)` in
+  `src/activation/activate.ts`.
 - The hotkey activation handler invoked by `HotkeyRegistry.bindForSession` SHALL
   receive the session through the registry's binding closure.
 
@@ -516,8 +522,7 @@ consumer for the lifetime of the extension.
 #### Scenario: Functions declare their session dependency
 
 - **WHEN** the signatures of `apply`, `clear`, `handleModelSelectDrift`,
-  `syncDirtyFromCurrentState`, and `applyPresetFlag` are inspected after the
-  change
+  `syncDirtyFromCurrentState`, `activate`, and `activateAtStartup` are inspected
 - **THEN** each SHALL accept an `ActivePresetSession` parameter
 - **AND** none SHALL import a free `getActive()` / `setActive()` /
   `clearActive()` from a module-scoped cell
@@ -527,6 +532,44 @@ consumer for the lifetime of the extension.
 - **WHEN** the source tree is searched for `new ActivePresetSession(`
 - **THEN** there SHALL be exactly one occurrence in `src/`, inside the
   `presetsPlus(pi)` default export of `src/index.ts`
+
+### Requirement: One module activates a preset for every trigger
+
+`src/activation/activate.ts` SHALL export `activate(ctx, pi, session, request)`,
+where `request` gives a loaded `preset`, or a `name` with an optional `scope`,
+and a `trigger`: `command`, `flag`, `hotkey`, or `picker`. It SHALL own the
+whole activation: finding a named preset (by exact identity when a scope is
+given, and through `findPresetByName` otherwise), reading the configuration when
+the caller passes none as `config`, the access-policy check and its override
+prompt, applying the preset, and showing the outcome. The trigger SHALL decide
+the wording (`flag` and `hotkey` name Presets Plus as the subject) and whether
+warnings are notified or returned in the outcome for the startup notification
+(`flag`). A cancelled override SHALL show nothing. A `picker` refusal SHALL come
+back without a notification, for the picker's own dialog; every other refusal
+SHALL be one error notification.
+
+The same module SHALL export
+`activateAtStartup(ctx, pi, session, config, startup, warnings)`, which runs
+session start's steps in order: restore the session's preset, apply the one
+`--preset` names, then apply the access policy's default when neither the
+restore nor the flag claimed the session. It SHALL add every warning to
+`warnings`, including a policy default that can't be applied.
+
+`/presets <name>`, the picker and the editor's Test, the preset shortcuts, and
+session start SHALL activate only through these two functions, and keep only
+their own parsing, registration, and UI.
+
+#### Scenario: Every trigger shares one activation
+
+- **WHEN** the source tree is searched for calls to `apply(` outside
+  `src/activation/`
+- **THEN** there SHALL be none
+
+#### Scenario: A hotkey keeps its preset's scope
+
+- **GIVEN** a user preset `plan` with a hotkey bound at session start
+- **WHEN** a project preset named `plan` is added and the hotkey is pressed
+- **THEN** the user preset `plan` SHALL be activated
 
 ### Requirement: Overlays follow Pi's list keybindings
 

@@ -12,7 +12,9 @@ import {
 import { Key, type Component } from "@earendil-works/pi-tui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const loadPresetsConfig = vi.fn();
+const { loadPresetsConfig } = vi.hoisted(() => ({
+  loadPresetsConfig: vi.fn(),
+}));
 
 /** Raw terminal byte sequence for the one key these tests drive. */
 const KEY_BYTES = {

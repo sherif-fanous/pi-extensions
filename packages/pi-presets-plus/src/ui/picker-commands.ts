@@ -2,8 +2,8 @@
  * Runs the dialog flows behind the picker's action keys: new, edit,
  * duplicate, delete, reorder, clear, and status.
  */
+import type { ActivationOutcome } from "../activation/activate.js";
 import { clear } from "../activation/clear.js";
-import type { ActivationResult } from "../activation/request.js";
 import type { ActivePresetSession } from "../activation/session.js";
 import { statusReport } from "../commands/presets/status.js";
 import type { HotkeyRegistry } from "../hotkey-registry.js";
@@ -63,7 +63,7 @@ export interface PickerCommandHost {
   /** Hide the picker overlay while a nested dialog runs. */
   runWithHiddenOverlay<T>(fn: () => Promise<T>): Promise<T>;
   /** Apply a preset (used by the editor's Test button as a passthrough). */
-  onActivate(preset: LoadedPreset): Promise<ActivationResult>;
+  onActivate(preset: LoadedPreset): Promise<ActivationOutcome>;
   /** Reload presets from disk and re-focus on `selectionKey`, if given. */
   refreshPresets(selectionKey?: string): Promise<void>;
   /** Close the picker; pass an `activated` payload when a preset was applied. */
@@ -351,11 +351,14 @@ export class PickerCommands {
           this.host.finish(undefined);
           reloadAfterOverlayClose(this.host.ctx);
         },
-        onTest: (candidate) =>
-          this.host.onActivate({
+        onTest: async (candidate) => {
+          const outcome = await this.host.onActivate({
             ...candidate,
             unavailable: undefined,
-          }),
+          });
+
+          return { ok: outcome.kind === "applied" };
+        },
         pi: this.host.pi,
         hotkeys: this.host.hotkeys,
         presets: this.host.getAllPresets(),

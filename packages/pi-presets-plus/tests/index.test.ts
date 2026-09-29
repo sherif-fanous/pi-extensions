@@ -6,6 +6,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import presetsPlus from "../src/index.js";
 import { toPersistedPreset } from "../src/store/api.js";
 import type { LoadedPreset, ThinkingLevel } from "../src/types.js";
 import { makeStubModelRegistry } from "./helpers/model-registry.js";
@@ -22,20 +23,6 @@ import {
   type TempConfigDirs,
 } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const { maybeApplyPolicyDefaultMock } = vi.hoisted(() => ({
-  maybeApplyPolicyDefaultMock: vi.fn(),
-}));
-
-vi.mock("../src/activation/policy-default.js", () => ({
-  maybeApplyPolicyDefault: maybeApplyPolicyDefaultMock,
-}));
-
-const { default: presetsPlus } = await import("../src/index.js");
-const { maybeApplyPolicyDefault: realMaybeApplyPolicyDefault } =
-  await vi.importActual<typeof import("../src/activation/policy-default.js")>(
-    "../src/activation/policy-default.js",
-  );
 
 let dirs: TempConfigDirs;
 let agentDir: string;
@@ -59,7 +46,10 @@ function makeContext(
     mode,
     model: { id: "gpt-5", provider: "openai" } as Model<Api>,
     modelRegistry: makeStubModelRegistry({
-      models: { anthropic: { "claude-opus": { hasKey: true } } },
+      models: {
+        anthropic: { "claude-opus": { hasKey: true } },
+        openai: { "gpt-5": { hasKey: true, reasoning: true } },
+      },
     }),
     sessionManager: { getBranch: () => branch },
     ui: {
@@ -77,7 +67,7 @@ function makePi() {
   const spies = {
     getThinkingLevel: vi.fn((): ThinkingLevel => "medium"),
     setActiveTools: vi.fn(),
-    setModel: vi.fn(),
+    setModel: vi.fn(() => Promise.resolve(true)),
     setThinkingLevel: vi.fn(),
   };
   const fake = createFakePi({
@@ -139,8 +129,6 @@ async function writeUserPresets(
 beforeEach(async () => {
   dirs = await createTempConfigDirs();
   agentDir = dirs.agentDir;
-  maybeApplyPolicyDefaultMock.mockReset();
-  maybeApplyPolicyDefaultMock.mockImplementation(realMaybeApplyPolicyDefault);
 });
 
 afterEach(async () => {
@@ -251,9 +239,29 @@ describe("session_start configuration", () => {
   it.each(["startup", "reload", "new", "resume", "fork"] as const)(
     "captures startup values before %s preset processing",
     async (reason) => {
+      await dirs.writeJson(join(agentDir, "settings.json"), {
+        defaultModel: "gpt-5",
+        defaultProvider: "openai",
+        defaultThinkingLevel: "medium",
+      });
+
+      await writeUserPresets(
+        [
+          {
+            model: "claude-opus",
+            name: "work",
+            provider: "anthropic",
+            scope: "user",
+          },
+        ],
+        {
+          policy: { rules: [{ default: { pattern: "^work$" }, match: ".*" }] },
+        },
+      );
+
       const { fake, spies } = makePi();
       const status: Record<string, string | undefined> = {};
-      const { ctx } = makeContext(status);
+      const { ctx, notify } = makeContext(status);
 
       // Pi's model and thinking level change once the configuration
       // starts loading, which asks whether the project is trusted.
@@ -266,64 +274,15 @@ describe("session_start configuration", () => {
         return true;
       };
 
-      maybeApplyPolicyDefaultMock.mockResolvedValue(false);
-
       presetsPlus(fake.pi);
       await startSession(fake, ctx, reason);
 
-      expect(maybeApplyPolicyDefaultMock).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.anything(),
-        expect.anything(),
-        expect.anything(),
-        expect.anything(),
-        {
-          model: { id: "gpt-5", provider: "openai" },
-          thinkingLevel: "medium",
-        },
-        expect.any(Array),
+      expect(notify).toHaveBeenCalledWith(
+        'Presets Plus applied preset "work".',
+        "info",
       );
     },
   );
-
-  it("passes a restored attachment as higher precedence without changing Pi state", async () => {
-    await writeUserPresets([
-      {
-        model: "claude-opus",
-        name: "restored",
-        provider: "anthropic",
-        scope: "user",
-      },
-    ]);
-
-    const branch = [
-      {
-        customType: "presets-plus:active",
-        data: { name: "restored", scope: "user" },
-        type: "custom" as const,
-      },
-    ] as ReturnType<ExtensionContext["sessionManager"]["getBranch"]>;
-    const { fake, spies } = makePi();
-    const status: Record<string, string | undefined> = {};
-    const { ctx } = makeContext(status, "tui", branch);
-
-    maybeApplyPolicyDefaultMock.mockResolvedValue(false);
-    presetsPlus(fake.pi);
-    await startSession(fake, ctx, "resume");
-
-    expect(maybeApplyPolicyDefaultMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      expect.objectContaining({ restored: true }),
-      expect.anything(),
-      expect.any(Array),
-    );
-    expect(spies.setModel).not.toHaveBeenCalled();
-    expect(spies.setThinkingLevel).not.toHaveBeenCalled();
-    expect(spies.setActiveTools).not.toHaveBeenCalled();
-  });
 
   it("keeps an SDK-shaped print session unchanged through the next turn", async () => {
     const directoryDefault: LoadedPreset = {

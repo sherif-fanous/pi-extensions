@@ -7,7 +7,9 @@ import { pickerMounter } from "../helpers/picker.js";
 import { Key, type Component } from "@earendil-works/pi-tui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const loadPresetsConfig = vi.fn();
+const { loadPresetsConfig } = vi.hoisted(() => ({
+  loadPresetsConfig: vi.fn(),
+}));
 /**
  * Raw terminal byte sequences for the special keys these tests drive.
  *

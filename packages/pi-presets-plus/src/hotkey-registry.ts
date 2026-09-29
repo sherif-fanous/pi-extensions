@@ -3,13 +3,11 @@
  * ones as session shortcuts, and tracks which bindings are live so the
  * editor can tell when a preset change needs a reload to take effect.
  */
-import { requestActivation } from "./activation/request.js";
+import { activate } from "./activation/activate.js";
 import type { ActivePresetSession } from "./activation/session.js";
 import { EXTENSION_NAME } from "./extension-name.js";
-import { findPreset, type PresetIdentity } from "./preset-identity.js";
-import type { PresetsConfig } from "./store/api.js";
+import type { PresetIdentity } from "./preset-identity.js";
 import type { LoadedPreset } from "./types.js";
-import { notifyApplyResult } from "./ui/apply-result.js";
 import {
   isPiBuiltin,
   parseHotkey,
@@ -21,10 +19,7 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import type { KeyId } from "@earendil-works/pi-tui";
-import {
-  describeErrorSentence,
-  notifyWarnings,
-} from "@sherif-fanous/pi-extensions-core";
+import { describeErrorSentence } from "@sherif-fanous/pi-extensions-core";
 
 export type { PresetIdentity } from "./preset-identity.js";
 
@@ -46,11 +41,6 @@ export interface HotkeyDiagnostic {
   readonly preset: LoadedPreset & { hotkey: string };
   readonly reason: string;
 }
-
-/** Re-reads the presets and the policy from disk when a shortcut fires. */
-export type CurrentConfigLoader = (
-  ctx: ExtensionContext,
-) => Promise<Pick<PresetsConfig, "policy" | "presets">>;
 
 /**
  * Tracks the hotkeys bound in the running session and the pending hotkey
@@ -78,7 +68,6 @@ export class HotkeyRegistry {
     hotkeyAnalysis: HotkeyAnalysis,
     ctx: Pick<ExtensionContext, "ui">,
     pi: ExtensionAPI,
-    loadCurrentConfig: CurrentConfigLoader,
     session: ActivePresetSession,
     warnings?: string[],
   ): void {
@@ -117,33 +106,10 @@ export class HotkeyRegistry {
         description: `Activate preset "${registeredName}"`,
         handler: async (handlerCtx) => {
           try {
-            const { policy, presets: currentPresets } =
-              await loadCurrentConfig(handlerCtx);
-            const current = findPreset(currentPresets, {
+            await activate(handlerCtx, pi, session, {
               name: registeredName,
               scope: registeredScope,
-            });
-
-            if (!current) {
-              notifyWarnings(handlerCtx, EXTENSION_NAME, [
-                `Preset "${registeredName}" no longer exists.`,
-              ]);
-
-              return;
-            }
-
-            const result = await requestActivation(
-              current,
-              policy,
-              handlerCtx,
-              pi,
-              session,
-            );
-
-            if (!result.ok && result.kind === "cancelled") return;
-
-            notifyApplyResult(handlerCtx, current, result, {
-              unprompted: true,
+              trigger: "hotkey",
             });
           } catch (err) {
             handlerCtx.ui.notify(

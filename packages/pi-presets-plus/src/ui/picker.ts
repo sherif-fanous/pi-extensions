@@ -2,8 +2,8 @@
  * Drives the `ctx.ui.custom` overlay that lets the user browse, filter,
  * edit, and activate presets.
  */
+import type { ActivationOutcome } from "../activation/activate.js";
 import { detectDriftReasons } from "../activation/drift.js";
-import type { ActivationResult } from "../activation/request.js";
 import type { ActivePresetSession } from "../activation/session.js";
 import { EXTENSION_NAME } from "../extension-name.js";
 import type { HotkeyRegistry } from "../hotkey-registry.js";
@@ -89,11 +89,10 @@ import {
 export interface PickerOptions {
   inheritedTools?: readonly string[];
   /**
-   * Activation callback. Returns `{ ok: true }` to close the picker, or
-   * `{ ok: false, reason }` to keep it open and surface the refusal in an
-   * overlay-appropriate dialog.
+   * Activation callback. An `applied` outcome closes the picker, and a
+   * `refused` one keeps it open and shows the reason in a dialog.
    */
-  onActivate(preset: LoadedPreset): Promise<ActivationResult>;
+  onActivate(preset: LoadedPreset): Promise<ActivationOutcome>;
   hotkeys: HotkeyRegistry;
   pi?: ExtensionAPI;
   session: ActivePresetSession;
@@ -147,7 +146,7 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
     private inheritedTools: readonly string[],
     readonly hotkeys: HotkeyRegistry,
     readonly session: ActivePresetSession,
-    readonly onActivate: (preset: LoadedPreset) => Promise<ActivationResult>,
+    readonly onActivate: (preset: LoadedPreset) => Promise<ActivationOutcome>,
     private readonly done: (result: PickerResult | undefined) => void,
     private readonly requestRender: () => void,
   ) {
@@ -320,20 +319,20 @@ class PresetPickerComponent implements Component, Focusable, PickerCommandHost {
 
     if (!preset) return;
 
-    const result = await this.runWithHiddenOverlay(async () => {
-      const activationResult = await this.onActivate(preset);
+    const outcome = await this.runWithHiddenOverlay(async () => {
+      const activation = await this.onActivate(preset);
 
-      if (!activationResult.ok && activationResult.kind !== "cancelled") {
+      if (activation.kind === "refused") {
         await openInfoDialog(this.ctx, {
-          body: this.theme.fg("error", activationResult.reason),
+          body: this.theme.fg("error", activation.reason),
           title: ACTIVATION_FAILED_TITLE,
         });
       }
 
-      return activationResult;
+      return activation;
     });
 
-    if (result.ok) this.finish({ activated: preset });
+    if (outcome.kind === "applied") this.finish({ activated: preset });
   }
 
   private cycleScope(direction: -1 | 1): void {
