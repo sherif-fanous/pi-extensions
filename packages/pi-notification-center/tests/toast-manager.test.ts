@@ -3,8 +3,8 @@ import { createNotificationEntry } from "../src/history.js";
 import type { NotificationConfig, ToastConfig } from "../src/types.js";
 import { ToastManager } from "../src/ui/toast-manager.js";
 import { TOAST_FRAME_ROWS } from "../src/ui/toast-stack.js";
-import type { BridgeUi } from "../src/ui/tui-bridge.js";
 import {
+  createFakeContext,
   createFakeTui,
   createFakeWidgets,
   type FakeTui,
@@ -168,8 +168,8 @@ describe("ToastManager", () => {
   });
 
   it("keeps recording without an overlay when the bridge fails", async () => {
-    const ui: BridgeUi = { setWidget: () => undefined };
-    const manager = new ToastManager(ui, DEFAULT_CONFIG);
+    // The fake context's `setWidget` never calls the factory.
+    const manager = new ToastManager(createFakeContext(), DEFAULT_CONFIG);
 
     manager.show(createNotificationEntry("history only", "info", 1));
 
@@ -200,6 +200,9 @@ function setup(overrides: ConfigOverrides = {}): {
 
   return {
     fake,
-    manager: new ToastManager(createFakeWidgets(fake), config(overrides)),
+    manager: new ToastManager(
+      createFakeContext({ ui: createFakeWidgets(fake) }),
+      config(overrides),
+    ),
   };
 }

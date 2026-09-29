@@ -16,16 +16,15 @@ import {
   type NotificationSeverity,
 } from "./types.js";
 import { ToastManager } from "./ui/toast-manager.js";
-import type { BridgeUi } from "./ui/tui-bridge.js";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
-import { isInteractiveTui } from "@sherif-fanous/pi-extensions-core";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+  isInteractiveTui,
+  type LiveTuiContext,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** Minimal context surface the runtime mutates and reads. */
-export type CaptureContext = Pick<ExtensionContext, "mode"> & {
-  ui: BridgeUi & { notify: NotifyFn };
+export type CaptureContext = LiveTuiContext & {
+  ui: LiveTuiContext["ui"] & { notify: NotifyFn };
 };
 
 /** Minimal extension API surface used for persistence. */
@@ -67,7 +66,7 @@ export class CaptureRuntime {
 
     const runtime = new CaptureRuntime(ctx, pi);
 
-    runtime.manager = new ToastManager(ctx.ui, config);
+    runtime.manager = new ToastManager(ctx, config);
     // Stored by reference, not bound, so restoration puts back the exact
     // same function object the context had before installation.
     runtime.original = ctx.ui.notify;

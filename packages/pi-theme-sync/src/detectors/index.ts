@@ -6,7 +6,6 @@ import {
   enableColorSchemeSubscription,
   hasColorSchemeApi,
 } from "./pi/color-scheme.js";
-import { getTuiHandle } from "./pi/tui-handle.js";
 import { detectAppearanceViaSystem } from "./system/appearance.js";
 import { probeDecMode2031Support } from "./terminal/dec-mode-2031.js";
 import { detectAppearanceViaOsc11Background } from "./terminal/osc-11.js";
@@ -15,6 +14,9 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
+import { getLiveTui } from "@sherif-fanous/pi-extensions-core";
+
+const TUI_WIDGET_KEY = "theme-sync:tui-handle";
 
 /** A running subscription and what the runtime shows about it. */
 export type ActiveSubscription = {
@@ -138,7 +140,10 @@ export async function probeDetectors(
   detectors: DetectorSet,
   hooks: DetectorHooks,
 ): Promise<SessionDetectors> {
-  const context: DetectorContext = { ctx, tui: getTuiHandle(ctx) };
+  const context: DetectorContext = {
+    ctx,
+    tui: getLiveTui(ctx, TUI_WIDGET_KEY)?.tui,
+  };
   const reportFailure = (label: string) =>
     hooks.warn(`${label} query failed. Using the other available detectors.`);
   const detect = async (detector: PollingDetector): Promise<Appearance> => {

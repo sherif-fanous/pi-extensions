@@ -31,6 +31,9 @@
   run only in the interactive terminal UI and shows one warning in other modes
 - Added: Add `overlayOptions` and `overlayMaxHeight`, which give every overlay
   one of two sizes, main or nested, and the height it lays itself out to
+- Added: Add `getLiveTui`, which gets Pi's live TUI and its theme for an overlay
+  or terminal API that `ctx.ui` does not offer, without drawing anything or
+  moving focus
 - Added: Add `renderFrame`, `frameTop`, `frameLine`, `frameSegment`,
   `frameBodyWidth`, `frameBodyRows`, and `padToWidth`, which draw the family's
   bordered frame with the title in the top border and a dim footer, fitted to

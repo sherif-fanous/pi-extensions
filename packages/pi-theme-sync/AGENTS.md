@@ -22,10 +22,10 @@ this package.
   probing, with the detector warnings as extras.
 - Expose new runtime state through `ThemeSyncRuntime` or `RuntimeStatus`, never
   through exported mutable bindings.
-- `getTuiHandle` gets Pi's live TUI through a transient zero-line `setWidget`
-  factory, because `ExtensionUIContext` doesn't expose the color-scheme API.
-  Keep the workaround isolated, acquire the handle once per session start (in
-  `probeDetectors`), and never cache it across sessions.
+- `probeDetectors` gets Pi's live TUI through core's `getLiveTui`, because
+  `ExtensionUIContext` doesn't expose the color-scheme API. Acquire the handle
+  once per session start (in `probeDetectors`), and never cache it across
+  sessions.
 - Pi's color-scheme API is the primary terminal source: Pi owns DSR 996/997
   parsing and the notification lifecycle, so never parse color-scheme reports
   from raw terminal input.

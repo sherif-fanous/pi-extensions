@@ -508,6 +508,32 @@ rounded down, no more than the rows inside the margins, and at least 1. Lay the
 surface out to this height and scroll anything taller, because Pi keeps only the
 top rows of a taller render.
 
+### `getLiveTui(ctx: LiveTuiContext, key: string): LiveTui | undefined`
+
+Returns `{ tui, theme }`, Pi's live TUI and the theme it renders with, for work
+`ctx.ui` does not cover, such as a passive overlay pushed with `showOverlay` or
+Pi's terminal color-scheme API. Pi hands the TUI only to component factories, so
+the helper adds a zero-line widget under `key` (`<slug>:<thing>`), keeps what
+its factory receives, and removes the widget before returning. Nothing is drawn
+and keyboard focus never moves.
+
+It returns `undefined` outside the interactive terminal UI, when `setWidget`
+throws, or when Pi does not call the factory. It relies on Pi calling a widget
+factory synchronously inside `setWidget`. Get the TUI once per session start and
+don't keep it across sessions.
+
+```ts
+import { getLiveTui } from "@sherif-fanous/pi-extensions-core";
+
+const live = getLiveTui(ctx, "notification-center:bridge");
+
+if (live) {
+  const handle = live.tui.showOverlay(new ToastStack(live.theme), {
+    nonCapturing: true,
+  });
+}
+```
+
 ### `renderFrame(options: FrameOptions): string[]`
 
 Draws a whole frame from `{ title, titleRight?, body, footer, theme, width }`:

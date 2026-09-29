@@ -3,8 +3,9 @@
 ## Purpose
 
 Give the extensions' interactive surfaces one frame, one key-hint notation, one
-reading of Pi's list keybindings, one list model, and two overlay sizes, so
-every overlay looks and behaves the same and fits any terminal width.
+reading of Pi's list keybindings, one list model, two overlay sizes, and one way
+to reach Pi's live TUI, so every overlay looks and behaves the same and fits any
+terminal width.
 
 ## Requirements
 
@@ -220,3 +221,34 @@ no more than `terminalRows - 2`, and at least 1.
 
 - **WHEN** `overlayMaxHeight` receives 40
 - **THEN** it returns 32
+
+### Requirement: The live TUI is reached through a transient widget
+
+`getLiveTui(ctx, key)` SHALL, when `isInteractiveTui(ctx)` is `true`, call
+`ctx.ui.setWidget(key, factory)` with a factory that keeps the TUI and theme it
+receives and returns a component that renders no lines, then call
+`ctx.ui.setWidget(key, undefined)`, and return `{ tui, theme }`. It SHALL return
+`undefined` without calling `setWidget` in every other run mode, and SHALL
+return `undefined` when adding the widget throws or the factory is not called
+before `setWidget` returns. A failure to remove the widget SHALL NOT change the
+result.
+
+#### Scenario: Interactive mode
+
+- **WHEN** `getLiveTui` receives a context whose mode is `tui` and whose
+  `setWidget` calls the factory with a TUI and a theme
+- **THEN** it returns that TUI and theme
+- **AND** `setWidget` was last called with the key and `undefined`
+
+#### Scenario: Any other mode
+
+- **WHEN** `getLiveTui` receives a context whose mode is `print`, `json`, or
+  `rpc`
+- **THEN** it returns `undefined`
+- **AND** `setWidget` is not called
+
+#### Scenario: Pi does not call the factory
+
+- **WHEN** `setWidget` returns without calling the factory, or throws
+- **THEN** `getLiveTui` returns `undefined`
+- **AND** `setWidget` was last called with the key and `undefined`

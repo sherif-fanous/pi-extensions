@@ -1,13 +1,12 @@
 /**
  * Obtains the render surface the toast stack draws into, bridging from
- * the extension UI context to the live TUI.
+ * the extension context to the live TUI.
  *
- * The surface is a `nonCapturing` overlay anchored top-right, created
- * through the factory form of `ctx.ui.setWidget` purely to reach the TUI
- * instance. Two properties keep it out of other extensions' way, and
- * both are load-bearing:
+ * The surface is a `nonCapturing` overlay anchored top-right, pushed on
+ * the TUI that core's `getLiveTui` reaches. Two properties keep it out of
+ * other extensions' way, and both are load-bearing:
  *
- * 1. `setWidget` never moves keyboard focus, unlike `ctx.ui.custom`,
+ * 1. Reaching the TUI never moves keyboard focus, unlike `ctx.ui.custom`,
  *    whose non-overlay branch defocuses the active component and hands
  *    focus to the core editor when it completes.
  * 2. The overlay is created once, eagerly, at session start, before any
@@ -24,8 +23,11 @@ import type {
   Component,
   OverlayHandle,
   OverlayOptions,
-  TUI,
 } from "@earendil-works/pi-tui";
+import {
+  getLiveTui,
+  type LiveTuiContext,
+} from "@sherif-fanous/pi-extensions-core";
 
 /** Everything the toast manager needs from a successful bridge call. */
 export interface ToastSurface<TComponent extends Component = Component> {
@@ -36,22 +38,6 @@ export interface ToastSurface<TComponent extends Component = Component> {
   /** Show or hide the surface without leaving the overlay stack. */
   setVisible: (visible: boolean) => void;
 }
-
-/**
- * UI surface required to open the bridge.
- *
- * Only the factory form of `setWidget` is declared, because the string
- * form cannot deliver the TUI instance.
- */
-export type BridgeUi = {
-  setWidget(
-    key: string,
-    content:
-      | ((tui: TUI, theme: Theme) => Component & { dispose?(): void })
-      | undefined,
-    options?: { placement?: "aboveEditor" | "belowEditor" },
-  ): void;
-};
 
 /**
  * Builds the surface's component once the TUI's theme and terminal are
@@ -74,74 +60,46 @@ export type ToastComponentFactory<TComponent extends Component> = (
  * arrives.
  */
 export function createToastSurface<TComponent extends Component>(
-  ui: BridgeUi,
+  ctx: LiveTuiContext,
   createComponent: ToastComponentFactory<TComponent>,
   overlayOptions: OverlayOptions,
 ): ToastSurface<TComponent> | undefined {
-  let surface: ToastSurface<TComponent> | undefined;
+  const live = getLiveTui(ctx, TOAST_WIDGET_KEY);
+
+  if (!live) return undefined;
+
+  const { theme, tui } = live;
 
   try {
-    ui.setWidget(TOAST_WIDGET_KEY, (tui, theme) => {
-      // A host that invokes the factory more than once would otherwise
-      // get a second overlay, doubling every toast.
-      if (!surface) {
-        const component = createComponent(theme, () => ({
-          height: tui.terminal.rows,
-          width: tui.terminal.columns,
-        }));
-        const handle: OverlayHandle = tui.showOverlay(component, {
-          ...overlayOptions,
-          // A toast must never take focus from the editor or an active
-          // component.
-          nonCapturing: true,
-        });
-
-        handle.setHidden(true);
-
-        surface = {
-          component,
-          remove: () => {
-            handle.hide();
-          },
-          requestRender: () => {
-            tui.requestRender();
-          },
-          setVisible: (visible) => {
-            handle.setHidden(!visible);
-          },
-        };
-      }
-
-      return EMPTY_WIDGET;
+    const component = createComponent(theme, () => ({
+      height: tui.terminal.rows,
+      width: tui.terminal.columns,
+    }));
+    const handle: OverlayHandle = tui.showOverlay(component, {
+      ...overlayOptions,
+      // A toast must never take focus from the editor or an active
+      // component.
+      nonCapturing: true,
     });
+
+    handle.setHidden(true);
+
+    return {
+      component,
+      remove: () => {
+        handle.hide();
+      },
+      requestRender: () => {
+        tui.requestRender();
+      },
+      setVisible: (visible) => {
+        handle.setHidden(!visible);
+      },
+    };
   } catch {
     return undefined;
-  } finally {
-    // The widget exists only to hand over the TUI instance. Removing it
-    // leaves the overlay alone, since the overlay has its own handle.
-    try {
-      ui.setWidget(TOAST_WIDGET_KEY, undefined);
-    } catch {
-      // A host that cannot clear the widget still gave back a usable
-      // surface, and a zero-height widget draws nothing.
-    }
   }
-
-  return surface;
 }
 
-/** Namespaced so the transient bridge widget cannot collide. */
+/** Namespaced so the transient widget `getLiveTui` adds cannot collide. */
 const TOAST_WIDGET_KEY = "notification-center:bridge";
-
-/**
- * Zero-height widget returned by the bridge factory.
- *
- * `setWidget` requires a component, but this one exists only to obtain
- * the TUI instance and is removed immediately, so it renders nothing.
- */
-const EMPTY_WIDGET: Component = {
-  invalidate: () => {
-    // Nothing is cached.
-  },
-  render: () => [],
-};

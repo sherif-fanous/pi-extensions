@@ -15,11 +15,8 @@ import {
   TOAST_HORIZONTAL_MARGIN,
   ToastStackComponent,
 } from "./toast-stack.js";
-import {
-  createToastSurface,
-  type BridgeUi,
-  type ToastSurface,
-} from "./tui-bridge.js";
+import { createToastSurface, type ToastSurface } from "./tui-bridge.js";
+import type { LiveTuiContext } from "@sherif-fanous/pi-extensions-core";
 
 type TimerHandle = ReturnType<typeof globalThis.setTimeout>;
 
@@ -44,11 +41,11 @@ export class ToastManager {
    * hidden, so an idle session shows nothing.
    */
   constructor(
-    ui: BridgeUi,
+    ctx: LiveTuiContext,
     private readonly config: NotificationConfig,
   ) {
     this.surface = createToastSurface(
-      ui,
+      ctx,
       (theme, terminalSize) =>
         new ToastStackComponent(theme, config, terminalSize),
       {

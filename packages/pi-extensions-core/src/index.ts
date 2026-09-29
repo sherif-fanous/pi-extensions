@@ -64,6 +64,11 @@ export {
   scrollLines,
 } from "./tui/list.js";
 export {
+  getLiveTui,
+  type LiveTui,
+  type LiveTuiContext,
+} from "./tui/live-tui.js";
+export {
   overlayMaxHeight,
   overlayOptions,
   type OverlaySize,

@@ -1,19 +1,8 @@
 import { openThemeSyncOverlay } from "../src/commands/theme-sync.js";
-import { getTuiHandle } from "../src/detectors/pi/tui-handle.js";
 import { queryWithTerminalListener } from "../src/detectors/terminal/query.js";
-import type {
-  TerminalInputHandler,
-  Theme,
-} from "@earendil-works/pi-coding-agent";
-import type { Component, TUI } from "@earendil-works/pi-tui";
-import {
-  createFakeContext,
-  createPlainTheme,
-} from "@sherif-fanous/pi-extensions-testing";
+import type { TerminalInputHandler } from "@earendil-works/pi-coding-agent";
+import { createFakeContext } from "@sherif-fanous/pi-extensions-testing";
 import { afterEach, expect, test, vi } from "vitest";
-
-/** A widget factory, as `ctx.ui.setWidget` receives it. */
-type WidgetFactory = (tui: TUI, theme: Theme) => Component;
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -34,7 +23,6 @@ test.each(["rpc", "json", "print"] as const)(
     expect(
       await queryWithTerminalListener(ctx, "query", () => "reply"),
     ).toBeUndefined();
-    expect(getTuiHandle(ctx)).toBeUndefined();
     await openThemeSyncOverlay(ctx);
 
     expect(write).not.toHaveBeenCalled();
@@ -83,23 +71,4 @@ test("TUI mode still opens the custom overlay", async () => {
 
   expect(custom).toHaveBeenCalledOnce();
   expect(notify).not.toHaveBeenCalled();
-});
-
-test("TUI handle acquisition still registers and removes its widget", () => {
-  const tui = {} as TUI;
-  const setWidget = vi.fn(
-    (_key: string, factory?: string[] | WidgetFactory) => {
-      if (typeof factory === "function") {
-        factory(tui, createPlainTheme());
-      }
-    },
-  );
-  const ctx = createFakeContext({ ui: { setWidget } });
-
-  expect(getTuiHandle(ctx)).toBe(tui);
-  expect(setWidget).toHaveBeenCalledTimes(2);
-  expect(setWidget).toHaveBeenLastCalledWith(
-    "theme-sync:tui-handle",
-    undefined,
-  );
 });

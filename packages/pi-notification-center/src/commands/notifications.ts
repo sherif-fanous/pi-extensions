@@ -6,9 +6,9 @@
  * reloads, and branch navigation are always reflected.
  */
 
-import { loadConfig, type LoadedConfig } from "../config.js";
 import { EXTENSION_NAME } from "../extension-name.js";
 import { readNotificationHistory } from "../history.js";
+import type { NotificationCenterSession } from "../session.js";
 import type { NotificationEntry } from "../types.js";
 import { HISTORY_EMPTY_MESSAGE } from "../ui/history-format.js";
 import {
@@ -33,10 +33,8 @@ import {
 /** What `/notifications` needs besides its arguments and context. */
 export interface NotificationsCommandDeps {
   readonly pi: Pick<ExtensionAPI, "appendEntry">;
-  /** The configuration the current session started with, once it has. */
-  readonly sessionConfig: () => LoadedConfig | undefined;
-  /** Whether captured notifications show as toasts in this session. */
-  readonly toastsActive: () => boolean;
+  /** The session whose status `/notifications status` reports. */
+  readonly session: Pick<NotificationCenterSession, "getStatus">;
 }
 
 /** Command-context surface used to open the overlay. */
@@ -69,12 +67,7 @@ export async function runNotificationsCommand(
 
   if (argument === "status") {
     deliverStatusReport(ctx, deps.pi, {
-      body: formatStatusReport({
-        captured: readNotificationHistory(ctx.sessionManager.getBranch())
-          .length,
-        loaded: deps.sessionConfig() ?? (await loadConfig(ctx)),
-        toasts: deps.toastsActive(),
-      }),
+      body: formatStatusReport(await deps.session.getStatus(ctx)),
     });
 
     return;
