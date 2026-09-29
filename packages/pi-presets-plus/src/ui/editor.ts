@@ -5,6 +5,7 @@
  */
 import type { ActivePresetSession } from "../activation/session.js";
 import type { HotkeyRegistry } from "../hotkey-registry.js";
+import { diagnoseDraftHotkey, hotkeyChanged } from "../hotkey-rules.js";
 import { findPreset, samePresetIdentity } from "../preset-identity.js";
 import {
   addPreset,
@@ -39,11 +40,6 @@ import { makeProviderRow } from "./editor/rows/provider.js";
 import { makeScopeRow } from "./editor/rows/scope.js";
 import { makeThinkingRow } from "./editor/rows/thinking.js";
 import { makeToolsRow } from "./editor/rows/tools.js";
-import {
-  findConflictingPreset,
-  isPiBuiltin,
-  parseHotkey,
-} from "./hotkey-input.js";
 import { openInfoDialog } from "./info-dialog.js";
 import {
   CANCEL_LABEL,
@@ -759,44 +755,20 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
   private addHotkeyDiagnostic(
     fieldDiagnostics: Map<EditorRowId, FieldDiagnostic>,
   ): void {
-    const hotkey = this.state.hotkey.trim();
-
-    if (hotkey.length === 0) return;
-
-    const parsed = parseHotkey(hotkey);
-
-    if (!parsed.ok) {
-      fieldDiagnostics.set("hotkey", {
-        message: parsed.reason,
-        severity: "error",
-      });
-
-      return;
-    }
-
-    if (isPiBuiltin(parsed.parsed)) {
-      fieldDiagnostics.set("hotkey", {
-        message: hotkeyShadowsBuiltinWarning(parsed.parsed.normalized),
-        severity: "warning",
-      });
-
-      return;
-    }
-
-    const conflict = findConflictingPreset(
-      parsed.parsed,
+    const diagnostic = diagnoseDraftHotkey(
+      {
+        hotkey: this.state.hotkey,
+        name: this.state.name.trim(),
+        replaces:
+          this.openOptions.mode === "edit"
+            ? this.openOptions.target
+            : undefined,
+        scope: this.state.scope,
+      },
       this.allPresets,
-      this.openOptions.mode === "edit"
-        ? this.openOptions.target.name
-        : undefined,
     );
 
-    if (conflict) {
-      fieldDiagnostics.set("hotkey", {
-        message: hotkeyConflictWarning(parsed.parsed.normalized, conflict.name),
-        severity: "warning",
-      });
-    }
+    if (diagnostic) fieldDiagnostics.set("hotkey", diagnostic);
   }
 
   private validateForSave(): ValidationResult {
@@ -882,6 +854,8 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
 
     if (row === "scope") this.fieldDiagnostics.delete("name");
     if (row === "provider") this.fieldDiagnostics.delete("model");
+    // Which preset owns the hotkey depends on the draft's name and scope.
+    if (row === "name" || row === "scope") this.recomputeHotkeyDiagnostic();
   }
 
   private syncFocus(): void {
@@ -892,8 +866,8 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
 
 /**
  * Build the notice lines that tell the user a hotkey change takes effect
- * only after `/reload`. Returns an empty array when the hotkey is
- * unchanged.
+ * only after `/reload`, or no lines when the hotkey is unchanged once
+ * normalized.
  */
 export function formatHotkeyReloadNotice(
   previousValue: string,
@@ -902,7 +876,7 @@ export function formatHotkeyReloadNotice(
   const previous = previousValue.trim();
   const next = nextValue.trim();
 
-  if (previous === next) return [];
+  if (!hotkeyChanged(previous, next)) return [];
 
   if (previous.length === 0) {
     return [
@@ -1010,16 +984,6 @@ function editorTitle(openOptions: EditorOpenOptions): string {
       return exhaustive;
     }
   }
-}
-
-/** Warning shown when another preset already binds this hotkey. */
-function hotkeyConflictWarning(normalized: string, presetName: string): string {
-  return `⚠ ${normalized} is already used by preset "${presetName}". Pi will skip this preset's binding.`;
-}
-
-/** Warning shown when the hotkey shadows a Pi built-in binding. */
-function hotkeyShadowsBuiltinWarning(normalized: string): string {
-  return `⚠ ${normalized} shadows a Pi built-in. Saving will replace Pi's behavior for this key.`;
 }
 
 /**

@@ -100,9 +100,10 @@ hotkey without requiring `/reload`.
 
 When two loaded presets declare the same hotkey, the package SHALL register the
 binding for the first one in load order and SHALL NOT register the binding for
-subsequent presets with the same hotkey. Each losing preset SHALL be marked with
-`hotkeyConflict: true` on its in-memory `LoadedPreset`. A warning SHALL be
-emitted at session start naming the conflicting presets.
+subsequent presets with the same hotkey. Hotkeys compare after normalizing, and
+a shadowed preset registers no binding and claims no key. Each losing preset
+SHALL be marked with `hotkeyConflict: true` on its in-memory `LoadedPreset`. A
+warning SHALL be emitted at session start naming the conflicting presets.
 
 #### Scenario: Two presets, same hotkey
 
@@ -170,10 +171,11 @@ persist past a hotkey change.
 ### Requirement: Hotkey changes require /reload
 
 When a preset's `hotkey` field is changed (added, modified, or removed) via the
-editor and saved, the editor SHALL display a notice that the change takes effect
-after `/reload` and that the previous binding (if any) remains active until
-then. The package SHALL NOT attempt to unregister or re-register shortcuts
-dynamically; pi exposes no API for unregistering.
+editor and saved, where a change in case or modifier order alone is not a
+change, the editor SHALL display a notice that the change takes effect after
+`/reload` and that the previous binding (if any) remains active until then. The
+package SHALL NOT attempt to unregister or re-register shortcuts dynamically; pi
+exposes no API for unregistering.
 
 #### Scenario: Adding a hotkey
 

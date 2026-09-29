@@ -37,6 +37,13 @@ presets you can switch between. The family rules are in the root `AGENTS.md` and
   badge and the picker, and each field's classification for status and clear.
   Read Pi's state through it rather than comparing it by hand; `decideClear`
   stays a pure function of the assessment.
+- Every hotkey rule lives in `src/hotkey-rules.ts`, a pure module: parsing and
+  normalizing, Pi's built-in keys, which preset owns a key across the merged
+  list (shadowed presets own nothing, the earlier preset wins), whether a hotkey
+  changed, and the warning wording. `loadPresetsConfig` annotates presets with
+  `analyzeHotkeys`, the editor asks `diagnoseDraftHotkey` and `hotkeyChanged`,
+  and `HotkeyRegistry.bindForSession(presets, …)` registers the keys
+  `analyzeHotkeys` assigns. Don't compare or parse hotkeys anywhere else.
 - Deleting the active preset leaves the session attached on purpose:
   `/presets clear` still needs the record to restore the baseline. The badge
   keeps the name and status reports the preset as no longer loaded.

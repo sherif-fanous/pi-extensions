@@ -72,7 +72,7 @@ export default function presetsPlus(pi: ExtensionAPI): void {
         migration = await migrateAll(ctx);
 
         const loaded = await loadPresetsConfig(ctx);
-        const { hotkeyAnalysis, presets, showInactiveStatus } = loaded;
+        const { presets, showInactiveStatus } = loaded;
 
         config = loaded.config.withMigrations(migration);
         session.setShowInactiveStatus(showInactiveStatus, ctx);
@@ -95,14 +95,7 @@ export default function presetsPlus(pi: ExtensionAPI): void {
           }
         };
 
-        hotkeys.bindForSession(
-          presets,
-          hotkeyAnalysis,
-          ctx,
-          pi,
-          session,
-          startupWarnings,
-        );
+        hotkeys.bindForSession(presets, ctx, pi, session, startupWarnings);
       } catch (err) {
         startupWarnings.push(
           `Could not load preset files: ${describeErrorSentence(err)}`,

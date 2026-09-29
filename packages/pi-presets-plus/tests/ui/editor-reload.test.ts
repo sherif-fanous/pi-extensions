@@ -4,7 +4,7 @@
  * cases where a pending change returns to what the session already runs.
  */
 import { ActivePresetSession } from "../../src/activation/session.js";
-import { analyzeHotkeys, HotkeyRegistry } from "../../src/hotkey-registry.js";
+import { HotkeyRegistry } from "../../src/hotkey-registry.js";
 import type { LoadedPreset } from "../../src/types.js";
 import type { EditorFormState } from "../../src/ui/editor.js";
 import type { Component } from "@earendil-works/pi-tui";
@@ -106,7 +106,6 @@ async function runSave(options: {
 
   hotkeys.bindForSession(
     baseline,
-    analyzeHotkeys(baseline),
     { ui: { notify: () => undefined } } as never,
     { registerShortcut: () => undefined } as never,
     {} as never,

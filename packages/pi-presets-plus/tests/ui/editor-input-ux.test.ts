@@ -566,6 +566,67 @@ describe("preset editor input UX", () => {
     );
   });
 
+  it("does not warn when the edited preset keeps its Hotkey over a later preset", async () => {
+    const edited = preset({ hotkey: "ctrl+m", name: "plan" });
+    const later = preset({
+      hotkey: "ctrl+m",
+      name: "review",
+      scope: "project",
+    });
+    const { editor } = await openHarness({
+      initial: edited,
+      presets: [edited, later],
+    });
+
+    moveFocus(editor, 7);
+    editor.handleInput("\x7f");
+    editor.handleInput("m");
+
+    expect(renderText(editor)).not.toContain("is already used by preset");
+  });
+
+  it("rechecks the Hotkey warning when Scope changes", async () => {
+    const edited = preset({ hotkey: "ctrl+m", name: "plan" });
+    const later = preset({ hotkey: "ctrl+m", name: "review" });
+    const { editor } = await openHarness({
+      initial: edited,
+      presets: [edited, later],
+    });
+
+    moveFocus(editor, 7);
+    editor.handleInput("\x7f");
+    editor.handleInput("m");
+
+    expect(renderText(editor)).not.toContain("is already used by preset");
+
+    // Tab wraps from Hotkey past the buttons and Name to Scope.
+    moveFocus(editor, 3);
+    editor.handleInput(" ");
+
+    expectErrorAfterLabel(
+      editor,
+      "Hotkey",
+      'is already used by preset "review"',
+    );
+  });
+
+  it("shows no reload notice when the Hotkey changes only in case", async () => {
+    const { editor } = await openHarness({
+      initial: preset({ hotkey: "Ctrl+Shift+1" }),
+    });
+
+    moveFocus(editor, 7);
+
+    for (let index = 0; index < "Ctrl+Shift+1".length; index++) {
+      editor.handleInput("\x7f");
+    }
+
+    for (const char of "ctrl+shift+1") editor.handleInput(char);
+
+    expect(lineContaining(editor, "Hotkey")).toContain("ctrl+shift+1");
+    expect(renderText(editor)).not.toContain("Run /reload");
+  });
+
   it("does not clear field errors when Thinking changes", async () => {
     const { editor } = await openHarness({ models: [] });
 

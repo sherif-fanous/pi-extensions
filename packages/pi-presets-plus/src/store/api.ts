@@ -3,7 +3,7 @@
  * Every operation reads current files again so reloads and direct edits take effect.
  */
 import { EXTENSION_NAME } from "../extension-name.js";
-import { analyzeHotkeys, type HotkeyAnalysis } from "../hotkey-registry.js";
+import { analyzeHotkeys } from "../hotkey-rules.js";
 import type {
   LoadedPreset,
   Preset,
@@ -29,9 +29,12 @@ export interface PresetsConfig {
    * `/presets reload`, and `/presets status` show these.
    */
   readonly config: ConfigOutcome<PresetScope>;
-  readonly hotkeyAnalysis: HotkeyAnalysis;
   /** The user policy's rules; their warnings are in `config`. */
   readonly policy: PolicyRules;
+  /**
+   * The merged presets, user then project, each annotated with its
+   * availability, clamp warning, and hotkey conflict and built-in shadowing.
+   */
   readonly presets: LoadedPreset[];
   readonly showInactiveStatus: boolean;
 }
@@ -89,19 +92,19 @@ export async function loadPresetsConfig(
     ...user.warnings.policy,
     ...project.warnings.policy,
   ];
-  const presets = mergeScopes(
-    { user: user.presets, project: project.presets },
-    ctx,
-  ).map((preset) => ({
-    ...preset,
-    ...(computeClampWarning(preset, ctx)
-      ? { clampWarning: true as const }
-      : {}),
-  }));
+  const { presets } = analyzeHotkeys(
+    mergeScopes({ user: user.presets, project: project.presets }, ctx).map(
+      (preset) => ({
+        ...preset,
+        ...(computeClampWarning(preset, ctx)
+          ? { clampWarning: true as const }
+          : {}),
+      }),
+    ),
+  );
 
   return {
     config: config.withValueWarnings(valueWarnings),
-    hotkeyAnalysis: analyzeHotkeys(presets),
     policy: { rules: user.policyRules },
     presets,
     showInactiveStatus: showInactiveStatus ?? DEFAULT_CONFIG.showInactiveStatus,

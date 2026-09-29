@@ -1,18 +1,14 @@
 /**
- * Analyzes the hotkeys declared by loaded presets, registers the usable
- * ones as session shortcuts, and tracks which bindings are live so the
- * editor can tell when a preset change needs a reload to take effect.
+ * Registers the keys the hotkey rules assign as session shortcuts, and
+ * tracks which bindings are live so the editor can tell when a preset
+ * change needs a reload to take effect.
  */
 import { activate } from "./activation/activate.js";
 import type { ActivePresetSession } from "./activation/session.js";
 import { EXTENSION_NAME } from "./extension-name.js";
+import { analyzeHotkeys, hotkeyChanged } from "./hotkey-rules.js";
 import type { PresetIdentity } from "./preset-identity.js";
 import type { LoadedPreset } from "./types.js";
-import {
-  isPiBuiltin,
-  parseHotkey,
-  type ParsedHotkey,
-} from "./ui/hotkey-input.js";
 import { reportWarnings } from "./warnings.js";
 import type {
   ExtensionAPI,
@@ -20,27 +16,6 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { KeyId } from "@earendil-works/pi-tui";
 import { describeErrorSentence } from "@sherif-fanous/pi-extensions-core";
-
-export type { PresetIdentity } from "./preset-identity.js";
-
-/** Conflicts, invalid entries, and parsed hotkeys from one analysis pass. */
-export interface HotkeyAnalysis {
-  readonly conflicts: HotkeyConflict[];
-  readonly invalid: HotkeyDiagnostic[];
-  readonly parsed: ReadonlyMap<LoadedPreset, ParsedHotkey>;
-}
-
-/** A preset whose hotkey was already claimed by another preset. */
-export interface HotkeyConflict {
-  readonly loser: LoadedPreset & { hotkey: string };
-  readonly winner: PresetIdentity;
-}
-
-/** A preset whose hotkey could not be parsed, with the parser's reason. */
-export interface HotkeyDiagnostic {
-  readonly preset: LoadedPreset & { hotkey: string };
-  readonly reason: string;
-}
 
 /**
  * Tracks the hotkeys bound in the running session and the pending hotkey
@@ -64,56 +39,29 @@ export class HotkeyRegistry {
    * otherwise out as one warning notification.
    */
   bindForSession(
-    presets: LoadedPreset[],
-    hotkeyAnalysis: HotkeyAnalysis,
+    presets: readonly LoadedPreset[],
     ctx: Pick<ExtensionContext, "ui">,
     pi: ExtensionAPI,
     session: ActivePresetSession,
     warnings?: string[],
   ): void {
-    const hotkeyWarnings: string[] = [];
+    const { bindings, warnings: hotkeyWarnings } = analyzeHotkeys(presets);
 
     this.setRuntimeHotkeyBaseline(presets);
 
-    for (const conflict of hotkeyAnalysis.conflicts) {
-      hotkeyWarnings.push(
-        `${formatPresetSubject(conflict.loser)} hotkey "${conflict.loser.hotkey}" conflicts with preset ${formatPresetIdentity(conflict.winner)}. The first registered wins.`,
-      );
-    }
-
-    for (const invalid of hotkeyAnalysis.invalid) {
-      hotkeyWarnings.push(
-        `${formatPresetSubject(invalid.preset)} has invalid hotkey "${invalid.preset.hotkey}" (${invalid.reason}). Ignored it, so it is not registered or checked for conflicts until it is fixed.`,
-      );
-    }
-
-    for (const preset of presets) {
-      const parsed = hotkeyAnalysis.parsed.get(preset);
-
-      if (!parsed) continue;
-      if (preset.shadowed || preset.hotkeyConflict === true) continue;
-
-      if (isPiBuiltin(parsed)) {
-        hotkeyWarnings.push(
-          `${formatPresetSubject(preset)} hotkey "${preset.hotkey}" shadows a Pi built-in. The preset binding will take precedence.`,
-        );
-      }
-
-      const registeredName = preset.name;
-      const registeredScope = preset.scope;
-
-      pi.registerShortcut(parsed.normalized as KeyId, {
-        description: `Activate preset "${registeredName}"`,
+    for (const { key, name, scope } of bindings) {
+      pi.registerShortcut(key as KeyId, {
+        description: `Activate preset "${name}"`,
         handler: async (handlerCtx) => {
           try {
             await activate(handlerCtx, pi, session, {
-              name: registeredName,
-              scope: registeredScope,
+              name,
+              scope,
               trigger: "hotkey",
             });
           } catch (err) {
             handlerCtx.ui.notify(
-              `${EXTENSION_NAME} hotkey for preset "${registeredName}" failed: ${describeErrorSentence(err)}`,
+              `${EXTENSION_NAME} hotkey for preset "${name}" failed: ${describeErrorSentence(err)}`,
               "error",
             );
           }
@@ -230,82 +178,6 @@ export class HotkeyRegistry {
   }
 }
 
-/**
- * Report the hotkey conflicts, unparseable hotkeys, and parsed hotkeys
- * across a loaded preset list.
- *
- * Rewrites the `hotkeyConflict` and `hotkeyShadowsBuiltin` annotations on
- * every preset passed in, so values from an earlier call never survive.
- */
-export function analyzeHotkeys(presets: LoadedPreset[]): HotkeyAnalysis {
-  const claimed = new Map<string, PresetIdentity>();
-  const conflicts: HotkeyConflict[] = [];
-  const invalid: HotkeyDiagnostic[] = [];
-  const parsedHotkeys = new Map<LoadedPreset, ParsedHotkey>();
-
-  for (const preset of presets) {
-    preset.hotkeyConflict = undefined;
-    preset.hotkeyShadowsBuiltin = undefined;
-
-    const { hotkey } = preset;
-
-    if (!hotkey) continue;
-
-    const presetWithHotkey: LoadedPreset & { hotkey: string } = {
-      ...preset,
-      hotkey,
-    };
-    const parsed = parseHotkey(hotkey);
-
-    if (!parsed.ok) {
-      invalid.push({ preset: presetWithHotkey, reason: parsed.reason });
-
-      continue;
-    }
-
-    parsedHotkeys.set(preset, parsed.parsed);
-
-    if (isPiBuiltin(parsed.parsed)) {
-      preset.hotkeyShadowsBuiltin = true;
-    }
-
-    if (preset.shadowed) continue;
-
-    const winner = claimed.get(parsed.parsed.normalized);
-
-    if (winner) {
-      preset.hotkeyConflict = true;
-      conflicts.push({ loser: presetWithHotkey, winner });
-
-      continue;
-    }
-
-    claimed.set(parsed.parsed.normalized, {
-      name: preset.name,
-      scope: preset.scope,
-    });
-  }
-
-  return { conflicts, invalid, parsed: parsedHotkeys };
-}
-
-/** Return `"<name>" (<scope>)`, including the quotes around the name. */
-export function formatPresetIdentity(identity: PresetIdentity): string {
-  return `"${identity.name}" (${identity.scope})`;
-}
-
-/** Return whether two hotkey declarations differ after commit-time cleanup. */
-export function hotkeyChanged(
-  prev: string | undefined,
-  next: string | undefined,
-): boolean {
-  return normalizeHotkeyForChange(prev) !== normalizeHotkeyForChange(next);
-}
-
-function formatPresetSubject(preset: Pick<LoadedPreset, "name">): string {
-  return `Preset "${preset.name}"`;
-}
-
 function identityChanged(
   prev: PresetIdentity | undefined,
   next: PresetIdentity,
@@ -313,17 +185,6 @@ function identityChanged(
   if (!prev) return false;
 
   return prev.name !== next.name || prev.scope !== next.scope;
-}
-
-/** Normalize a hotkey for comparison, falling back to the trimmed text. */
-function normalizeHotkeyForChange(hotkey: string | undefined): string {
-  const trimmed = hotkey?.trim() ?? "";
-
-  if (trimmed.length === 0) return "";
-
-  const parsed = parseHotkey(trimmed);
-
-  return parsed.ok ? parsed.parsed.normalized : trimmed;
 }
 
 function presetKey(identity: PresetIdentity): string {

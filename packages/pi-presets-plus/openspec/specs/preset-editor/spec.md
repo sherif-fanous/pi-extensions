@@ -570,35 +570,39 @@ If the entered key is unparseable, the editor SHALL set a row-tied **error**
 diagnostic on the Hotkey row reading the parser's `reason`. Errors block Save
 (Save is refused; user remains in the editor).
 
-If the entered key parses successfully and matches a documented pi built-in OR
-is already claimed by another preset, the editor SHALL set a row-tied
-**warning** diagnostic on the Hotkey row. Warnings render inline beneath the
-Hotkey row in the theme's `warning` color (yellow), with a `⚠` glyph prefix and
-a sentence-cased message ending with a terminal period. Warnings do NOT block
-Save — the user is informed but can proceed by pressing Save again. The wording
-is:
+If the entered key parses successfully and matches a documented pi built-in, or
+another preset would own it once the draft is saved, the editor SHALL set a
+row-tied **warning** diagnostic on the Hotkey row. Ownership follows the rules
+that register shortcuts: shadowed presets own no key and the earlier preset in
+the merged list wins, with the draft kept in place when editing in the same
+scope and placed last in its scope otherwise. A preset the draft would take the
+key from is not a conflict. Warnings render inline beneath the Hotkey row in the
+theme's `warning` color (yellow), with a `⚠` glyph prefix and a sentence-cased
+message ending with a terminal period. Warnings do NOT block Save — the user is
+informed but can proceed by pressing Save again. The wording is:
 
 - For a Pi-builtin shadow:
-  `"⚠ <normalized> shadows a Pi built-in; saving will replace Pi's behavior for this key."`
+  `"⚠ <normalized> shadows a Pi built-in. Saving will replace Pi's behavior for this key."`
   where `<normalized>` is the parsed-and-normalized hotkey form (e.g.
-  `Ctrl+Shift+1`).
+  `ctrl+shift+1`).
 - For another-preset conflict:
-  `"⚠ <normalized> is already used by preset \"<name>\"; this preset's binding will be skipped."`
-  where `<name>` is the conflicting preset's name.
+  `"⚠ <normalized> is already used by preset \"<name>\". Pi will skip this preset's binding."`
+  where `<name>` is the name of the preset that would own the key.
 
 The editor SHALL NOT open modal confirmation dialogs for these warnings. The
 previous `HOTKEY_SHADOWS_TITLE` / `HOTKEY_CONFLICT_TITLE` confirm flows are
 removed.
 
-The editor SHALL recompute the Hotkey diagnostic eagerly after every Hotkey
-edit, not only at Save time, so the user sees the warning while they are still
-typing rather than only after pressing Save. The Save pipeline SHALL still
-re-check as a backstop.
+The editor SHALL recompute the Hotkey diagnostic eagerly after every Hotkey,
+Name, or Scope edit, not only at Save time, so the user sees the warning while
+they are still typing rather than only after pressing Save. The Save pipeline
+SHALL still re-check as a backstop.
 
 When the field is changed from a previously-saved value (or cleared from one),
-the editor SHALL display a notice that the hotkey change requires `/reload`
-(because pi exposes no `unregisterShortcut`). This notice is unrelated to the
-warning diagnostic and renders in the dim color via the existing
+comparing normalized hotkeys so a change in case or modifier order alone is not
+a change, the editor SHALL display a notice that the hotkey change requires
+`/reload` (because pi exposes no `unregisterShortcut`). This notice is unrelated
+to the warning diagnostic and renders in the dim color via the existing
 `formatHotkeyReloadNotice` path.
 
 #### Scenario: Invalid format
@@ -611,13 +615,27 @@ warning diagnostic and renders in the dim color via the existing
 
 #### Scenario: Conflict with another preset's hotkey
 
-- **WHEN** the entered hotkey matches another preset's `hotkey` field
+- **WHEN** the entered hotkey matches the hotkey of another preset that would
+  own it once the draft is saved
 - **THEN** the editor SHALL set a **warning** diagnostic on the Hotkey row
   reading exactly
-  `"⚠ <normalized> is already used by preset \"<conflicting-name>\"; this preset's binding will be skipped."`
+  `"⚠ <normalized> is already used by preset \"<conflicting-name>\". Pi will skip this preset's binding."`
 - **AND** no modal confirmation dialog SHALL appear
 - **AND** if the user presses Save, save SHALL proceed (the warning is
   non-blocking)
+
+#### Scenario: No conflict when this preset keeps the key
+
+- **GIVEN** a user preset `plan` and a later project preset `review` both use
+  `ctrl+m`
+- **WHEN** the user edits `plan` and its Hotkey reads `ctrl+m`
+- **THEN** the editor SHALL NOT set a conflict warning, because `plan` keeps the
+  key
+
+#### Scenario: Case-only change shows no reload notice
+
+- **WHEN** the user changes a saved hotkey `Ctrl+Shift+1` to `ctrl+shift+1`
+- **THEN** the editor SHALL NOT display the `/reload` notice
 
 #### Scenario: Conflict with pi built-in
 
@@ -625,7 +643,7 @@ warning diagnostic and renders in the dim color via the existing
   `ctrl+p`)
 - **THEN** the editor SHALL set a **warning** diagnostic on the Hotkey row
   reading exactly
-  `"⚠ <normalized> shadows a Pi built-in; saving will replace Pi's behavior for this key."`
+  `"⚠ <normalized> shadows a Pi built-in. Saving will replace Pi's behavior for this key."`
 - **AND** no modal confirmation dialog SHALL appear
 - **AND** if the user presses Save, save SHALL proceed
 

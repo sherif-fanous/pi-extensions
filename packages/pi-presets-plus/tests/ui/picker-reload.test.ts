@@ -4,7 +4,7 @@
  * picker performs when the user declines or no hotkey was bound.
  */
 import { ActivePresetSession } from "../../src/activation/session.js";
-import { analyzeHotkeys, HotkeyRegistry } from "../../src/hotkey-registry.js";
+import { HotkeyRegistry } from "../../src/hotkey-registry.js";
 import type { LoadedPreset } from "../../src/types.js";
 import {
   createFakeCustom,
@@ -87,7 +87,6 @@ async function runDelete(
 
   hotkeys.bindForSession(
     baseline,
-    analyzeHotkeys(baseline),
     { ui: { notify: () => undefined } } as never,
     { registerShortcut: () => undefined } as never,
     {} as never,

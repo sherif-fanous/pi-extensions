@@ -383,64 +383,80 @@ so.
 - **AND** badge updates emitted from dirty / clean transitions SHALL render
   directly from `ActivePresetState`
 
+### Requirement: One module owns the hotkey rules
+
+The package SHALL keep every hotkey rule in one pure module,
+`src/hotkey-rules.ts`, which imports no Pi runtime, UI, or storage module. It
+SHALL own how a typed hotkey parses and normalizes, which keys are Pi built-ins,
+which preset owns each key across the merged preset list (shadowed presets own
+nothing, and the earlier preset wins a conflict), when a hotkey counts as
+changed (after normalizing, so `Ctrl+P` and `ctrl+p` are the same hotkey), and
+the wording of every hotkey warning. It SHALL export:
+
+1. `analyzeHotkeys(presets)`, which returns the keys to register, the presets
+   copied with their `hotkeyConflict` and `hotkeyShadowsBuiltin` annotations
+   recomputed, and the session-start warnings: conflicts, then invalid hotkeys,
+   then bound hotkeys that shadow a Pi built-in, each in preset order.
+2. `diagnoseDraftHotkey(draft, presets)`, the editor's Hotkey row diagnostic,
+   which judges ownership on the merged list as it would load once the draft is
+   saved.
+3. `hotkeyChanged(previous, next)`, the one change comparison.
+
+`loadPresetsConfig(ctx)` SHALL annotate its presets through `analyzeHotkeys`.
+The editor's Hotkey diagnostic and its reload notice, and the registry, SHALL
+read the rules only through this module.
+
+#### Scenario: The editor and the runtime agree on ownership
+
+- **GIVEN** a user preset `plan` and a project preset `review` that both use
+  `ctrl+m`
+- **WHEN** the user edits `plan` without changing its hotkey
+- **THEN** the editor SHALL NOT warn about a conflict, because `plan` keeps the
+  key when shortcuts are registered
+
+#### Scenario: A case-only change is not a change
+
+- **WHEN** the user changes a preset's hotkey from `Ctrl+P` to `ctrl+p`
+- **THEN** the editor SHALL NOT show the reload notice
+- **AND** saving SHALL NOT open the reload prompt
+
 ### Requirement: Runtime hotkey bindings are owned by a single class
 
 The package SHALL own the runtime hotkey bindings in exactly one module:
 `src/hotkey-registry.ts`, exporting a class `HotkeyRegistry`. The
 `presetsPlus(pi)` default export SHALL construct one instance per invocation.
+Its public surface SHALL be:
 
-The class SHALL replace and consolidate the deleted modules
-`src/hotkey-conflicts.ts`, `src/hotkeys.ts`, and
-`src/hotkey-reload-baseline.ts`. Its public surface SHALL be:
+1. `bindForSession(presets, ctx, pi, session, warnings?): void`, which asks
+   `analyzeHotkeys` for the keys and warnings, registers one `pi` shortcut per
+   key, shows or collects the warnings, and captures the runtime baseline. Each
+   shortcut activates its preset's name and scope through `activate` with the
+   `hotkey` trigger. Called once at `session_start`.
+2. `changedHotkeyNames(presets): string[]`, the presets whose hotkey differs
+   from the runtime baseline, for `/presets reload`.
+3. `saveNeedsReload(initial, saved): boolean`, for the editor's post-Save reload
+   prompt.
+4. `deleteNeedsReload(identity): boolean`, for the picker's post-Delete reload
+   prompt.
+5. `recordReloadPromptDeclined(identity, hotkey?): void`, which remembers a
+   declined prompt so the same pending state is not prompted again.
 
-1. `analyze(presets: LoadedPreset[]): HotkeyAnalysis` — parses, marks
-   `LoadedPreset.hotkeyConflict` and `LoadedPreset.hotkeyShadowsBuiltin` as a
-   side effect for downstream UI read sites, and returns the analysis. Called by
-   `loadPresetsConfig` on every storage read.
-2. `bindForSession(presets, analysis, ctx, pi, session, warnings?): void` —
-   registers `pi` shortcuts, emits session-start conflict/shadow/invalid
-   notifications, and captures the runtime baseline internally. Each shortcut
-   activates its preset's name and scope through `activate` with the `hotkey`
-   trigger. Called once at `session_start`.
-3. `saveNeedsReload(initial, saved): boolean` — query for the editor's post-Save
-   reload prompt.
-4. `deleteNeedsReload(identity): boolean` — query for the picker's post-Delete
-   reload prompt.
-5. `recordReloadPromptDeclined(identity, hotkey?): void` — remembers a declined
-   prompt so the same pending state is not re-prompted.
-
-The class SHALL NOT expose a public method for setting the runtime baseline;
-"what was just bound" is captured as part of `bindForSession` and is not
-externally writable.
-
-The class SHALL NOT carry module-scoped mutable state; every mutable cell (the
-runtime baseline map, the acknowledged-pending-prompts map) SHALL live as
-instance state. The previously-exposed test-only `clearRuntimeHotkeyBaseline()`
-reset hatch SHALL NOT exist after this change — tests construct a fresh
-`HotkeyRegistry` instance per case.
-
-The deleted modules `src/hotkey-conflicts.ts`, `src/hotkey-reload-baseline.ts`,
-and `src/hotkeys.ts` SHALL NOT exist after this change.
+The class SHALL NOT expose a public method for setting the runtime baseline, and
+SHALL keep its mutable state (the runtime baseline and the declined prompts) as
+instance state, never module-scoped.
 
 #### Scenario: Registry is the only writer of runtime-binding state
 
-- **WHEN** the source tree is inspected after the change
+- **WHEN** the source tree is inspected
 - **THEN** no file outside `src/hotkey-registry.ts` SHALL hold module-scoped
-  mutable state for runtime hotkey bindings or acknowledged-pending prompts
+  mutable state for runtime hotkey bindings or declined prompts
 
-#### Scenario: Loader uses the registry's analyze
+#### Scenario: bindForSession takes only the presets
 
-- **WHEN** `loadPresetsConfig(ctx)` runs
-- **THEN** it SHALL invoke `hotkeys.analyze(presets)` exactly once
-- **AND** the returned `HotkeyAnalysis` SHALL be threaded to callers exactly as
-  today's `annotateAndAnalyzeHotkeys` was
-
-#### Scenario: bindForSession captures the baseline internally
-
-- **WHEN** `bindForSession(presets, analysis, ctx, pi, session)` completes
-- **THEN** the registry's runtime baseline SHALL reflect the hotkeys that were
-  just registered
-- **AND** there SHALL NOT be a separate public method to set the baseline
+- **WHEN** `bindForSession(presets, ctx, pi, session)` completes
+- **THEN** it SHALL have registered exactly the keys `analyzeHotkeys(presets)`
+  assigns
+- **AND** the registry's runtime baseline SHALL reflect those presets' hotkeys
 
 #### Scenario: Tests use per-case instances, not module reset
 

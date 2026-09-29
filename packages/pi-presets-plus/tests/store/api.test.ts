@@ -95,8 +95,6 @@ describe("loadPresetsConfig", () => {
 
     expect(result.presets).toEqual([]);
     expect(result.config.warnings).toEqual([]);
-    expect(result.hotkeyAnalysis.conflicts).toEqual([]);
-    expect(result.hotkeyAnalysis.invalid).toEqual([]);
     expect(result.policy).toEqual({ rules: [] });
   });
 
