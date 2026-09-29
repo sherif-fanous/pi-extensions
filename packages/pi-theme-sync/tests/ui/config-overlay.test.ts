@@ -545,7 +545,7 @@ function createOverlay(
     keybindings: createPiKeybindings(overrides.keybindings),
     requestRender,
     save,
-    terminalRows: () => overrides.rows ?? 30,
+    terminal: { rows: overrides.rows ?? 30 },
     theme,
     themeNames: overrides.themeNames ?? ["light", "dark", "界-wide-theme"],
   });

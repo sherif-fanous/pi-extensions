@@ -82,7 +82,7 @@ describe("HistoryViewComponent", () => {
   });
 
   it("shows a muted list position once the list scrolls", () => {
-    const view = build(entries(30), { terminalHeight: () => 14 });
+    const view = build(entries(30), { terminal: { rows: 14 } });
 
     expect(view.render(100)[TITLE_ROW]).toMatch(/\(1\/30\) │ Detail/u);
 
@@ -91,7 +91,7 @@ describe("HistoryViewComponent", () => {
     expect(view.render(100)[TITLE_ROW]).toMatch(/\(2\/30\) │ Detail/u);
 
     const marked = build(entries(30), {
-      terminalHeight: () => 14,
+      terminal: { rows: 14 },
       theme: createMarkerTheme(),
     });
 
@@ -251,7 +251,7 @@ describe("HistoryViewComponent", () => {
   it("grows for a single long notification instead of forcing a scroll", () => {
     const layout = layout2(
       [createNotificationEntry(numberedLines(12), "warning", FIRST)],
-      { terminalHeight: 40 },
+      { terminalRows: 40 },
     );
 
     expect(layout.right.join(" ")).toContain("detail line 11");
@@ -262,7 +262,7 @@ describe("HistoryViewComponent", () => {
   it("advertises hidden detail in the pane title and last row", () => {
     const list = [createNotificationEntry(numberedLines(60), "info", FIRST)];
     const at = (pendingPages: number): HistoryLayout =>
-      layout2(list, { pendingPages, terminalHeight: 20 });
+      layout2(list, { pendingPages, terminalRows: 20 });
     const top = at(0);
 
     // Title carries the range, last visible row carries the marker.
@@ -299,7 +299,7 @@ describe("HistoryViewComponent", () => {
 
     for (const width of [39, 40, 100]) {
       for (const list of [entries(30), [long], []]) {
-        const lines = build(list, { terminalHeight: () => 14 }).render(width);
+        const lines = build(list, { terminal: { rows: 14 } }).render(width);
 
         expect(lines.length).toBeLessThanOrEqual(overlayMaxHeight(14));
         // The footer must survive, since it carries the only close hint.
@@ -317,7 +317,7 @@ describe("HistoryViewComponent", () => {
 
     for (const width of [39, 40]) {
       for (const list of [entries(30), [long], []]) {
-        const lines = build(list, { terminalHeight: () => 20 }).render(width);
+        const lines = build(list, { terminal: { rows: 20 } }).render(width);
 
         expect(lines.length).toBeGreaterThan(0);
         expect(findOverflowingLines(lines, width)).toEqual([]);
@@ -329,7 +329,7 @@ describe("HistoryViewComponent", () => {
     const short = layout2([createNotificationEntry("short", "info", FIRST)]);
     const long = layout2(
       [createNotificationEntry(numberedLines(60), "info", FIRST)],
-      { terminalHeight: 20 },
+      { terminalRows: 20 },
     );
 
     expect(short.lines.at(-2)).toBe(`│ ${"↑/↓ Move · Esc Close".padEnd(96)} │`);
@@ -343,7 +343,7 @@ describe("HistoryViewComponent", () => {
   it("wraps the footer between hints rather than cutting it", () => {
     const layout = layout2(
       [createNotificationEntry(numberedLines(60), "info", FIRST)],
-      { terminalHeight: 20, width: 40 },
+      { terminalRows: 20, width: 40 },
     );
     const footer = layout.lines
       .slice(-3, -1)
@@ -376,7 +376,7 @@ describe("HistoryViewComponent", () => {
       {
         done,
         keybindings,
-        terminalHeight: () => 20,
+        terminal: { rows: 20 },
       },
     );
     const top = view.render(100);
@@ -492,7 +492,7 @@ function build(
     locale: "en-US",
     // Tall enough that the row budget never binds, so a test that is not
     // about height asserts on content alone.
-    terminalHeight: () => 40,
+    terminal: { rows: 40 },
     theme: createPlainTheme(),
     timeZone: "UTC",
     ...overrides,
@@ -521,7 +521,7 @@ function layout2(
     locale: "en-US",
     pendingPages: 0,
     selected: 0,
-    terminalHeight: 40,
+    terminalRows: 40,
     theme: createPlainTheme(),
     timeZone: "UTC",
     width: 100,

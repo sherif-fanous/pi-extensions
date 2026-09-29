@@ -18,7 +18,7 @@ import { createRewritingBashTool, createUserBashRewriter } from "./shell.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   guardCommand,
-  guardEvent,
+  onEvent,
   subcommandCompletions,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -37,13 +37,10 @@ export default function rtk(pi: ExtensionAPI): void {
     ),
   });
 
-  pi.on(
-    "session_start",
-    guardEvent(EXTENSION_NAME, "session_start", (_event, ctx) => {
-      runtime.startSession(ctx);
-    }),
-  );
+  onEvent(pi, EXTENSION_NAME, "session_start", (_event, ctx) => {
+    runtime.startSession(ctx);
+  });
 
   // A failure here resolves to no result, so Pi runs the command itself.
-  pi.on("user_bash", guardEvent(EXTENSION_NAME, "user_bash", rewriteUserBash));
+  onEvent(pi, EXTENSION_NAME, "user_bash", rewriteUserBash);
 }

@@ -7,7 +7,7 @@ import { registerStatusReportRenderer } from "./ui/status-report.js";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   guardCommand,
-  guardEvent,
+  onEvent,
   subcommandCompletions,
 } from "@sherif-fanous/pi-extensions-core";
 
@@ -27,11 +27,8 @@ export default function notificationCenter(pi: ExtensionAPI): void {
     ),
   });
 
-  pi.on(
-    "session_start",
-    guardEvent(EXTENSION_NAME, "session_start", (_event, ctx) =>
-      session.startSession(ctx),
-    ),
+  onEvent(pi, EXTENSION_NAME, "session_start", (_event, ctx) =>
+    session.startSession(ctx),
   );
 
   pi.on("session_shutdown", () => {

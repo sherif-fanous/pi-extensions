@@ -14,8 +14,8 @@ README for the full API.
   `tui/`, `commands/`, `fakes/`), with only the entry point and cross-cutting
   helpers at the top level.
 - Errors: `describeError` for thrown values. Register every command handler
-  through `guardCommand("<Display Name>", handler)` and every `pi.on` handler
-  that can throw through `guardEvent("<Display Name>", "<event>", handler)`, so
+  through `guardCommand("<Display Name>", handler)` and every event handler that
+  can throw through `onEvent(pi, "<Display Name>", "<event>", handler)`, so
   failures read `<Display Name> command failed: …` or
   `<Display Name> <event> failed: …`. Display names: `Theme Sync`,
   `Presets Plus`, `Notification Center`, `Session Slice`, `RTK`. Don't notify
@@ -90,3 +90,10 @@ README for the full API.
   why it changed, what a change was called, or where it might be extended later;
   that history lives in Git and the changelogs.
 - Comment prose follows the prose rules in [text.md](text.md).
+
+## Rejected ideas
+
+- Theme Sync settings registry: revisit when a setting is added (4 stable
+  settings; ~12 edit sites today).
+- Name-bound extension helpers (`bindExtension(NAME)`): the repeated display
+  name is harmless and grep-friendly.

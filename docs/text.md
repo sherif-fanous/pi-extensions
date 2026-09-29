@@ -21,7 +21,7 @@ it can't check.
 - Names: the display names are `RTK`, `Theme Sync`, `Presets Plus`,
   `Notification Center`, and `Session Slice`. Each package exports one
   `EXTENSION_NAME` constant from `src/extension-name.ts`, used by every
-  `guardCommand`, `guardEvent`, `notifyWarnings`, `notifyUsageWarning`, and
+  `guardCommand`, `onEvent`, `notifyWarnings`, `notifyUsageWarning`, and
   `requireInteractiveTui` call, dialog title, and report heading. `Pi` is the
   product and `pi` the binary; lowercase `rtk` means only the rtk executable.
   Command names stay literal (`/presets clear`).
@@ -46,8 +46,8 @@ it can't check.
   command the user just ran doesn't name the extension (`Reloaded 3 presets.`).
   A message the user didn't ask for (startup, background work, hotkeys) names it
   as the subject (`Presets Plus migrated its configuration to <path>.`).
-- Handled errors go through core. In a command or `pi.on` handler, let the error
-  reach `guardCommand` or `guardEvent`. An unprompted failure outside the guards
+- Handled errors go through core. In a command or event handler, let the error
+  reach `guardCommand` or `onEvent`. An unprompted failure outside the guards
   mirrors them: `<Display Name> <thing> failed: <message>`
   (`Presets Plus hotkey failed: …`). A failure shown in reply to the user, such
   as an overlay message, reads `Could not <verb> <object>: <message>`

@@ -22,9 +22,9 @@ export { describeError, describeErrorSentence } from "./errors.js";
 export {
   guardCommand,
   type GuardContext,
-  guardEvent,
   notifyUsageWarning,
   notifyWarnings,
+  onEvent,
   subcommandCompletions,
   type SubcommandCompletion,
 } from "./commands/extension.js";
@@ -39,6 +39,11 @@ export {
   padToWidth,
   renderFrame,
 } from "./tui/frame.js";
+export {
+  type FramedSurfaceLayout,
+  type FramedSurfaceOptions,
+  layoutFramedSurface,
+} from "./tui/framed-surface.js";
 export { isNotFoundError, isRecord } from "./guards.js";
 export {
   isInteractiveTui,

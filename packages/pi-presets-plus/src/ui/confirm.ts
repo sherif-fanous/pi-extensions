@@ -17,15 +17,11 @@ import {
   type Terminal,
 } from "@earendil-works/pi-tui";
 import {
-  frameBodyRows,
   frameBodyWidth,
   keyHint,
+  layoutFramedSurface,
   matchSelectAction,
-  overlayMaxHeight,
   overlayOptions,
-  renderFrame,
-  scrollLines,
-  wrapKeyHints,
 } from "@sherif-fanous/pi-extensions-core";
 
 /** Button text for the two choices, defaulting to `Yes` and `No`. */
@@ -33,9 +29,6 @@ interface ConfirmLabels {
   readonly no: string;
   readonly yes: string;
 }
-
-/** Body rows the choices take below the message: a blank row and the buttons. */
-const CHOICE_ROWS = 2;
 
 class ConfirmComponent implements Component, Focusable {
   private selected: "no" | "yes" = "no";
@@ -101,8 +94,6 @@ class ConfirmComponent implements Component, Focusable {
 
   render(width: number): string[] {
     const bodyWidth = frameBodyWidth(width);
-    const height = overlayMaxHeight(this.terminal.rows);
-    const messageLines = wrapTextWithAnsi(this.message, Math.max(1, bodyWidth));
     const choiceHints = [
       `←/→ Choose`,
       keyHint(this.keybindings, "tui.select.confirm", "Confirm"),
@@ -111,37 +102,6 @@ class ConfirmComponent implements Component, Focusable {
       this.labels.no === CANCEL_LABEL ? undefined : `n ${this.labels.no}`,
       keyHint(this.keybindings, "tui.select.cancel", CANCEL_LABEL),
     ];
-    const messageRowsFor = (footerLineCount: number): number =>
-      Math.max(1, frameBodyRows(height, footerLineCount) - CHOICE_ROWS);
-    let footer = wrapKeyHints(choiceHints, bodyWidth);
-
-    if (messageLines.length > messageRowsFor(footer.length)) {
-      footer = wrapKeyHints(
-        [
-          keyHint(
-            this.keybindings,
-            ["tui.select.up", "tui.select.down"],
-            SCROLL_LABEL,
-          ),
-          keyHint(
-            this.keybindings,
-            ["tui.select.pageUp", "tui.select.pageDown"],
-            PAGE_LABEL,
-          ),
-          ...choiceHints,
-        ],
-        bodyWidth,
-      );
-    }
-
-    const messageRows = messageRowsFor(footer.length);
-    const message = scrollLines(
-      messageLines,
-      messageRows,
-      this.scrollOffset,
-      bodyWidth,
-      this.theme,
-    );
     const buttons = [
       this.renderButton("yes", this.labels.yes),
       this.renderButton("no", this.labels.no),
@@ -149,17 +109,34 @@ class ConfirmComponent implements Component, Focusable {
     const buttonIndent = " ".repeat(
       Math.max(0, Math.floor((bodyWidth - visibleWidth(buttons)) / 2)),
     );
-
-    this.scrollOffset = message.offset;
-    this.pageRows = messageRows;
-
-    return renderFrame({
-      body: [...message.lines, "", `${buttonIndent}${buttons}`],
-      footer,
+    const layout = layoutFramedSurface({
+      body: wrapTextWithAnsi(this.message, Math.max(1, bodyWidth)),
+      hints: choiceHints,
+      overflowHints: [
+        keyHint(
+          this.keybindings,
+          ["tui.select.up", "tui.select.down"],
+          SCROLL_LABEL,
+        ),
+        keyHint(
+          this.keybindings,
+          ["tui.select.pageUp", "tui.select.pageDown"],
+          PAGE_LABEL,
+        ),
+        ...choiceHints,
+      ],
+      pinned: ["", `${buttonIndent}${buttons}`],
+      scrollOffset: this.scrollOffset,
+      terminalRows: this.terminal.rows,
       theme: this.theme,
       title: this.title,
       width,
     });
+
+    this.scrollOffset = layout.scrollOffset;
+    this.pageRows = layout.bodyRows;
+
+    return layout.lines;
   }
 
   private finish(result: boolean): void {

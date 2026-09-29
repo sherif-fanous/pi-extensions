@@ -42,37 +42,40 @@ the thrown value, followed by a full stop unless it already ends in `.`, `!`, or
 
 ### Requirement: Event failures become error notifications
 
-The package SHALL export a `guardEvent(extensionName, eventName, handler)`
-function returning a `pi.on` handler. When `handler` succeeds, the returned
-handler SHALL resolve to `handler`'s result unchanged. When `handler` throws or
-rejects, the returned handler SHALL notify
-`<extensionName> <eventName> failed: <message>` at `error` severity, with
+The package SHALL export an `onEvent(pi, extensionName, event, handler)`
+function that registers a guarded handler for `event` with `pi.on`. The event
+name SHALL be checked against Pi's event types, and the handler's result against
+the result `pi.on` accepts for that event. When `handler` succeeds, the
+registered handler SHALL resolve to `handler`'s result unchanged. When `handler`
+throws or rejects, the registered handler SHALL notify
+`<extensionName> <event> failed: <message>` at `error` severity, with
 `<message>` formed as for `guardCommand`, and SHALL resolve to `undefined`.
 
 #### Scenario: A handler result passes through
 
-- **WHEN** a guarded `before_agent_start` handler returns a system prompt
-- **THEN** the returned handler resolves to that same result
-- **AND** the guard does not notify
+- **WHEN** a `before_agent_start` handler registered through `onEvent` returns a
+  system prompt
+- **THEN** the registered handler resolves to that same result
+- **AND** it does not notify
 
 #### Scenario: A handler fails
 
-- **WHEN** a guarded handler for `session_start` rejects with an `Error` whose
-  message is `Disk full!`
-- **THEN** the guard notifies `<extensionName> session_start failed: Disk full!`
-  at `error` severity
-- **AND** the returned handler resolves to `undefined`
+- **WHEN** a `session_start` handler registered through `onEvent` rejects with
+  an `Error` whose message is `Disk full!`
+- **THEN** the registered handler notifies
+  `<extensionName> session_start failed: Disk full!` at `error` severity
+- **AND** it resolves to `undefined`
 
 ### Requirement: Guards never reject when reporting fails
 
-`guardCommand` and `guardEvent` SHALL report failures on a best-effort basis.
-When the context's `notify` itself throws, for example because Pi has already
-replaced the session, the returned handler SHALL still resolve.
+`guardCommand` and `onEvent` SHALL report failures on a best-effort basis. When
+the context's `notify` itself throws, for example because Pi has already
+replaced the session, the guarded handler SHALL still resolve.
 
 #### Scenario: A stale context
 
 - **WHEN** a guarded handler fails and the context's `notify` throws
-- **THEN** the returned handler resolves instead of rejecting
+- **THEN** the guarded handler resolves instead of rejecting
 
 ### Requirement: Warnings from one operation form one notification
 

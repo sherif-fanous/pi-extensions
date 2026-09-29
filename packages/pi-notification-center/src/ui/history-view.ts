@@ -27,17 +27,17 @@ import type {
   Component,
   Focusable,
   KeybindingsManager,
+  Terminal,
 } from "@earendil-works/pi-tui";
 import {
   emptyStateLines,
-  frameBodyRows,
   frameBodyWidth,
   keyHint,
+  layoutFramedSurface,
   listWindow,
   matchSelectAction,
   moveListSelection,
   overlayMaxHeight,
-  renderFrame,
   scrollLines,
   wrapKeyHints,
 } from "@sherif-fanous/pi-extensions-core";
@@ -73,7 +73,8 @@ export interface HistoryLayoutOptions {
    */
   pendingPages: number;
   selected: number;
-  terminalHeight: number;
+  /** Pi's terminal height, `tui.terminal.rows`. */
+  terminalRows: number;
   theme: HistoryTheme;
   timeZone?: string;
   width: number;
@@ -86,10 +87,10 @@ export interface HistoryViewOptions {
   keybindings: KeybindingsManager;
   locale?: Intl.LocalesArgument;
   /**
-   * Current terminal height, so the browser can keep its footer on
+   * Pi's terminal, `tui.terminal`, whose height keeps the footer on
    * screen. Read on every render, so a resize needs no listener.
    */
-  terminalHeight: () => number;
+  terminal: Pick<Terminal, "rows">;
   theme: HistoryTheme;
   timeZone?: string;
 }
@@ -157,7 +158,7 @@ export class HistoryViewComponent implements Component, Focusable {
       locale: this.options.locale,
       pendingPages: this.pendingPages,
       selected: this.selected,
-      terminalHeight: this.options.terminalHeight(),
+      terminalRows: this.options.terminal.rows,
       theme: this.options.theme,
       timeZone: this.options.timeZone,
       width,
@@ -214,29 +215,28 @@ export function layoutHistory(
 
   if (!panes) return undefined;
 
-  const height = overlayMaxHeight(options.terminalHeight);
   const footerWidth = frameBodyWidth(width);
   const closeHint = keyHint(keybindings, "tui.select.cancel", "Close");
 
   if (items.length === 0) {
-    const footer = wrapKeyHints([closeHint], footerWidth);
-    const body = emptyStateLines(HISTORY_EMPTY_MESSAGE, footerWidth, theme);
-
     return {
       detailOffset: 0,
       left: [],
-      lines: renderFrame({
-        body: body.slice(0, frameBodyRows(height, footer.length)),
-        footer,
+      lines: layoutFramedSurface({
+        body: emptyStateLines(HISTORY_EMPTY_MESSAGE, footerWidth, theme),
+        hints: [closeHint],
+        scrollOffset: 0,
+        terminalRows: options.terminalRows,
         theme,
         title: HISTORY_TITLE,
         width,
-      }),
+      }).lines,
       right: [],
       rows: 0,
     };
   }
 
+  const height = overlayMaxHeight(options.terminalRows);
   const time = { locale: options.locale, timeZone: options.timeZone };
   const entry = items[selected];
   const detail = entry

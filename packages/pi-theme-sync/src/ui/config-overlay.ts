@@ -16,6 +16,7 @@ import {
   type Component,
   type Focusable,
   type KeybindingsManager,
+  type Terminal,
 } from "@earendil-works/pi-tui";
 import {
   configScopeLabel,
@@ -56,7 +57,8 @@ export interface ConfigOverlayOptions {
     scope: ConfigScope,
     changes: EditableConfigChanges,
   ) => Promise<void>;
-  readonly terminalRows: () => number;
+  /** Pi's terminal, `tui.terminal`, read on every render. */
+  readonly terminal: Pick<Terminal, "rows">;
   readonly theme: Theme;
   readonly themeNames: readonly string[];
 }
@@ -223,11 +225,17 @@ export class ConfigOverlayComponent implements Component, Focusable {
     this.pollInput.invalidate();
   }
 
+  /**
+   * Draw the current step from the frame pieces. Most steps size their
+   * body to the rows the footer leaves (a list window with the save
+   * message trimmed below it, the polling editor trimming its
+   * instruction), which `layoutFramedSurface`'s scrolled body can't do.
+   */
   render(width: number): string[] {
     if (width <= 0) return [];
 
     const bodyWidth = frameBodyWidth(width);
-    const height = overlayMaxHeight(this.options.terminalRows());
+    const height = overlayMaxHeight(this.options.terminal.rows);
     const layout = (paging: boolean): string[] =>
       this.busyText === undefined
         ? wrapKeyHints(this.footerHints(paging), bodyWidth)

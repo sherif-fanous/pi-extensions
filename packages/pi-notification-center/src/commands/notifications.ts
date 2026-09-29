@@ -112,7 +112,7 @@ export async function showNotificationHistory(
         },
         entries,
         keybindings,
-        terminalHeight: () => tui.terminal.rows,
+        terminal: tui.terminal,
         theme,
       }),
     {

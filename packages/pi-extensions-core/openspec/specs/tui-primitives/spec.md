@@ -63,6 +63,37 @@ fit in a frame `height` rows tall with that many footer lines.
   footer
 - **THEN** the frame is 12 lines tall
 
+### Requirement: A framed surface fits the overlay height
+
+`layoutFramedSurface({ title, titleRight?, body, scrollOffset, hints, overflowHints?, busy?, pinned?, reveal?, terminalRows, theme, width })`
+SHALL return `{ lines, scrollOffset, bodyRows }`: the frame drawn in
+`overlayMaxHeight(terminalRows)` rows. Its footer SHALL be the busy line when
+there is one, else `hints` wrapped between hints, or `overflowHints` (defaulting
+to `hints`) when `body` has more rows than fit under `hints`. The body SHALL get
+the rows the footer and `pinned` leave, at least one, and SHALL scroll from
+`scrollOffset` as `scrollLines` does, clamped into range; with `reveal`, the
+offset SHALL move as little as it can to show the revealed rows. `pinned` rows
+SHALL follow the body and never scroll.
+
+#### Scenario: A body taller than the overlay
+
+- **WHEN** `layoutFramedSurface` receives 40 body rows on a 20-row terminal at
+  width 48, with `overflowHints` that wrap to two lines
+- **THEN** it returns 16 lines with those two footer lines, 11 body rows, and a
+  `↓` on the last body row
+
+#### Scenario: A busy surface
+
+- **WHEN** `layoutFramedSurface` receives `busy: "Saving…"`
+- **THEN** the footer is the one dim line `Saving…`
+
+#### Scenario: An offset past the end
+
+- **WHEN** `layoutFramedSurface` receives 40 body rows with 11 rows to show and
+  `scrollOffset` 100
+- **THEN** it returns `scrollOffset` 29 and shows the last body row without a
+  `↓`
+
 ### Requirement: Key hints follow the user's keybindings
 
 `keyText(keybindings, keybinding)` SHALL return the first key bound to the

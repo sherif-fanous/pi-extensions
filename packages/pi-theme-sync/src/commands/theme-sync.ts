@@ -47,7 +47,7 @@ export async function openThemeSyncOverlay(
         keybindings,
         requestRender: () => tui.requestRender(),
         save: (scope, changes) => writeConfigChanges(scope, ctx, changes),
-        terminalRows: () => tui.terminal?.rows ?? 24,
+        terminal: tui.terminal,
         theme,
         themeNames: ctx.ui.getAllThemes().map((item) => item.name),
       });

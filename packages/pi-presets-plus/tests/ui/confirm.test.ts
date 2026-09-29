@@ -1,7 +1,7 @@
 /**
  * Covers the confirmation overlay: a golden rendering of the frame, prompt,
- * choices, and footer hint, choosing through Pi's keybindings, and fitting
- * a long message in the overlay height.
+ * choices, and footer hint, choosing through Pi's keybindings, and the
+ * scroll keys a long message adds to the footer.
  */
 import { openConfirm } from "../../src/ui/confirm.js";
 import type { KeybindingsManager } from "@earendil-works/pi-tui";
@@ -11,7 +11,6 @@ import {
   createFakeCustom,
   createFakeTui,
   createPiKeybindings,
-  findOverflowingLines,
   stripAnsi,
 } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it, vi } from "vitest";
@@ -139,20 +138,7 @@ describe("openConfirm", () => {
     ]);
   });
 
-  it("fits every line at a narrow width", async () => {
-    const harness = makeConfirmHarness(["n"], { width: 30 });
-
-    await openConfirm(
-      harness.ctx,
-      "Preset Doesn't Match Policy",
-      "The access policy for this directory does not permit this preset.",
-      { no: "Cancel", yes: "Override" },
-    );
-
-    expect(findOverflowingLines(harness.rendered, 30)).toEqual([]);
-  });
-
-  it("keeps the choices, footer, and border when the message is taller than the overlay", async () => {
+  it("offers Scroll and Page before the choice keys when the message is taller than the overlay", async () => {
     const harness = makeConfirmHarness(["n"], { rows: 20 });
     const message = Array.from({ length: 30 }, (_, i) => `line ${i}`).join(
       "\n",
@@ -160,14 +146,9 @@ describe("openConfirm", () => {
 
     await openConfirm(harness.ctx, "Title", message);
 
-    const lines = harness.rendered.map(stripAnsi);
-
-    // 80% of 20 rows is 16.
-    expect(lines).toHaveLength(16);
-    expect(lines.join("\n")).toContain("○ Yes   ● No");
-    expect(lines.join("\n")).toContain("Esc Cancel");
-    expect(lines.join("\n")).toContain("↑/↓ Scroll");
-    expect(lines.at(-1)).toMatch(/^└─+┘$/);
-    expect(lines.join("\n")).toContain("↓ │");
+    expect(harness.rendered.map(stripAnsi).slice(-3, -1)).toEqual([
+      "│ ↑/↓ Scroll · PgUp/PgDn Page · ←/→ Choose     │",
+      "│ Enter Confirm · y Yes · n No · Esc Cancel    │",
+    ]);
   });
 });

@@ -119,6 +119,12 @@ class ModelSelectorComponent implements Component, Focusable {
     this.requestRender();
   }
 
+  /**
+   * Draw the selector from the frame pieces. It keeps a search row above
+   * a list window, always offers PgUp/PgDn, and drops the frame when the
+   * terminal is too short for one, which `layoutFramedSurface`'s scrolled
+   * body can't do.
+   */
   render(width: number): string[] {
     const height = overlayMaxHeight(this.terminal.rows);
     const bodyWidth = frameBodyWidth(width);

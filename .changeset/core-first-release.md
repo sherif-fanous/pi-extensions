@@ -14,8 +14,9 @@
   warnings
 - Added: Add `formatReport`, which lays out a report body: the heading, rows
   aligned on the longest label, the `Config:` block, and the warnings
-- Added: Add `guardCommand` and `guardEvent`, which turn a failing command or
-  event handler into an error notification with one wording across extensions
+- Added: Add `guardCommand`, which turns a failing command handler into an error
+  notification, and `onEvent`, which registers an event handler that does the
+  same, with one wording across extensions
 - Added: Add `notifyWarnings`, which shows the warnings one operation produced
   as one warning notification headed with the extension name and warning count
 - Added: Add `notifyUsageWarning`, which answers an argument a command does not
@@ -38,6 +39,9 @@
   `frameBodyWidth`, `frameBodyRows`, and `padToWidth`, which draw the family's
   bordered frame with the title in the top border and a dim footer, fitted to
   any width
+- Added: Add `layoutFramedSurface`, which lays out a framed dialog or form whose
+  text scrolls: it picks the footer, shows a busy line in its place, and fits
+  the overlay height
 - Added: Add `keyHint`, `keyText`, `formatKeyId`, and `wrapKeyHints`, which
   write footer key hints with the keys the user actually has bound and wrap them
   between hints instead of cutting one

@@ -208,17 +208,19 @@ of letting Pi show its generic extension error row, and never rethrows.
 `<message>` is the `describeError` text with a full stop added unless it already
 ends in `.`, `!`, or `?`.
 
-### `guardEvent(extensionName: string, eventName: string, handler): handler`
+### `onEvent(pi, extensionName: string, event, handler): void`
 
-Wraps a `pi.on` handler. A successful handler's result, such as a
-`before_agent_start` system prompt, passes through unchanged. When the handler
-throws or rejects, the wrapper notifies
-`<extensionName> <eventName> failed: <message>` at error severity and resolves
-to `undefined`. Passed to `pi.on`, the wrapper takes its event, context, and
-result types from the matching overload.
+Registers `handler` with `pi.on` for `event`, guarded. A successful handler's
+result, such as a `before_agent_start` system prompt, passes through unchanged.
+When the handler throws or rejects, the registered handler notifies
+`<extensionName> <event> failed: <message>` at error severity and resolves to
+`undefined`, which Pi treats as no result. The event is named once: the
+handler's event type comes from it, and a result the event does not accept fails
+to compile, reported at the `pi` argument. Every Pi event except `project_trust`
+can be registered this way.
 
 ```ts
-import { guardCommand, guardEvent } from "@sherif-fanous/pi-extensions-core";
+import { guardCommand, onEvent } from "@sherif-fanous/pi-extensions-core";
 
 export default function themeSync(pi: ExtensionAPI): void {
   pi.registerCommand("theme-sync", {
@@ -226,11 +228,8 @@ export default function themeSync(pi: ExtensionAPI): void {
       runThemeSyncCommand(args, ctx),
     ),
   });
-  pi.on(
-    "session_start",
-    guardEvent("Theme Sync", "session_start", (_event, ctx) =>
-      startMonitoring(ctx),
-    ),
+  onEvent(pi, "Theme Sync", "session_start", (_event, ctx) =>
+    startMonitoring(ctx),
   );
 }
 ```
@@ -533,6 +532,67 @@ if (live) {
   });
 }
 ```
+
+### `layoutFramedSurface(options: FramedSurfaceOptions): FramedSurfaceLayout`
+
+Lays out a framed surface whose body is scrolled text, such as a dialog, a
+confirmation, or a form, in the height Pi gives an overlay, and returns
+`{ lines, scrollOffset, bodyRows }`. The options are:
+
+- `title`, `titleRight?`, `theme`, and `width`, as for `renderFrame`;
+- `terminalRows`: Pi's terminal height, `tui.terminal.rows`, which
+  `overlayMaxHeight` turns into the surface's height;
+- `body`: styled rows fitted to `frameBodyWidth(width)`;
+- `scrollOffset`: the body rows scrolled past, as the last layout returned it;
+- `hints`: the footer's key hints while the body fits;
+- `overflowHints?`: the footer's key hints while the body does not fit, such as
+  `hints` with `↑/↓ Scroll` and `PgUp/PgDn Page` added. Defaults to `hints`;
+- `busy?`: a busy line such as `Saving…`, drawn in place of either;
+- `pinned?`: styled rows drawn under the body and never scrolled, such as a
+  form's buttons;
+- `reveal?`: `{ start, end }`, body rows to keep in view, such as the focused
+  field. The offset moves as little as it can.
+
+The footer is wrapped with `wrapKeyHints`. The overflow hints are chosen when
+the body is taller than the rows left under `hints`, and the body then gets the
+rows left under them, at least one. It scrolls with `scrollLines`, so hidden
+rows show as `↑` and `↓` markers. Store `scrollOffset`, clamped into range, for
+the next render, and page by `bodyRows`.
+
+```ts
+import {
+  frameBodyWidth,
+  keyHint,
+  layoutFramedSurface,
+} from "@sherif-fanous/pi-extensions-core";
+import { wrapTextWithAnsi } from "@earendil-works/pi-tui";
+
+render(width: number): string[] {
+  const close = keyHint(this.keybindings, "tui.select.cancel", "Close");
+  const layout = layoutFramedSurface({
+    body: wrapTextWithAnsi(this.text, Math.max(1, frameBodyWidth(width))),
+    hints: [close],
+    overflowHints: [
+      keyHint(this.keybindings, ["tui.select.up", "tui.select.down"], "Scroll"),
+      keyHint(this.keybindings, ["tui.select.pageUp", "tui.select.pageDown"], "Page"),
+      close,
+    ],
+    scrollOffset: this.scrollOffset,
+    terminalRows: this.terminal.rows,
+    theme: this.theme,
+    title: "Preset Prompt",
+    width,
+  });
+
+  this.scrollOffset = layout.scrollOffset;
+  this.pageRows = layout.bodyRows;
+
+  return layout.lines;
+}
+```
+
+A surface whose body depends on its row count, such as a list window, draws with
+`renderFrame` and `frameBodyRows` instead.
 
 ### `renderFrame(options: FrameOptions): string[]`
 

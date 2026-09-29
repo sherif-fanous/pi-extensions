@@ -5,16 +5,17 @@
  */
 import {
   guardCommand,
-  guardEvent,
   notifyUsageWarning,
   notifyWarnings,
+  onEvent,
   subcommandCompletions,
   type GuardContext,
 } from "../../src/index.js";
-import type {
-  BeforeAgentStartEvent,
-  BeforeAgentStartEventResult,
-} from "@earendil-works/pi-coding-agent";
+import type { BeforeAgentStartEvent } from "@earendil-works/pi-coding-agent";
+import {
+  createFakeContext,
+  createFakePi,
+} from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it, vi } from "vitest";
 
 function notifyingContext(): {
@@ -71,43 +72,54 @@ describe("guard reporting through a stale context", () => {
       guardCommand("RTK", () => Promise.reject(new Error("boom")))("", ctx),
     ).resolves.toBeUndefined();
 
+    const fake = createFakePi();
+
+    onEvent(fake.pi, "RTK", "session_start", () => {
+      throw new Error("boom");
+    });
+
     await expect(
-      guardEvent("RTK", "user_bash", () => {
-        throw new Error("boom");
-      })({}, ctx),
-    ).resolves.toBeUndefined();
+      fake.emit(
+        { reason: "startup", type: "session_start" },
+        createFakeContext({ ui: ctx.ui }),
+      ),
+    ).resolves.toEqual([undefined]);
   });
 });
 
-describe("guardEvent", () => {
-  const event = { systemPrompt: "base" } as BeforeAgentStartEvent;
+describe("onEvent", () => {
+  const event = {
+    systemPrompt: "base",
+    type: "before_agent_start",
+  } as BeforeAgentStartEvent;
 
-  it("passes the handler result through when it succeeds", async () => {
+  it("registers the handler for the event and passes its result through", async () => {
     const { ctx, notify } = notifyingContext();
-    const handler = guardEvent(
-      "Presets Plus",
-      "before_agent_start",
-      (received: BeforeAgentStartEvent): BeforeAgentStartEventResult => ({
-        systemPrompt: `${received.systemPrompt}\n\nextra`,
-      }),
-    );
+    const fake = createFakePi();
 
-    await expect(handler(event, ctx)).resolves.toEqual({
-      systemPrompt: "base\n\nextra",
-    });
+    onEvent(fake.pi, "Presets Plus", "before_agent_start", (received) => ({
+      systemPrompt: `${received.systemPrompt}\n\nextra`,
+    }));
+
+    expect([...fake.handlers.keys()]).toEqual(["before_agent_start"]);
+    await expect(
+      fake.emit(event, createFakeContext({ ui: ctx.ui })),
+    ).resolves.toEqual([{ systemPrompt: "base\n\nextra" }]);
     expect(notify).not.toHaveBeenCalled();
   });
 
-  it("notifies a failure and returns undefined", async () => {
+  it("notifies a failure named after the event and returns undefined", async () => {
     const { ctx, notify } = notifyingContext();
-    const handler = guardEvent(
-      "Presets Plus",
-      "before_agent_start",
-      (): Promise<BeforeAgentStartEventResult> =>
-        Promise.reject(new Error("Disk full!")),
+    const fake = createFakePi();
+
+    onEvent(fake.pi, "Presets Plus", "before_agent_start", () =>
+      Promise.reject(new Error("Disk full!")),
     );
 
-    await expect(handler(event, ctx)).resolves.toBeUndefined();
+    await expect(
+      fake.emit(event, createFakeContext({ ui: ctx.ui })),
+    ).resolves.toEqual([undefined]);
+
     expect(notify).toHaveBeenCalledExactlyOnceWith(
       "Presets Plus before_agent_start failed: Disk full!",
       "error",

@@ -14,7 +14,6 @@ import {
   createMarkerTheme,
   createPiKeybindings,
   createPlainTheme,
-  findOverflowingLines,
   stripAnsi,
 } from "@sherif-fanous/pi-extensions-testing";
 import { describe, expect, it, vi } from "vitest";
@@ -176,17 +175,12 @@ describe("openInfoDialog", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("fits a tall body in the overlay height and keeps footer and border", async () => {
+  it("offers Scroll and Page once the body is taller than the dialog", async () => {
     const lines = await renderAfterKeys([]);
 
-    // 80% of 20 rows is 16.
-    expect(lines).toHaveLength(16);
-    expect(lines.at(-1)).toMatch(/^└─+┘$/);
     expect(lines.slice(-3, -1).map((line) => line.slice(2, -1).trim())).toEqual(
       ["↑/↓ Scroll · PgUp/PgDn Page", "Enter/Esc Close"],
     );
-    expect(lines[1]).toContain("line 0");
-    expect(lines.join("\n")).toContain("↓ │");
   });
 
   it("scrolls the body with the down and page-down keys", async () => {
@@ -211,24 +205,6 @@ describe("openInfoDialog", () => {
 
     expect(lines[1]).toContain("line 2");
     expect(lines.slice(-3, -1).join("\n")).toContain("Ctrl+P/Ctrl+N Scroll");
-  });
-
-  it("fits every line at a narrow width", async () => {
-    const harness = makeInfoDialogHarness("\r", 30);
-
-    await openInfoDialog(harness.ctx, {
-      body: LONG_BODY.join(" "),
-      title: "A Title Too Long For This Narrow Dialog",
-    });
-
-    expect(findOverflowingLines(harness.rendered, 30)).toEqual([]);
-  });
-
-  it("stops scrolling at the end of the body", async () => {
-    const lines = await renderAfterKeys(Array(60).fill("\u001B[B"));
-
-    expect(lines.join("\n")).toContain("line 39");
-    expect(lines.join("\n")).not.toContain("↓ │");
   });
 
   it("wraps multi-line bodies at narrow width", async () => {

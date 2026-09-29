@@ -15,15 +15,11 @@ import {
   type Terminal,
 } from "@earendil-works/pi-tui";
 import {
-  frameBodyRows,
   frameBodyWidth,
   keyHint,
+  layoutFramedSurface,
   matchSelectAction,
-  overlayMaxHeight,
   overlayOptions,
-  renderFrame,
-  scrollLines,
-  wrapKeyHints,
 } from "@sherif-fanous/pi-extensions-core";
 
 /**
@@ -82,57 +78,41 @@ class InfoDialogComponent implements Component, Focusable {
   }
 
   render(width: number): string[] {
-    const bodyWidth = frameBodyWidth(width);
-    const height = overlayMaxHeight(this.terminal.rows);
-    const bodyLines = wrapTextWithAnsi(
-      this.options.body,
-      Math.max(1, bodyWidth),
-    );
     const closeHint = keyHint(
       this.keybindings,
       ["tui.select.confirm", "tui.select.cancel"],
       CLOSE_LABEL,
     );
-    let footer = wrapKeyHints([closeHint], bodyWidth);
-
-    if (bodyLines.length > frameBodyRows(height, footer.length)) {
-      footer = wrapKeyHints(
-        [
-          keyHint(
-            this.keybindings,
-            ["tui.select.up", "tui.select.down"],
-            SCROLL_LABEL,
-          ),
-          keyHint(
-            this.keybindings,
-            ["tui.select.pageUp", "tui.select.pageDown"],
-            PAGE_LABEL,
-          ),
-          closeHint,
-        ],
-        bodyWidth,
-      );
-    }
-
-    const rows = Math.max(1, frameBodyRows(height, footer.length));
-    const body = scrollLines(
-      bodyLines,
-      rows,
-      this.scrollOffset,
-      bodyWidth,
-      this.theme,
-    );
-
-    this.scrollOffset = body.offset;
-    this.pageRows = rows;
-
-    return renderFrame({
-      body: body.lines,
-      footer,
+    const layout = layoutFramedSurface({
+      body: wrapTextWithAnsi(
+        this.options.body,
+        Math.max(1, frameBodyWidth(width)),
+      ),
+      hints: [closeHint],
+      overflowHints: [
+        keyHint(
+          this.keybindings,
+          ["tui.select.up", "tui.select.down"],
+          SCROLL_LABEL,
+        ),
+        keyHint(
+          this.keybindings,
+          ["tui.select.pageUp", "tui.select.pageDown"],
+          PAGE_LABEL,
+        ),
+        closeHint,
+      ],
+      scrollOffset: this.scrollOffset,
+      terminalRows: this.terminal.rows,
       theme: this.theme,
       title: this.options.title,
       width,
     });
+
+    this.scrollOffset = layout.scrollOffset;
+    this.pageRows = layout.bodyRows;
+
+    return layout.lines;
   }
 
   private finish(): void {

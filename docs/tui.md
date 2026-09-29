@@ -17,18 +17,25 @@ instead of drawing borders, hints, or list movement by hand.
   with no frame, but follows every other rule here: an accent title, the list
   model, the markers, and a dim key-hint line. Like `/fork`, it shows at most
   ten messages and doesn't fit itself to the terminal height.
-- Height: a surface lays itself out to `overlayMaxHeight(terminalRows)` and
-  scrolls whatever is taller (`scrollLines`, `listWindow`), keeping the focused
-  row and the footer visible. Pi keeps only the top rows of a taller render, so
-  never rely on it to cut.
-- Frame: `renderFrame`. The border uses box characters in the theme's `border`
-  color. The title sits in the top border (`┌─ Title ───┐`), bold accent, in
-  Title Case, with names in double quotes and a question ending in `?`
-  (`Delete "coding"?`). The body is padded one space inside the border and never
-  repeats the title. A `├───┤` rule separates the dim footer, then `└───┘`.
-  Muted text such as a position may sit at the right of the top border
-  (`titleRight`). Layouts `renderFrame` does not cover (split panes, toast
-  cards) are built from `frameTop`, `frameLine`, and `frameSegment`.
+- Height: a surface takes Pi's terminal as `tui.terminal` and reads its `rows`
+  on every render, so a resize needs no listener. It lays itself out to
+  `overlayMaxHeight(rows)` and scrolls whatever is taller (`scrollLines`,
+  `listWindow`), keeping the focused row and the footer visible. Pi keeps only
+  the top rows of a taller render, so never rely on it to cut.
+- Frame: a surface whose body is scrolled text, such as a dialog, a
+  confirmation, or a form, is laid out by `layoutFramedSurface`: it picks the
+  footer (the hints, the hints for a body that overflows, or the busy line),
+  gives the body the rows left, scrolls it, and draws the frame. A surface whose
+  body depends on its row count, such as a list window or a body trimmed to fit,
+  draws with `renderFrame` and `frameBodyRows`. The border uses box characters
+  in the theme's `border` color. The title sits in the top border
+  (`┌─ Title ───┐`), bold accent, in Title Case, with names in double quotes and
+  a question ending in `?` (`Delete "coding"?`). The body is padded one space
+  inside the border and never repeats the title. A `├───┤` rule separates the
+  dim footer, then `└───┘`. Muted text such as a position may sit at the right
+  of the top border (`titleRight`). Layouts `renderFrame` does not cover (split
+  panes, toast cards) are built from `frameTop`, `frameLine`, and
+  `frameSegment`.
 - Width: every line a component returns fits the width it was given; Pi stops
   with an error on a wider line in its main screen and cuts overlays off.
   Truncate with `…`, never `...`. Text the cursor can reach is never truncated

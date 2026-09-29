@@ -1,12 +1,17 @@
 /**
- * Scaffolding for extension entry points: error guards for command and
- * event handlers, warning notifications, the usage-mistake warning, and
- * argument completion for fixed subcommands.
+ * Scaffolding for extension entry points: guarded command and event
+ * handlers, warning notifications, the usage-mistake warning, and argument
+ * completion for fixed subcommands.
  */
 
 import { describeErrorSentence } from "../errors.js";
 import { pluralize } from "../text.js";
-import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionContext,
+  ExtensionEvent,
+  ExtensionHandler,
+  ExtensionUIContext,
+} from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 
 /**
@@ -24,6 +29,16 @@ export interface SubcommandCompletion {
   /** Token the user types, and the value the completion inserts. */
   readonly name: string;
 }
+
+/** The Pi event of type `K`, such as `SessionStartEvent` for `session_start`. */
+type EventOf<K extends GuardedEventName> = Extract<ExtensionEvent, { type: K }>;
+
+/**
+ * The events {@link onEvent} registers: every Pi event except
+ * `project_trust`, whose handler takes another context and must always
+ * return a result.
+ */
+type GuardedEventName = Exclude<ExtensionEvent["type"], "project_trust">;
 
 /**
  * Wrap a command handler so a failure becomes an error notification.
@@ -45,34 +60,6 @@ export function guardCommand<C extends GuardContext>(
       await handler(args, ctx);
     } catch (error) {
       reportFailure(ctx, `${extensionName} command failed`, error);
-    }
-  };
-}
-
-/**
- * Wrap a `pi.on` handler so a failure becomes an error notification.
- *
- * The handler's result, such as a `before_agent_start` system prompt,
- * passes through unchanged. When `handler` throws or rejects, the wrapper
- * notifies `<extensionName> <eventName> failed: <message>` at error
- * severity and resolves to `undefined`, which Pi treats as no result.
- *
- * When the wrapper is passed to `pi.on`, TypeScript infers `E` and `C`
- * from the matching overload and checks the result against the event's
- * result type. Tests may call the wrapper with a narrower context.
- */
-export function guardEvent<E, R, C extends GuardContext>(
-  extensionName: string,
-  eventName: string,
-  handler: (event: E, ctx: C) => R,
-): (event: E, ctx: C) => Promise<Awaited<R> | undefined> {
-  return async (event: E, ctx: C): Promise<Awaited<R> | undefined> => {
-    try {
-      return await handler(event, ctx);
-    } catch (error) {
-      reportFailure(ctx, `${extensionName} ${eventName} failed`, error);
-
-      return undefined;
     }
   };
 }
@@ -121,6 +108,37 @@ export function notifyWarnings(
   } catch {
     // No usable UI is left to report through.
   }
+}
+
+/**
+ * Register `handler` for the Pi event `event` so a failure becomes an
+ * error notification.
+ *
+ * The handler's result, such as a `before_agent_start` system prompt,
+ * passes through unchanged. When `handler` throws or rejects, the
+ * registered handler notifies `<extensionName> <event> failed: <message>`
+ * at error severity and resolves to `undefined`, which Pi treats as no
+ * result. The event's type comes from `event`, and `pi` is checked
+ * against the matching `pi.on` overload, so a result the event does not
+ * accept fails to compile at the `pi` argument.
+ */
+export function onEvent<K extends GuardedEventName, R>(
+  pi: NoInfer<{
+    on(event: K, handler: ExtensionHandler<EventOf<K>, Awaited<R>>): unknown;
+  }>,
+  extensionName: string,
+  event: K,
+  handler: (event: EventOf<K>, ctx: ExtensionContext) => R,
+): void {
+  pi.on(event, async (received, ctx): Promise<Awaited<R> | undefined> => {
+    try {
+      return await handler(received, ctx);
+    } catch (error) {
+      reportFailure(ctx, `${extensionName} ${event} failed`, error);
+
+      return undefined;
+    }
+  });
 }
 
 /**
