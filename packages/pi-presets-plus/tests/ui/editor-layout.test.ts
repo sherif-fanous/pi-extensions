@@ -1,10 +1,9 @@
 /**
- * Covers how the preset editor fits its overlay: the title in the top
- * border, the footer wrapping between hints, a form taller than the
- * overlay keeping its buttons, footer, and border while it scrolls to the
- * focused row, every line fitting a narrow width, the tools row wrapping
- * so every tool stays visible, the busy line while a save runs, and Pi's
- * keybindings, remaps included.
+ * Covers how the preset editor lays out its form: the title in the top
+ * border, a form taller than the overlay keeping its buttons while it
+ * scrolls to the focused row, the tools row wrapping so every tool stays
+ * visible, the busy line while a save runs, and Pi's keybindings, remaps
+ * included.
  */
 import { ActivePresetSession } from "../../src/activation/session.js";
 import type { LoadedPreset } from "../../src/types.js";
@@ -15,7 +14,6 @@ import {
   createFakeCustom,
   createFakeTui,
   createPiKeybindings,
-  findOverflowingLines,
   flushPromises,
   stripAnsi,
 } from "@sherif-fanous/pi-extensions-testing";
@@ -155,25 +153,13 @@ describe("editor layout", () => {
     expect(render(editor, 80)[0]).toMatch(/^┌─ Edit "plan" ─+┐$/);
   });
 
-  it("wraps the footer so Ctrl+T Test and Esc Cancel stay visible at 40 columns", async () => {
-    const { editor } = await open();
-    const footer = footerRows(render(editor, 40)).join("\n");
-
-    expect(footer).toContain("Ctrl+T Test");
-    expect(footer).toContain("Esc Cancel");
-    expect(footer).not.toContain("…");
-  });
-
-  it("fits a short terminal and keeps the buttons, footer, and border", async () => {
+  it("keeps the buttons below the fields on a short terminal, with a plain scroll marker", async () => {
     const { editor } = await open({ rows: 16 });
     const lines = render(editor, 100);
+    const rule = lines.findIndex((line) => line.startsWith("├"));
 
-    // 80% of 16 rows is 12.
-    expect(lines).toHaveLength(12);
-    expect(lines.at(-1)).toMatch(/^└─+┘$/);
-    expect(lines.join("\n")).toContain("Actions");
-    expect(lines.join("\n")).toContain("Esc Cancel");
-    expect(lines.join("\n")).toContain("↓ │");
+    expect(lines[rule - 1]).toContain("Actions");
+    expect(lines[rule - 2]).toMatch(/ {2}↓ │$/);
   });
 
   it("scrolls the form to keep the focused row visible", async () => {
@@ -189,18 +175,6 @@ describe("editor layout", () => {
     expect(lines.join("\n")).toContain("↑ │");
     expect(lines.at(-1)).toMatch(/^└─+┘$/);
   });
-
-  it.each([40, 30])(
-    "fits every line on every row at width %i",
-    async (width) => {
-      const { editor } = await open();
-
-      for (let row = 0; row < 9; row++) {
-        expect(findOverflowingLines(editor.render(width), width)).toEqual([]);
-        editor.handleInput?.("\t");
-      }
-    },
-  );
 
   it("shows the whole focused name field without cutting it off", async () => {
     const { editor } = await open();

@@ -5,10 +5,7 @@
  * written back to disk.
  */
 import type { LoadedPreset } from "../../src/types.js";
-import {
-  formatHotkeyReloadNotice,
-  scrollOffsetShowing,
-} from "../../src/ui/editor.js";
+import { formatHotkeyReloadNotice } from "../../src/ui/editor.js";
 import {
   buildPreset,
   initialState,
@@ -406,21 +403,6 @@ describe("formatHotkeyReloadNotice", () => {
     expect(formatHotkeyReloadNotice("ctrl+shift+1", "ctrl+shift+1")).toEqual(
       [],
     );
-  });
-});
-
-describe("scrollOffsetShowing", () => {
-  it("keeps the offset while the range is visible", () => {
-    expect(scrollOffsetShowing(2, 4, 3, 5)).toBe(2);
-  });
-
-  it("scrolls up or down just enough to show the range", () => {
-    expect(scrollOffsetShowing(4, 4, 1, 2)).toBe(1);
-    expect(scrollOffsetShowing(0, 4, 5, 7)).toBe(3);
-  });
-
-  it("shows the start of a range taller than the window", () => {
-    expect(scrollOffsetShowing(0, 2, 3, 8)).toBe(3);
   });
 });
 

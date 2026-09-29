@@ -69,18 +69,13 @@ import {
   type Terminal,
 } from "@earendil-works/pi-tui";
 import {
-  frameBodyRows,
   frameBodyWidth,
   keyHint,
   keyText,
+  layoutFramedSurface,
   matchesHelpKey,
   matchSelectAction,
-  overlayMaxHeight,
   overlayOptions,
-  padToWidth,
-  renderFrame,
-  scrollLines,
-  wrapKeyHints,
 } from "@sherif-fanous/pi-extensions-core";
 
 export { EDITOR_ROWS };
@@ -282,24 +277,50 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
     this.overlayHandle = handle;
   }
 
+  /**
+   * Render the form. The messages and the buttons row always show; when
+   * the value rows do not fit above them, they scroll to keep the focused
+   * row in view, with edge markers.
+   */
   render(width: number): string[] {
     const bodyWidth = frameBodyWidth(width);
-    const footer =
-      this.busyMessage === undefined
-        ? wrapKeyHints(this.footerHints(), bodyWidth)
-        : [this.busyMessage];
-    const bodyRows = frameBodyRows(
-      overlayMaxHeight(this.terminal.rows),
-      footer.length,
-    );
+    const valueLines: string[] = [];
+    let focused: { end: number; start: number } | undefined;
 
-    return renderFrame({
-      body: this.renderBody(bodyWidth, bodyRows),
-      footer,
+    for (const id of EDITOR_ROWS) {
+      if (id === "buttons") continue;
+
+      const start = valueLines.length;
+
+      valueLines.push(...(this.rowsById.get(id)?.renderLines(bodyWidth) ?? []));
+
+      if (id === this.currentRow()) {
+        focused = { end: valueLines.length, start };
+      }
+    }
+
+    const layout = layoutFramedSurface({
+      body: valueLines,
+      busy: this.busyMessage,
+      hints: this.footerHints(),
+      // The hotkey reload notice and the flow error belong to the form as
+      // a whole, so they render between the last value row and the
+      // buttons.
+      pinned: [
+        ...this.renderMessages(),
+        ...(this.rowsById.get("buttons")?.renderLines(bodyWidth) ?? []),
+      ],
+      reveal: focused,
+      scrollOffset: this.scrollOffset,
+      terminalRows: this.terminal.rows,
       theme: this.theme,
       title: editorTitle(this.openOptions),
       width,
     });
+
+    this.scrollOffset = layout.scrollOffset;
+
+    return layout.lines;
   }
 
   private async confirm(title: string, message: string): Promise<boolean> {
@@ -508,67 +529,6 @@ class PresetEditorComponent implements Component, Focusable, EditorRowHost {
       this.options.onTest === undefined ? undefined : "Ctrl+T Test",
       keyHint(keybindings, "tui.select.cancel", CANCEL_LABEL),
     ];
-  }
-
-  /**
-   * Render the form in at most `height` lines. The messages and the
-   * buttons row always show; when the value rows do not fit above them,
-   * they scroll to keep the focused row in view, with edge markers.
-   */
-  private renderBody(width: number, height: number): string[] {
-    const valueLines: string[] = [];
-    let focusStart = 0;
-    let focusEnd = 0;
-
-    for (const id of EDITOR_ROWS) {
-      if (id === "buttons") continue;
-
-      const start = valueLines.length;
-
-      valueLines.push(...(this.rowsById.get(id)?.renderLines(width) ?? []));
-
-      if (id === this.currentRow()) {
-        focusStart = start;
-        focusEnd = valueLines.length;
-      }
-    }
-
-    // The hotkey reload notice and the flow error belong to the form as a
-    // whole, so they render between the last value row and the buttons.
-    const pinnedLines = [
-      ...this.renderMessages(),
-      ...(this.rowsById.get("buttons")?.renderLines(width) ?? []),
-    ];
-    const valueRows = Math.max(1, height - pinnedLines.length);
-    let visibleValueLines = valueLines;
-
-    if (valueLines.length > valueRows) {
-      if (this.currentRow() !== "buttons") {
-        this.scrollOffset = scrollOffsetShowing(
-          this.scrollOffset,
-          valueRows,
-          focusStart,
-          focusEnd,
-        );
-      }
-
-      const scrolled = scrollLines(
-        valueLines.map((line) => padToWidth(line, width)),
-        valueRows,
-        this.scrollOffset,
-        width,
-        this.theme,
-      );
-
-      this.scrollOffset = scrolled.offset;
-      visibleValueLines = scrolled.lines;
-    } else {
-      this.scrollOffset = 0;
-    }
-
-    return [...visibleValueLines, ...pinnedLines].map((line) =>
-      padToWidth(line, width),
-    );
   }
 
   /** Build this instance's rows, each bound to the editor as its host. */
@@ -946,23 +906,6 @@ export async function openEditor(
       overlayOptions: overlayOptions("main"),
     },
   );
-}
-
-/**
- * Return the scroll offset closest to `scrollOffset` that shows the lines
- * from `start` to the exclusive `end` in a window of `rows` lines. A range
- * taller than the window shows its first line.
- */
-export function scrollOffsetShowing(
-  scrollOffset: number,
-  rows: number,
-  start: number,
-  end: number,
-): number {
-  if (start < scrollOffset || end - start > rows) return start;
-  if (end > scrollOffset + rows) return end - rows;
-
-  return scrollOffset;
 }
 
 /**
