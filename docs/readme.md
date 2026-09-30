@@ -59,8 +59,8 @@ holds the same rules.
   Versions follow as `## [x.y.z] - YYYY-MM-DD` sections, newest first, with
   their link references at the end. Only `mise run version` adds a section, from
   the changesets (see [releasing.md](releasing.md)); there is no
-  `## [Unreleased]` section. Leave released sections as they were written,
-  including their links to the old single-extension repositories.
+  `## [Unreleased]` section. Released sections keep their links to the old
+  single-extension repositories; reword an entry only to fit Common Changelog.
 
 - `CONTRIBUTING.md`: every extension has the same text (setup, tasks, planning,
   and the checklist before a pull request); add a package's own manual check to

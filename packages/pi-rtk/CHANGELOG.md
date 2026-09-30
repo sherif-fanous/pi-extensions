@@ -4,52 +4,38 @@ This changelog follows [Common Changelog](https://common-changelog.org/).
 
 ## [0.6.0] - 2026-05-13
 
-### Added
-
-- A `/rtk` slash command for session-scoped control. `/rtk enable` and
-  `/rtk disable` toggle rewriting on and off for the current Pi session;
-  `/rtk status` shows the toggle state, the detected `rtk` binary version and
-  path, and a tip on how to bypass rtk for a single command. A bare `/rtk`
-  invocation opens an overlay with the same actions. The toggle is in-memory
-  only and resets to enabled each time Pi starts.
-  ([#13](https://github.com/sherif-fanous/pi-rtk/pull/13))
-- A persistent footer indicator showing whether rewriting is currently active:
-  `rtk ✓` in green when enabled, `rtk ✗` in red when disabled.
-  ([#13](https://github.com/sherif-fanous/pi-rtk/pull/13))
-- A warning notification when the `rtk` binary cannot be reached. The
-  notification fires at session start if `rtk` is missing from PATH or not
-  executable, and again mid-session if `rtk` becomes unavailable while Pi is
-  running. At most one notification per outage — reinstalling `rtk` mid-session
-  resets the gate so a subsequent removal will warn again.
-  ([#12](https://github.com/sherif-fanous/pi-rtk/pull/12))
-
 ### Changed
 
-- Reduced latency on user-issued `!<cmd>` shell commands by reusing the
-  probe-time rewrite result rather than recomputing it. Same output, fewer
-  subprocess spawns. ([#10](https://github.com/sherif-fanous/pi-rtk/pull/10))
+- Reuse the rewrite found while probing a `!<cmd>` shell command instead of
+  running rtk again, so the command starts sooner
+  ([#10](https://github.com/sherif-fanous/pi-rtk/pull/10))
+
+### Added
+
+- Add `/rtk enable` and `/rtk disable`, which turn rewriting on or off until Pi
+  restarts, and `/rtk status`, which shows the state, the rtk binary's version
+  and path, and how to skip rtk for one command. A bare `/rtk` opens a menu with
+  the same actions ([#13](https://github.com/sherif-fanous/pi-rtk/pull/13))
+- Add a footer badge that shows `rtk ✓` in green while rewriting is on and
+  `rtk ✗` in red while it is off
+  ([#13](https://github.com/sherif-fanous/pi-rtk/pull/13))
+- Warn once per outage when the rtk binary can't be reached, at session start or
+  when it disappears while Pi runs
+  ([#12](https://github.com/sherif-fanous/pi-rtk/pull/12))
 
 ## [0.5.0] - 2026-05-12
 
 ### Changed
 
-- **Breaking:** The extension now targets Pi published under the
-  `@earendil-works` npm scope (Pi `0.74.0` and later). Pi has moved away from
-  its old `@mariozechner` scope, and `pi-rtk` v0.5.0 will not load on Pi
-  versions prior to `0.74.0`. Upgrade Pi to `0.74.0` or newer before upgrading
-  this extension.
+- **Breaking:** Require Pi 0.74.0 or later, which Pi publishes under the
+  `@earendil-works` npm scope instead of `@mariozechner`
 
 ## [0.4.0] - 2026-05-12
 
 ### Fixed
 
-- The extension now applies rtk rewrites for the vast majority of shell
-  commands. Previously, rewrites were silently dropped for every command outside
-  a narrow read-only allow-list (`ls`, `grep`, `find`, `wc`, `cat`) — meaning
-  `head`, `tail`, every pipe ending in head/tail, and every destructive command
-  ran in their original un-rewritten form and produced no token savings. The
-  extension now applies rtk's rewrite whenever one is produced, with Pi's
-  existing per-command approval continuing to gate execution.
+- Apply rtk's rewrite to every shell command rtk rewrites, instead of only to
+  `ls`, `grep`, `find`, `wc`, and `cat`
   ([#2](https://github.com/sherif-fanous/pi-rtk/issues/2))
 
 ## [0.3.0] - 2026-03-18
@@ -63,8 +49,8 @@ This changelog follows [Common Changelog](https://common-changelog.org/).
 
 ### Added
 
-- Support for optimizing context-visible user shell commands entered with Pi's
-  `!<cmd>` syntax
+- Rewrite shell commands you run with Pi's `!<cmd>` syntax, whose output goes
+  into the context
 
 ## [0.1.0] - 2026-03-09
 

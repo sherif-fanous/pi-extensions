@@ -37,8 +37,8 @@ This changelog follows [Common Changelog](https://common-changelog.org/).
 
 - Store presets, settings, and user policy in one configuration file per scope
   ([#43](https://github.com/sherif-fanous/pi-presets-plus/pull/43))
-- Automatically migrate valid legacy configuration, preset, and policy files
-  into the new configuration, then delete the migrated legacy files
+- Migrate valid legacy configuration, preset, and policy files into the new
+  configuration automatically, then delete the migrated legacy files
   ([#43](https://github.com/sherif-fanous/pi-presets-plus/pull/43))
 - Leave legacy files unchanged when migration cannot complete
   ([#43](https://github.com/sherif-fanous/pi-presets-plus/pull/43))
