@@ -1,6 +1,6 @@
 {
   "name": "@sherif-fanous/pi-rtk",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Pi extension that routes shell commands through rtk to reduce LLM token usage",
   "keywords": [
     "pi",

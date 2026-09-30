@@ -2,6 +2,32 @@
 
 This changelog follows [Common Changelog](https://common-changelog.org/).
 
+## [0.3.0] - 2026-09-29
+
+### Changed
+
+- **Breaking:** Rename the settings `maxToastsVisible` to `toast.maxVisible` and
+  `toast.timeout` to `toast.timeoutMs`. Notification Center updates your file at
+  the next session start and shows a message naming it
+- Draw the notification browser with the shared frame and key hints. Its footer
+  wraps instead of being cut off and follows remapped Pi keys, and its list
+  wraps around at the ends and shows its `(n/m)` position when it scrolls
+- Show configuration warnings as one notification, in the wording every
+  extension in the family uses
+- Show a failure in `/notifications` or at startup as one Notification Center
+  error notification
+- Answer an argument `/notifications` doesn't accept with a warning that lists
+  the valid forms, and shorten the command's description
+- Add `"version": 2` to the configuration file. A file without it still loads; a
+  file with another version is ignored with a warning instead of being misread
+- Update `@sherif-fanous/pi-extensions-core` to 0.1.0
+
+### Added
+
+- Add `/notifications status`, which shows whether toasts are on, how many
+  notifications this session has captured, the toast settings in use, and the
+  state of your configuration file
+
 ## [0.2.1] - 2026-09-06
 
 ### Fixed
@@ -63,6 +89,8 @@ This changelog follows [Common Changelog](https://common-changelog.org/).
   width
   ([`af75c57`](https://github.com/sherif-fanous/pi-notification-center/commit/af75c57))
 
+[0.3.0]:
+  https://github.com/sherif-fanous/pi-extensions/releases/tag/%40sherif-fanous%2Fpi-notification-center%400.3.0
 [0.2.1]:
   https://github.com/sherif-fanous/pi-notification-center/releases/tag/v0.2.1
 [0.2.0]:

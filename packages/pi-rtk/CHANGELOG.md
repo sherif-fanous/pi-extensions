@@ -2,6 +2,38 @@
 
 This changelog follows [Common Changelog](https://common-changelog.org/).
 
+## [0.7.0] - 2026-09-29
+
+### Changed
+
+- Show the real state in the footer: dim `RTK: on` while rewriting is on and the
+  rtk binary runs, dim `RTK: off` while rewriting is off, and `RTK: unavailable`
+  in the warning color when the rtk binary is missing from PATH or can't run.
+  The footer used to show a green `rtk ✓` even when rtk was missing
+- Show `/rtk status` as an RTK Status report in the transcript, with aligned
+  `Rewriting:`, `Binary:`, and `Tip:` rows, that stays after a reload. Outside
+  the TUI the same report arrives as a notification
+- Show the `/rtk status` report for a bare `/rtk` in print and JSON mode, which
+  have no menu, instead of doing nothing
+- Title the bare `/rtk` menu with the current state, and describe `/rtk` and
+  each subcommand in its completions
+- Answer an unknown `/rtk` subcommand with a warning that lists the valid forms
+- Show a failure in `/rtk` or in RTK's startup or shell-command handling as one
+  RTK error notification, and run a `!<cmd>` command unchanged when its rewrite
+  fails
+- Head the warning about an unreachable rtk binary with RTK
+- Update `@sherif-fanous/pi-extensions-core` to 0.1.0
+
+### Fixed
+
+- Warn about an unreachable rtk binary and update the RTK footer badge after
+  `/new`, `/resume`, or `/fork`, instead of showing an RTK error
+- Describe `/rtk enable` and `/rtk disable` as lasting until Pi restarts, which
+  they always did, instead of for the current session
+- Warn when the rtk binary becomes unreachable again after `/new`, `/resume`, or
+  `/fork` found it working, instead of staying silent because RTK had already
+  warned about the earlier outage
+
 ## [0.6.0] - 2026-05-13
 
 ### Changed
@@ -56,6 +88,8 @@ This changelog follows [Common Changelog](https://common-changelog.org/).
 
 _Initial release._
 
+[0.7.0]:
+  https://github.com/sherif-fanous/pi-extensions/releases/tag/%40sherif-fanous%2Fpi-rtk%400.7.0
 [0.6.0]: https://github.com/sherif-fanous/pi-rtk/releases/tag/v0.6.0
 [0.5.0]: https://github.com/sherif-fanous/pi-rtk/releases/tag/v0.5.0
 [0.4.0]: https://github.com/sherif-fanous/pi-rtk/releases/tag/v0.4.0

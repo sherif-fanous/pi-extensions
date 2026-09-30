@@ -2,6 +2,52 @@
 
 This changelog follows [Common Changelog](https://common-changelog.org/).
 
+## [0.6.0] - 2026-09-29
+
+### Changed
+
+- **Breaking:** Read the configuration from `theme-sync/config.json` in each
+  scope and rename `isSyncActive` to `syncEnabled`. At session start, Theme Sync
+  moves `settings.json`, or the older `theme-sync.json`, to `config.json`,
+  renames the key, and shows one message naming the new files. A file that can't
+  be migrated stays where it is, with a warning
+- **Breaking:** Read the Project configuration only when Pi trusts the project.
+  In an untrusted project, Theme Sync skips the file and warns once
+- Add `"version": 2` to the configuration file. A file without it still loads; a
+  file with another version is ignored with a warning instead of being misread
+- Show the warnings Theme Sync finds at startup as one notification. Warnings
+  found later stay in `/theme-sync status`
+- Label the scopes User and Project instead of Global and Project, write report
+  labels in sentence case, and show progress messages in muted text instead of
+  the warning color
+- Show `Sync: on` or `Sync: off` in the `/theme-sync` window
+- Draw the `/theme-sync` window with the shared frame, size, and key hints, and
+  title it in Title Case
+- Warn instead of showing an error when `/theme-sync` runs outside the TUI
+- Show a failure in `/theme-sync` or at startup as one Theme Sync error
+  notification, and word a failed save or reload as `Could not …`
+- Save the configuration atomically, so an interrupted save leaves either the
+  old or the new file
+- Update `@sherif-fanous/pi-extensions-core` to 0.1.0
+
+### Added
+
+- Add a `Config:` block to `/theme-sync status` with each file's path and state
+- Add F1 help for the focused field of the `/theme-sync` window
+
+### Fixed
+
+- Fall back to the User value, then the default, when a Project value is invalid
+  or names a theme Pi doesn't have, instead of going straight to the default
+- Warn about an unreadable configuration file and continue with the other scope
+  and the defaults, instead of failing at startup
+- Show when the appearance last changed in `/theme-sync status` with polling
+  detection, instead of refreshing Last update and Last event on every poll
+- Report a theme you changed by hand as `Drift corrected` in
+  `/theme-sync status` with polling detection, as a subscription already did
+- Report a recurring failure to read Pi's theme as a warning in
+  `/theme-sync status` with polling detection, instead of ignoring it
+
 ## [0.5.0] - 2026-09-08
 
 ### Changed
@@ -127,6 +173,8 @@ This changelog follows [Common Changelog](https://common-changelog.org/).
 
 _Initial release._
 
+[0.6.0]:
+  https://github.com/sherif-fanous/pi-extensions/releases/tag/%40sherif-fanous%2Fpi-theme-sync%400.6.0
 [0.5.0]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.5.0
 [0.4.2]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.4.2
 [0.4.1]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.4.1

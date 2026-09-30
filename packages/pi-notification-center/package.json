@@ -1,6 +1,6 @@
 {
   "name": "@sherif-fanous/pi-notification-center",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Pi extension that shows notifications as toasts and keeps a browsable session history",
   "keywords": [
     "pi",

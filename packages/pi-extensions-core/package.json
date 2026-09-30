@@ -1,6 +1,6 @@
 {
   "name": "@sherif-fanous/pi-extensions-core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Pi extension library that provides shared helpers for errors, config files, reports, and TUI surfaces",
   "keywords": [
     "pi",

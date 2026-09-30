@@ -1,6 +1,6 @@
 {
   "name": "@sherif-fanous/pi-theme-sync",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Pi extension that switches Pi's theme to match your terminal or system appearance",
   "keywords": [
     "pi",

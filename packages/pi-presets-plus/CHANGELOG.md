@@ -2,6 +2,70 @@
 
 This changelog follows [Common Changelog](https://common-changelog.org/).
 
+## [0.13.0] - 2026-09-29
+
+### Changed
+
+- **Breaking:** Read the Project configuration only when Pi trusts the project.
+  In an untrusted project, Presets Plus skips the file with one warning and
+  refuses to save to it
+- Draw the picker, editor, and dialogs with the shared frames, sizes, and key
+  hints. Remapped Pi keys replace the default keys instead of adding to them,
+  the Tools, Scope, Thinking, and Actions rows wrap, empty states name the next
+  step, and a busy line shows progress
+- Head every report, and give single-sentence reports such as the one from
+  `/presets clear` a heading. Warnings in a report show in the warning color
+- Show the warnings one action finds as one notification, apart from its result,
+  in the wording every extension in the family uses
+- Show a failure in `/presets` or in a Presets Plus event handler as one Presets
+  Plus error notification instead of Pi's generic extension error
+- Name the extension Presets Plus everywhere, write scopes as User and Project,
+  and shorten the descriptions of `/presets`, its subcommands, and `--preset`
+- Answer an argument `/presets` doesn't accept with a warning that lists the
+  valid forms, and warn instead of doing nothing when `/presets` runs outside
+  the TUI
+- Ask for the policy override confirmation in RPC clients too
+- Apply `showInactiveStatus` on `/presets reload`, and name the hotkey changes
+  that still need `/reload`
+- Show configuration warnings at session start and after `/presets reload`,
+  instead of every time the picker opens
+- Load a `config.json` without `version` as version 2
+- Update `@sherif-fanous/pi-extensions-core` to 0.1.0
+
+### Added
+
+- Add a `Config:` block to `/presets status` with each file's path and state
+
+### Fixed
+
+- Stop cutting off the end of a field in the preset editor with `…` beside the
+  arrow that shows the form scrolls
+- Show the chosen preset's prompt after `/presets show-prompt` instead of
+  activating the preset, including names with spaces
+- Wrap footers instead of cutting them off, scroll dialogs taller than the
+  window, and let Ctrl+C and remapped keys work in every overlay
+- Show the key hint that matches what `Enter` does in the picker's filter mode
+- Leave out the `n` hint in the policy override footer when it repeats
+  `Esc Cancel`
+- Warn in the preset editor that a hotkey is already used only when another
+  preset would get the key, not when the preset you edit comes first and keeps
+  it, or when the other preset is a User preset that a Project preset of the
+  same name replaces
+- Stop asking you to run `/reload` in the preset editor when a hotkey changes
+  only in case or modifier order, such as `Ctrl+P` to `ctrl+p`
+- Show warnings about the User policy once with the other configuration warnings
+  at session start, after `/presets reload`, and in `/presets status`, instead
+  of on every activation, twice when a `--preset` activation was cancelled, and
+  never when Pi restored a session
+- Mark the active preset as changed when you turn tools on after activating a
+  preset whose tools Pi doesn't have, matching what `/presets status` already
+  reported
+- Apply a preset again when you activate it after changing the tools it carried
+  over from an earlier preset, instead of marking it unchanged until the next
+  turn
+- Stop re-applying the active preset and repeating the ignored-tools warning
+  when you activate it again and it names a tool Pi doesn't have
+
 ## [0.12.1] - 2026-09-27
 
 ### Added
@@ -233,6 +297,8 @@ This changelog follows [Common Changelog](https://common-changelog.org/).
 
 _Initial release._
 
+[0.13.0]:
+  https://github.com/sherif-fanous/pi-extensions/releases/tag/%40sherif-fanous%2Fpi-presets-plus%400.13.0
 [0.12.1]: https://github.com/sherif-fanous/pi-presets-plus/releases/tag/v0.12.1
 [0.12.0]: https://github.com/sherif-fanous/pi-presets-plus/releases/tag/v0.12.0
 [0.11.0]: https://github.com/sherif-fanous/pi-presets-plus/releases/tag/v0.11.0

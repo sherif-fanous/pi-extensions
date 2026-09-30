@@ -1,6 +1,6 @@
 {
   "name": "@sherif-fanous/pi-presets-plus",
-  "version": "0.12.1",
+  "version": "0.13.0",
   "description": "Pi extension that bundles a model, thinking level, tools, and system prompt into switchable presets",
   "keywords": [
     "pi",
