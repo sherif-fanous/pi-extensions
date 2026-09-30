@@ -3,15 +3,20 @@
 - Tasks: mise is the single entry point for every task; `package.json` has no
   `scripts`. Read a package's `mise.toml` for its tasks. Releases run from the
   root (see [releasing.md](releasing.md)).
-- Shared configs (TypeScript, Prettier, Biome, ESLint, Vitest, `.gitignore`)
-  live at the root; a package keeps only what is its own, such as its
-  `tsconfig.json` `include`. Don't add a per-package copy.
+- Shared configs (TypeScript, Prettier, ESLint, Vitest, `.gitignore`) live at
+  the root; a package keeps only what is its own, such as its `tsconfig.json`
+  `include`. Don't add a per-package copy.
 - Dependencies: Pi packages and dev tools are dev dependencies at `catalog:`, so
   an upgrade is one bump in `pnpm-workspace.yaml`. Published packages list the
   Pi packages as `peerDependencies` at `"*"`.
-- Formatting covers Markdown (READMEs, changelogs, `AGENTS.md`, `docs/`, specs),
-  wrapped at 80 columns; `mise run format` applies it. Archived OpenSpec changes
-  are left as written.
+- Formatting covers every file Prettier can format, Markdown wrapped at 80
+  columns; `mise run format` applies it. It skips what `.gitignore` and
+  `.prettierignore` list: the lockfile and archived OpenSpec changes, which are
+  left as written. The root `format` also sorts every `package.json` with
+  `sort-package-json`, and the root check fails on an unsorted one.
+- The root `mise run check` checks every package at once. Each package prints
+  one line when it finishes, and the output of any package that failed follows
+  at the end, one package at a time.
 
 ## Lockfile
 

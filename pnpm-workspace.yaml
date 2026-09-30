@@ -6,7 +6,6 @@ allowBuilds:
   koffi: true
   protobufjs: true
 catalog:
-  "@biomejs/biome": ^2.5.13
   "@changesets/apply-release-plan": ^8.1.1
   "@changesets/assemble-release-plan": ^7.0.0
   "@changesets/cli": ^3.0.3

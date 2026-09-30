@@ -31,14 +31,14 @@ mise install
 pnpm install
 ```
 
-| Task                  | Where           | What it does                                                    |
-| :-------------------- | :-------------- | :-------------------------------------------------------------- |
-| `mise run check`      | root            | Checks the root files' formatting, then every package's `check` |
-| `mise run check`      | `packages/<p>`  | Checks formatting, types, and lint, and runs the tests          |
-| `mise run format`     | root or package | Formats the files                                               |
-| `mise run lint-fix`   | `packages/<p>`  | Fixes most lint violations                                      |
-| `mise run test-watch` | `packages/<p>`  | Runs the tests in watch mode                                    |
-| `mise run changeset`  | root            | Records a user-visible change for the next release              |
+| Task                  | Where           | What it does                                                  |
+| :-------------------- | :-------------- | :------------------------------------------------------------ |
+| `mise run check`      | root            | Checks the root files' formatting, then every package at once |
+| `mise run check`      | `packages/<p>`  | Checks formatting, types, and lint, and runs the tests        |
+| `mise run format`     | root or package | Formats the files                                             |
+| `mise run lint-fix`   | `packages/<p>`  | Fixes most lint violations                                    |
+| `mise run test-watch` | `packages/<p>`  | Runs the tests in watch mode                                  |
+| `mise run changeset`  | root            | Records a user-visible change for the next release            |
 
 Run `pi -e packages/<p>` to try a package from the checkout.
 [AGENTS.md](AGENTS.md) and the guides in [docs/](docs) are the family style

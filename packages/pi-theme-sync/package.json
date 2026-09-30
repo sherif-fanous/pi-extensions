@@ -35,14 +35,12 @@
     "@sherif-fanous/pi-extensions-core": "workspace:*"
   },
   "devDependencies": {
-    "@biomejs/biome": "catalog:",
     "@earendil-works/pi-coding-agent": "catalog:",
     "@earendil-works/pi-tui": "catalog:",
     "@ianvs/prettier-plugin-sort-imports": "catalog:",
     "@sherif-fanous/pi-extensions-testing": "workspace:*",
     "eslint": "catalog:",
     "prettier": "catalog:",
-    "sort-package-json": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },

@@ -2,6 +2,7 @@
 .agents/
 .env
 .pi/
+.vitest/
 *.code-workspace
 node_modules/
 package-lock.json

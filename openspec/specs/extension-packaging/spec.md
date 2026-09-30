@@ -136,12 +136,11 @@ and the line `Copyright (c) 2026 Sherif Fanous`.
 
 Every package SHALL run its tasks through its `mise.toml`, which SHALL define
 `check`, `format`, `format-check`, `lint`, `lint-fix`, `type-check`, `test`, and
-`test-watch`; published packages SHALL also define `pack-check` and `login`.
-`check` SHALL run `format-check`, `type-check`, `lint`, and `test`. `format` and
-`format-check` SHALL include the package's Markdown files and, where the package
-has one, `openspec/specs`. Every package's `tsconfig.json` SHALL extend
-`../../tsconfig.base.json` and set only `include` (plus
-`allowImportingTsExtensions` in `pi-extensions-release`). The shared
+`test-watch`. `check` SHALL run `format-check`, `type-check`, `lint`, and
+`test`. `format` and `format-check` SHALL cover every file in the package that
+the root `.gitignore` and `.prettierignore` don't exclude. Every package's
+`tsconfig.json` SHALL extend `../../tsconfig.base.json` and set only `include`
+(plus `allowImportingTsExtensions` in `pi-extensions-release`). The shared
 `eslint.config.mjs` SHALL extend `typescript-eslint`'s type-checked recommended
 preset with `parserOptions.projectService: true`. Every package SHALL list the
 tools its tasks run as `devDependencies` at `catalog:`.

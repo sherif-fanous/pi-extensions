@@ -4,17 +4,19 @@ _.path = ["{{config_root}}/node_modules/.bin"]
 [tasks.check]
 depends = ["format-check", "type-check", "lint", "test"]
 
+# Prettier reads ignore files only from the current directory, so these point
+# it at the root ones.
 [tasks.format]
-run = "prettier --write package.json src/. tests/. tsconfig.json vitest.config.ts *.md"
+run = "prettier --write --ignore-path ../../.gitignore --ignore-path ../../.prettierignore ."
 
 [tasks.format-check]
-run = "prettier --check package.json src/. tests/. tsconfig.json vitest.config.ts *.md"
+run = "prettier --check --ignore-path ../../.gitignore --ignore-path ../../.prettierignore ."
 
 [tasks.lint]
-run = "biome lint src/. tests/. && eslint src/. tests/."
+run = "eslint src/. tests/."
 
 [tasks.lint-fix]
-run = "biome lint src/. tests/. --fix && eslint src/. tests/. --fix"
+run = "eslint src/. tests/. --fix"
 
 [tasks.test]
 run = "vitest --run"
@@ -24,7 +26,3 @@ run = "vitest"
 
 [tasks.type-check]
 run = "tsc --noEmit"
-
-[tools]
-node = "lts"
-"npm:pnpm" = "latest"

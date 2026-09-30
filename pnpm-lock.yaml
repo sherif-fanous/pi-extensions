@@ -6,9 +6,6 @@ settings:
 
 catalogs:
   default:
-    '@biomejs/biome':
-      specifier: ^2.5.13
-      version: 2.5.14
     '@changesets/apply-release-plan':
       specifier: ^8.1.1
       version: 8.1.1
@@ -101,6 +98,9 @@ importers:
       prettier:
         specifier: 'catalog:'
         version: 3.9.9
+      sort-package-json:
+        specifier: 'catalog:'
+        version: 4.0.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -113,9 +113,6 @@ importers:
 
   packages/pi-extensions-core:
     devDependencies:
-      '@biomejs/biome':
-        specifier: 'catalog:'
-        version: 2.5.14
       '@earendil-works/pi-coding-agent':
         specifier: 'catalog:'
         version: 0.87.1(ws@8.22.0)(zod@4.6.5)
@@ -134,9 +131,6 @@ importers:
       prettier:
         specifier: 'catalog:'
         version: 3.9.9
-      sort-package-json:
-        specifier: 'catalog:'
-        version: 4.0.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -168,9 +162,6 @@ importers:
         specifier: 'catalog:'
         version: 3.9.9
     devDependencies:
-      '@biomejs/biome':
-        specifier: 'catalog:'
-        version: 2.5.14
       '@ianvs/prettier-plugin-sort-imports':
         specifier: 'catalog:'
         version: 4.7.1(prettier@3.9.9)
@@ -186,9 +177,6 @@ importers:
 
   packages/pi-extensions-testing:
     devDependencies:
-      '@biomejs/biome':
-        specifier: 'catalog:'
-        version: 2.5.14
       '@earendil-works/pi-coding-agent':
         specifier: 'catalog:'
         version: 0.87.1(ws@8.22.0)(zod@4.6.5)
@@ -217,9 +205,6 @@ importers:
         specifier: workspace:*
         version: link:../pi-extensions-core
     devDependencies:
-      '@biomejs/biome':
-        specifier: 'catalog:'
-        version: 2.5.14
       '@earendil-works/pi-coding-agent':
         specifier: 'catalog:'
         version: 0.87.1(ws@8.22.0)(zod@4.6.5)
@@ -238,9 +223,6 @@ importers:
       prettier:
         specifier: 'catalog:'
         version: 3.9.9
-      sort-package-json:
-        specifier: 'catalog:'
-        version: 4.0.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -254,9 +236,6 @@ importers:
         specifier: workspace:*
         version: link:../pi-extensions-core
     devDependencies:
-      '@biomejs/biome':
-        specifier: 'catalog:'
-        version: 2.5.14
       '@earendil-works/pi-ai':
         specifier: 'catalog:'
         version: 0.87.1(ws@8.22.0)(zod@4.6.5)
@@ -278,9 +257,6 @@ importers:
       prettier:
         specifier: 'catalog:'
         version: 3.9.9
-      sort-package-json:
-        specifier: 'catalog:'
-        version: 4.0.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -294,9 +270,6 @@ importers:
         specifier: workspace:*
         version: link:../pi-extensions-core
     devDependencies:
-      '@biomejs/biome':
-        specifier: 'catalog:'
-        version: 2.5.14
       '@earendil-works/pi-coding-agent':
         specifier: 'catalog:'
         version: 0.87.1(ws@8.22.0)(zod@4.6.5)
@@ -315,9 +288,6 @@ importers:
       prettier:
         specifier: 'catalog:'
         version: 3.9.9
-      sort-package-json:
-        specifier: 'catalog:'
-        version: 4.0.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -331,9 +301,6 @@ importers:
         specifier: workspace:*
         version: link:../pi-extensions-core
     devDependencies:
-      '@biomejs/biome':
-        specifier: 'catalog:'
-        version: 2.5.14
       '@earendil-works/pi-ai':
         specifier: 'catalog:'
         version: 0.87.1(ws@8.22.0)(zod@4.6.5)
@@ -355,9 +322,6 @@ importers:
       prettier:
         specifier: 'catalog:'
         version: 3.9.9
-      sort-package-json:
-        specifier: 'catalog:'
-        version: 4.0.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -371,9 +335,6 @@ importers:
         specifier: workspace:*
         version: link:../pi-extensions-core
     devDependencies:
-      '@biomejs/biome':
-        specifier: 'catalog:'
-        version: 2.5.14
       '@earendil-works/pi-coding-agent':
         specifier: 'catalog:'
         version: 0.87.1(ws@8.22.0)(zod@4.6.5)
@@ -392,9 +353,6 @@ importers:
       prettier:
         specifier: 'catalog:'
         version: 3.9.9
-      sort-package-json:
-        specifier: 'catalog:'
-        version: 4.0.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -533,63 +491,6 @@ packages:
   '@babel/types@7.29.8':
     resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
     engines: {node: '>=6.9.0'}
-
-  '@biomejs/biome@2.5.14':
-    resolution: {integrity: sha512-0FabLIjd4M/dm8VFI86RMaLLdgepzbdfiAL2R8cr7V81OYYrP1w7Z73KfAwPK5h9SrEBXTzNG2y+mBwPo9xRnw==}
-    engines: {node: '>=14.21.3'}
-    hasBin: true
-
-  '@biomejs/cli-darwin-arm64@2.5.14':
-    resolution: {integrity: sha512-UnzaXO65L4tsZimFITFP2M121GyhDcWFrT3pL5ZJ5U4XcS/0L5VHYytVohdCf/gnDUFHgl2I9xnt5bV/J1kxHQ==}
-    engines: {node: '>=14.21.3'}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@biomejs/cli-darwin-x64@2.5.14':
-    resolution: {integrity: sha512-kiy8qA16K93J7uvFfWi4LgjqDpnRKyePAna6A0Y4jxyUga35SYpIZ2cNWlhy0lsfgqRenCpfymnJWEZ6mgpRgA==}
-    engines: {node: '>=14.21.3'}
-    cpu: [x64]
-    os: [darwin]
-
-  '@biomejs/cli-linux-arm64-musl@2.5.14':
-    resolution: {integrity: sha512-SJ9PrZkBnnH9dHJDnxk34vKs0GB2dbsioaft6/hPhWJ7AHpwYH83Isnhj0FSRpFkGgpVfJ1lds23ApB2czUDLQ==}
-    engines: {node: '>=14.21.3'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [musl]
-
-  '@biomejs/cli-linux-arm64@2.5.14':
-    resolution: {integrity: sha512-vO/9BaU1n30CiFNLx49gMTMtbCAAqlo/EqFoG0BU3deQInTbJrmXSmTQ9e3FoDZIKQnvSLDVNL4lx1ci7y1T1Q==}
-    engines: {node: '>=14.21.3'}
-    cpu: [arm64]
-    os: [linux]
-    libc: [glibc]
-
-  '@biomejs/cli-linux-x64-musl@2.5.14':
-    resolution: {integrity: sha512-2kI5PrMgW5dcEZYrstLPmUmCwkUwZY39rP4BN93Vxbwcs2O57LDQOktUZZYPvvspN5i0mhGr3TJtF5sU26NUWg==}
-    engines: {node: '>=14.21.3'}
-    cpu: [x64]
-    os: [linux]
-    libc: [musl]
-
-  '@biomejs/cli-linux-x64@2.5.14':
-    resolution: {integrity: sha512-VHZRa7CCQBUWKxNwUvHJeuW03WFRgN5NWO//SDGOitc9QIeNyfA42V9zlKm+x82xFSG9Bzi5fi+hbhm9anO8yA==}
-    engines: {node: '>=14.21.3'}
-    cpu: [x64]
-    os: [linux]
-    libc: [glibc]
-
-  '@biomejs/cli-win32-arm64@2.5.14':
-    resolution: {integrity: sha512-pHgAFffmZtaYoxavEsWEYNvcA7NwOIjLyqw2HXyLbt16xYryX0L4fMV2u0G9ag6LNYPIoqWaWqzUcnc6rLGGXg==}
-    engines: {node: '>=14.21.3'}
-    cpu: [arm64]
-    os: [win32]
-
-  '@biomejs/cli-win32-x64@2.5.14':
-    resolution: {integrity: sha512-oJWmBhoHsnhUKIke+0gXDX0mltJrWHA1UyHsrTlXwX0TL64ilVZAo+TYZm97baecV0esBdpzy3k96q+09JaZUQ==}
-    engines: {node: '>=14.21.3'}
-    cpu: [x64]
-    os: [win32]
 
   '@cacheable/memory@2.2.0':
     resolution: {integrity: sha512-CTLKqLItRCEixEAewD3/j9DB3/o96gpTPD4eJ1v+DGOlxZRZncRQkGYqqnAGCscYd6RNeXfGeiuCphsPtqyIfQ==}
@@ -2611,41 +2512,6 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
-
-  '@biomejs/biome@2.5.14':
-    optionalDependencies:
-      '@biomejs/cli-darwin-arm64': 2.5.14
-      '@biomejs/cli-darwin-x64': 2.5.14
-      '@biomejs/cli-linux-arm64': 2.5.14
-      '@biomejs/cli-linux-arm64-musl': 2.5.14
-      '@biomejs/cli-linux-x64': 2.5.14
-      '@biomejs/cli-linux-x64-musl': 2.5.14
-      '@biomejs/cli-win32-arm64': 2.5.14
-      '@biomejs/cli-win32-x64': 2.5.14
-
-  '@biomejs/cli-darwin-arm64@2.5.14':
-    optional: true
-
-  '@biomejs/cli-darwin-x64@2.5.14':
-    optional: true
-
-  '@biomejs/cli-linux-arm64-musl@2.5.14':
-    optional: true
-
-  '@biomejs/cli-linux-arm64@2.5.14':
-    optional: true
-
-  '@biomejs/cli-linux-x64-musl@2.5.14':
-    optional: true
-
-  '@biomejs/cli-linux-x64@2.5.14':
-    optional: true
-
-  '@biomejs/cli-win32-arm64@2.5.14':
-    optional: true
-
-  '@biomejs/cli-win32-x64@2.5.14':
-    optional: true
 
   '@cacheable/memory@2.2.0':
     dependencies:

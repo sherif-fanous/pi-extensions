@@ -16,7 +16,6 @@
     "prettier": "catalog:"
   },
   "devDependencies": {
-    "@biomejs/biome": "catalog:",
     "@ianvs/prettier-plugin-sort-imports": "catalog:",
     "eslint": "catalog:",
     "typescript": "catalog:",

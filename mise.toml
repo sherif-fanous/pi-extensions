@@ -10,14 +10,55 @@ run = "changeset add"
 run = "node packages/pi-extensions-release/src/check.ts"
 
 [tasks.check]
-depends = ["changeset-check", "format-check"]
-run = 'for d in packages/*/; do echo "== $d"; (cd "$d" && mise run check) || exit 1; done'
+# Checks the root and every package at once. Each runs its steps in order and
+# keeps going after a failed step, and each step writes to its own log, so
+# output never interleaves. Each prints one line when it finishes; the logs of
+# the failed steps follow once all are done.
+quiet = true
+run = '''
+logs=$(mktemp -d)
+trap 'rm -rf "$logs"' EXIT
+[ -t 1 ] && export FORCE_COLOR=1
 
+# check NAME DIR STEP...: runs each STEP's mise task in DIR.
+check() {
+  name=$1 dir=$2
+  shift 2
+  start=$(date +%s) failed=""
+  for step in "$@"; do
+    if ! (cd "$dir" && mise run --quiet "$step") >"$logs/$name.$step.log" 2>&1; then
+      failed="$failed $step"
+      echo "$name $step" >>"$logs/failed"
+    fi
+  done
+  seconds=$(( $(date +%s) - start ))
+  if [ -z "$failed" ]; then
+    printf '✓ %s (%ss)\n' "$name" "$seconds"
+  else
+    printf '✗ %s:%s (%ss)\n' "$name" "$failed" "$seconds"
+  fi
+}
+
+check root . changeset-check format-check &
+for dir in packages/*/; do
+  check "$(basename "$dir")" "$dir" format-check type-check lint test &
+done
+wait
+[ -f "$logs/failed" ] || exit 0
+sort "$logs/failed" | while read -r name step; do
+  printf '\n━━ %s: %s ━━\n' "$name" "$step"
+  cat "$logs/$name.$step.log"
+done
+exit 1
+'''
+
+# Prettier skips what .gitignore and .prettierignore list; each package
+# formats its own files. Every package.json is sorted from here.
 [tasks.format]
-run = "prettier --write .changeset .prettierrc.json AGENTS.md README.md docs biome.json eslint.config.mjs openspec/config.yaml openspec/specs package.json pnpm-workspace.yaml tsconfig.base.json vitest.config.base.ts"
+run = "sort-package-json package.json 'packages/*/package.json' && prettier --write . '!packages/**'"
 
 [tasks.format-check]
-run = "prettier --check .changeset .prettierrc.json AGENTS.md README.md docs biome.json eslint.config.mjs openspec/config.yaml openspec/specs package.json pnpm-workspace.yaml tsconfig.base.json vitest.config.base.ts"
+run = "sort-package-json --check package.json 'packages/*/package.json' && prettier --check . '!packages/**'"
 
 [tasks.publish]
 depends = ["check"]

@@ -36,7 +36,6 @@
     "@sherif-fanous/pi-extensions-core": "workspace:*"
   },
   "devDependencies": {
-    "@biomejs/biome": "catalog:",
     "@earendil-works/pi-ai": "catalog:",
     "@earendil-works/pi-coding-agent": "catalog:",
     "@earendil-works/pi-tui": "catalog:",
@@ -44,7 +43,6 @@
     "@sherif-fanous/pi-extensions-testing": "workspace:*",
     "eslint": "catalog:",
     "prettier": "catalog:",
-    "sort-package-json": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
