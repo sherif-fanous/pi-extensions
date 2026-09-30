@@ -15,7 +15,15 @@
   left as written. The root `format` also sorts every `package.json` with
   `sort-package-json`, and the root check fails on an unsorted one.
 - CI (`.github/workflows/check.yml`) runs `pnpm install --frozen-lockfile` and
-  the root `mise run check` on every push to `main` and every pull request.
+  the root `mise run check` on every push to `main` and every pull request. The
+  check's job summary has one table with every package's steps, and the log of
+  each failed step.
+- The root `check` is the file task `mise-tasks/check`; the other root tasks
+  live in `mise.toml`.
+- Renovate (`.github/renovate.json`) opens a pull request for each new
+  dependency, Node, pnpm, or GitHub Action version, once the release is three
+  days old. Actions are pinned by commit digest, with the version in a comment
+  that Renovate keeps up to date.
 - Node and pnpm are pinned to a major version in the root `mise.toml`; run
   `mise upgrade` for the newest release within it.
 - The root `mise run check` checks every package at once. Each package prints

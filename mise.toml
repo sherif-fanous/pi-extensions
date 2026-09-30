@@ -9,49 +9,6 @@ run = "changeset add"
 # Fails on a pending changeset that `mise run version` would reject.
 run = "node packages/pi-extensions-release/src/check.ts"
 
-[tasks.check]
-# Checks the root and every package at once. Each runs its steps in order and
-# keeps going after a failed step, and each step writes to its own log, so
-# output never interleaves. Each prints one line when it finishes; the logs of
-# the failed steps follow once all are done.
-quiet = true
-run = '''
-logs=$(mktemp -d)
-trap 'rm -rf "$logs"' EXIT
-[ -t 1 ] && export FORCE_COLOR=1
-
-# check NAME DIR STEP...: runs each STEP's mise task in DIR.
-check() {
-  name=$1 dir=$2
-  shift 2
-  start=$(date +%s) failed=""
-  for step in "$@"; do
-    if ! (cd "$dir" && mise run --quiet "$step") >"$logs/$name.$step.log" 2>&1; then
-      failed="$failed $step"
-      echo "$name $step" >>"$logs/failed"
-    fi
-  done
-  seconds=$(( $(date +%s) - start ))
-  if [ -z "$failed" ]; then
-    printf '✓ %s (%ss)\n' "$name" "$seconds"
-  else
-    printf '✗ %s:%s (%ss)\n' "$name" "$failed" "$seconds"
-  fi
-}
-
-check root . changeset-check format-check &
-for dir in packages/*/; do
-  check "$(basename "$dir")" "$dir" format-check type-check lint test &
-done
-wait
-[ -f "$logs/failed" ] || exit 0
-sort "$logs/failed" | while read -r name step; do
-  printf '\n━━ %s: %s ━━\n' "$name" "$step"
-  cat "$logs/$name.$step.log"
-done
-exit 1
-'''
-
 # Prettier skips what .gitignore and .prettierignore list; each package
 # formats its own files. Every package.json is sorted from here.
 [tasks.format]

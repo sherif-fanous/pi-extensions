@@ -1,0 +1,97 @@
+#!/usr/bin/env sh
+#MISE description="Check the root and every package at once"
+#MISE quiet=true
+#
+# Each of the root and the packages runs its steps in order and keeps going
+# after a failed step. Every step writes to its own log, so output never
+# interleaves: each prints one line when it finishes, and the logs of the
+# failed steps follow once all are done. In GitHub Actions it also writes a
+# table of every step's result to the job summary.
+
+set -u
+logs=$(mktemp -d)
+trap 'rm -rf "$logs"' EXIT
+[ -t 1 ] && export FORCE_COLOR=1
+
+# check NAME DIR STEP...: runs each STEP's mise task in DIR and records
+# "NAME STEP ok|failed" and "NAME time Ns" in $logs/results.
+check() {
+  name=$1 dir=$2
+  shift 2
+  start=$(date +%s) failed=""
+  for step in "$@"; do
+    if (cd "$dir" && mise run --quiet "$step") >"$logs/$name.$step.log" 2>&1; then
+      echo "$name $step ok" >>"$logs/results"
+    else
+      echo "$name $step failed" >>"$logs/results"
+      failed="$failed $step"
+    fi
+  done
+  seconds=$(($(date +%s) - start))
+  echo "$name time ${seconds}s" >>"$logs/results"
+  if [ -z "$failed" ]; then
+    printf '✓ %s (%ss)\n' "$name" "$seconds"
+  else
+    printf '✗ %s:%s (%ss)\n' "$name" "$failed" "$seconds"
+  fi
+}
+
+# plain FILE: prints FILE without color codes.
+plain() {
+  tr -d '\033' <"$1" | sed 's/\[[0-9;]*m//g'
+}
+
+# cell NAME STEP: prints NAME's table cell for STEP; the test cell adds the
+# number of tests, or how many of them failed.
+cell() {
+  status=$(awk -v n="$1" -v s="$2" '$1 == n && $2 == s { print $3 }' "$logs/results")
+  case $status in
+    ok) mark="✅" ;;
+    failed) mark="❌" ;;
+    *) return ;;
+  esac
+  if [ "$2" = test ]; then
+    line=$(plain "$logs/$1.test.log" | grep -E '^ *Tests ')
+    total=$(echo "$line" | sed -n 's/.*(\([0-9]*\)).*/\1/p')
+    fails=$(echo "$line" | sed -n 's/.* \([0-9]*\) failed.*/\1/p')
+    mark="$mark ${fails:+$fails of }$total"
+  fi
+  printf '%s' "$mark"
+}
+
+# summary: appends the results table, and each failed step's log, to the
+# GitHub Actions job summary.
+summary() {
+  {
+    echo "| Package | Changesets | Format | Types | Lint | Tests | Time |"
+    echo "| :-- | :-: | :-: | :-: | :-: | :-: | --: |"
+    for name in root $names; do
+      time=$(awk -v n="$name" '$1 == n && $2 == "time" { print $3 }' "$logs/results")
+      printf '| %s | %s | %s | %s | %s | %s | %s |\n' "$name" \
+        "$(cell "$name" changeset-check)" "$(cell "$name" format-check)" \
+        "$(cell "$name" type-check)" "$(cell "$name" lint)" \
+        "$(cell "$name" test)" "$time"
+    done
+    grep ' failed$' "$logs/results" | sort | while read -r name step _; do
+      printf '\n<details><summary>%s: %s</summary>\n\n```\n' "$name" "$step"
+      plain "$logs/$name.$step.log"
+      printf '```\n\n</details>\n'
+    done
+  } >>"$GITHUB_STEP_SUMMARY"
+}
+
+names=""
+check root . changeset-check format-check &
+for dir in packages/*/; do
+  name=$(basename "$dir")
+  names="$names $name"
+  check "$name" "$dir" format-check type-check lint test &
+done
+wait
+[ -z "${GITHUB_STEP_SUMMARY:-}" ] || summary
+grep -q ' failed$' "$logs/results" || exit 0
+grep ' failed$' "$logs/results" | sort | while read -r name step _; do
+  printf '\n━━ %s: %s ━━\n' "$name" "$step"
+  cat "$logs/$name.$step.log"
+done
+exit 1
