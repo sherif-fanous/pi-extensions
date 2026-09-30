@@ -76,6 +76,11 @@ exec env "npm_config_//registry.npmjs.org/:_authToken=$NPM_ACCESS_TOKEN" changes
 # packages/pi-extensions-release.
 run = "node packages/pi-extensions-release/src/version.ts"
 
+# pnpm's npm package replaces its launcher in an install script. mise's default
+# npm installer skips install scripts, which leaves a pnpm that can't start.
+[settings]
+npm.package_manager = "npm"
+
 # Major versions only: the newest release within each. Moving to a new major
 # is a change to this file.
 [tools]
