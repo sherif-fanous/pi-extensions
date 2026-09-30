@@ -1,5 +1,4 @@
 [env]
-_.file = ".env"
 _.path = ["{{config_root}}/node_modules/.bin"]
 
 [tasks.check]
