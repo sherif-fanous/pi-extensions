@@ -14,6 +14,10 @@
   `.prettierignore` list: the lockfile and archived OpenSpec changes, which are
   left as written. The root `format` also sorts every `package.json` with
   `sort-package-json`, and the root check fails on an unsorted one.
+- CI (`.github/workflows/check.yml`) runs `pnpm install --frozen-lockfile` and
+  the root `mise run check` on every push to `main` and every pull request.
+- Node and pnpm are pinned to a major version in the root `mise.toml`; run
+  `mise upgrade` for the newest release within it.
 - The root `mise run check` checks every package at once. Each package prints
   one line when it finishes, and the output of any package that failed follows
   at the end, one package at a time.
