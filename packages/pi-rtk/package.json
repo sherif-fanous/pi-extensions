@@ -8,13 +8,14 @@
     "pi-package",
     "rtk"
   ],
-  "homepage": "https://github.com/sherif-fanous/pi-rtk#readme",
+  "homepage": "https://github.com/sherif-fanous/pi-extensions/tree/main/packages/pi-rtk#readme",
   "bugs": {
-    "url": "https://github.com/sherif-fanous/pi-rtk/issues"
+    "url": "https://github.com/sherif-fanous/pi-extensions/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sherif-fanous/pi-rtk.git"
+    "url": "git+https://github.com/sherif-fanous/pi-extensions.git",
+    "directory": "packages/pi-rtk"
   },
   "license": "MIT",
   "author": "Sherif Fanous",

@@ -13,13 +13,14 @@
     "tools-presets",
     "system-prompt-presets"
   ],
-  "homepage": "https://github.com/sherif-fanous/pi-presets-plus#readme",
+  "homepage": "https://github.com/sherif-fanous/pi-extensions/tree/main/packages/pi-presets-plus#readme",
   "bugs": {
-    "url": "https://github.com/sherif-fanous/pi-presets-plus/issues"
+    "url": "https://github.com/sherif-fanous/pi-extensions/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sherif-fanous/pi-presets-plus.git"
+    "url": "git+https://github.com/sherif-fanous/pi-extensions.git",
+    "directory": "packages/pi-presets-plus"
   },
   "license": "MIT",
   "author": "Sherif Fanous",

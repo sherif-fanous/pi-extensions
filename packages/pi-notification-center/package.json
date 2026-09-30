@@ -11,13 +11,14 @@
     "toast",
     "tui"
   ],
-  "homepage": "https://github.com/sherif-fanous/pi-notification-center#readme",
+  "homepage": "https://github.com/sherif-fanous/pi-extensions/tree/main/packages/pi-notification-center#readme",
   "bugs": {
-    "url": "https://github.com/sherif-fanous/pi-notification-center/issues"
+    "url": "https://github.com/sherif-fanous/pi-extensions/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sherif-fanous/pi-notification-center.git"
+    "url": "git+https://github.com/sherif-fanous/pi-extensions.git",
+    "directory": "packages/pi-notification-center"
   },
   "license": "MIT",
   "author": "Sherif Fanous",

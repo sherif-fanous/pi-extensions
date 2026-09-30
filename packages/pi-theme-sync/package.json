@@ -12,13 +12,14 @@
     "terminal-appearance",
     "system-appearance"
   ],
-  "homepage": "https://github.com/sherif-fanous/pi-theme-sync#readme",
+  "homepage": "https://github.com/sherif-fanous/pi-extensions/tree/main/packages/pi-theme-sync#readme",
   "bugs": {
-    "url": "https://github.com/sherif-fanous/pi-theme-sync/issues"
+    "url": "https://github.com/sherif-fanous/pi-extensions/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sherif-fanous/pi-theme-sync.git"
+    "url": "git+https://github.com/sherif-fanous/pi-extensions.git",
+    "directory": "packages/pi-theme-sync"
   },
   "license": "MIT",
   "author": "Sherif Fanous",
