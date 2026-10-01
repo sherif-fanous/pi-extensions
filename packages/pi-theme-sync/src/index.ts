@@ -13,7 +13,20 @@ import {
 
 /** Register theme sync with Pi's extension API. */
 export default function themeSync(pi: ExtensionAPI): void {
-  const runtime = createThemeSyncRuntime();
+  // Pi 0.99 added `getSettings`; the pinned Pi types predate it.
+  const getSettings = (pi as { getSettings?: () => { theme?: unknown } })
+    .getSettings;
+  const runtime = createThemeSyncRuntime({
+    readThemeSetting: () => {
+      try {
+        const theme = getSettings?.call(pi).theme;
+
+        return typeof theme === "string" ? theme : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+  });
 
   registerStatusReportRenderer(pi);
   pi.registerCommand("theme-sync", {

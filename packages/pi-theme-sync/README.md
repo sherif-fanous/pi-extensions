@@ -3,10 +3,41 @@
 A [Pi](https://github.com/earendil-works/pi) extension that switches Pi's theme
 to match your terminal or system appearance.
 
+**Deprecated.** Since Pi 0.79.7, Pi switches themes itself. It follows your
+terminal's light and dark appearance when its `theme` setting is a pair of theme
+names written as `<light>/<dark>`. Whether to keep Theme Sync depends on your Pi
+version:
+
+| Pi version       | What to do                                                                                                                                                                                   |
+| :--------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0.99.0 and later | Move to Pi's `theme` setting and remove Theme Sync. Pi 0.99.0 removed the terminal light/dark query Theme Sync relies on, so Theme Sync falls back to polling.                               |
+| 0.79.7 to 0.87.1 | Theme Sync works as documented, so you can keep it. Pi's `theme` setting does the same job on terminals that report light and dark changes. If you move, remove Theme Sync at the same time. |
+| Before 0.79.7    | Keep Theme Sync. Pi can't switch themes on its own.                                                                                                                                          |
+
+To move over:
+
+1. Set `theme` in Pi's `settings.json` to your light and dark theme names from
+   the Theme Sync configuration, for example
+   `"theme": "catppuccin-latte/catppuccin-macchiato"`. The startup notice prints
+   the exact value for your setup. If your mapping comes from a Project file,
+   set it in that project's `.pi/settings.json`.
+2. Run `pi remove npm:@sherif-fanous/pi-theme-sync`.
+3. Delete `~/.pi/agent/theme-sync/` and any project `.pi/theme-sync/`
+   directories.
+
+On Pi 0.99.0 and later, Theme Sync stands down on its own once the pair is set,
+until you remove the package. It sends no terminal queries and leaves your theme
+alone, and `/theme-sync status` shows `Sync: off`. On Pi 0.87.1 and earlier,
+remove the package when you set the pair, because Theme Sync would overwrite it
+with a single theme name.
+
+Pi only switches themes live on terminals that report light and dark changes. On
+other terminals, Pi picks the right theme when it starts.
+
 ## Requirements
 
-- Tested only against the latest stable release of
-  [Pi](https://github.com/earendil-works/pi)
+- [Pi](https://github.com/earendil-works/pi) 0.87.1 or earlier for full support.
+  On Pi 0.99.0 and later, use Pi's `theme` setting instead (see above).
 
 ## Install
 
@@ -57,22 +88,6 @@ Project configuration. The footer shows the keys that work in the current step.
 | `Esc`           | Close, or go back from a nested step     |
 
 If you have remapped Pi's keys, the overlay follows your bindings.
-
-### Pi's built-in `auto` theme
-
-Pi has its own automatic theme setting of the form
-`auto:<light-theme>,<dark-theme>`. Theme Sync does the same job with per-project
-configuration, custom theme mapping, and a status report, so the two are
-alternatives rather than complements.
-
-Use one or the other. When Theme Sync applies a theme it calls Pi's `setTheme`,
-which persists a concrete theme name into your Pi settings. If your Pi `theme`
-setting was `auto:...`, that value is replaced by the applied theme name and
-Pi's built-in auto-switching stops on its own.
-
-To go back to Pi's built-in behavior, set **Sync** to **off** in the
-`/theme-sync` overlay and save it (or uninstall the extension), then set your Pi
-`theme` setting back to `auto:<light-theme>,<dark-theme>`.
 
 ## Configuration
 
@@ -146,7 +161,7 @@ On startup, Theme Sync determines the current appearance by probing three
 detection methods in order and using the first one that returns a result:
 
 ```text
-Terminal Color Scheme  ← asks Pi's terminal API for light/dark mode
+Terminal Color Scheme  ← asks Pi's terminal API for light/dark mode, when available
     ↓
 OSC 11                 ← reads terminal background color, classifies as light/dark
     ↓
@@ -172,11 +187,8 @@ the theme that matches the last detected appearance. If Pi's active theme is
 changed manually while the detected appearance stays the same, the extension
 switches it back automatically.
 
-Pi's built-in `auto:light,dark` theme mode and Theme Sync can use the same
-terminal notifications safely. The extension removes only its own listener
-during `/reload`, `/new`, or shutdown and does not disable Pi's notification
-channel. While Theme Sync is active, the extension's configured theme mapping
-remains authoritative.
+Current Pi versions no longer offer the terminal color-scheme query, so on them
+Theme Sync falls back to OSC 11 and the system appearance.
 
 When polling, all available detectors are tried in priority order on each cycle.
 If a higher-priority detector fails transiently, lower-priority detectors still

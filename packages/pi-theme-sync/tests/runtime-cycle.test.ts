@@ -6,6 +6,7 @@ import {
   fakePollingDetector,
   fakeSubscriptionDetector,
 } from "./helpers/fake-detectors.js";
+import { DEFAULT_DEPRECATION_NOTICE } from "./helpers/notices.js";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { Component, TUI } from "@earendil-works/pi-tui";
 import {
@@ -84,7 +85,7 @@ test("the real detectors read terminal replies and subscribe to Pi's color schem
     expect(status).toMatchObject({
       currentAppearance: "dark",
       detectionStrategy: "Terminal Color Scheme (subscription)",
-      warnings: [],
+      warnings: [DEFAULT_DEPRECATION_NOTICE],
     });
 
     expect(status.availableDetectors.slice(0, 2)).toEqual([
@@ -139,6 +140,7 @@ for (const mode of ["polling", "subscription"] as const) {
       slowFailure.reject(new Error("expected recurring failure"));
       await flushPromises();
       expect(session.status().warnings).toEqual([
+        DEFAULT_DEPRECATION_NOTICE,
         "Terminal Color Scheme query failed. Using the other available detectors.",
       ]);
 
@@ -205,6 +207,7 @@ for (const mode of ["polling", "subscription"] as const) {
       });
 
       expect(session.status().warnings).toEqual([
+        DEFAULT_DEPRECATION_NOTICE,
         "A recurring appearance update failed. Retrying on the next cycle.",
       ]);
 
@@ -358,6 +361,7 @@ test("demotion drops the subscription from status and polls the fallback chain",
       detectionStrategy: "Terminal Color Scheme",
       lastEvent: "Switched to polling after notifications stopped arriving",
       warnings: [
+        DEFAULT_DEPRECATION_NOTICE,
         "Terminal color-scheme notifications stopped arriving. Switched to polling.",
       ],
     });
@@ -371,6 +375,7 @@ test("demotion drops the subscription from status and polls the fallback chain",
       detectionStrategy: "OSC 11",
       lastEvent: "Detected light appearance",
       warnings: [
+        DEFAULT_DEPRECATION_NOTICE,
         "Terminal color-scheme notifications stopped arriving. Switched to polling.",
       ],
     });

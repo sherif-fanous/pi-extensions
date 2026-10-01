@@ -105,6 +105,18 @@ test("everything Theme Sync shows follows the family text standard", async () =>
   );
   await fake.emit({ reason: "quit", type: "session_shutdown" }, tui);
 
+  // A second session where Pi's theme pair already follows the terminal.
+  const deferring = createFakePi({ appendEntry: shown.appendEntry });
+
+  registerThemeSync(
+    Object.assign(deferring.pi, {
+      getSettings: () => ({ theme: "light/dark" }),
+    }),
+  );
+  await deferring.emit({ reason: "startup", type: "session_start" }, tui);
+  await deferring.command("theme-sync").handler("status", tui);
+  await deferring.emit({ reason: "quit", type: "session_shutdown" }, tui);
+
   expect(shown.texts.map(({ text }) => text)).toEqual(
     expect.arrayContaining([
       expect.stringContaining(
@@ -113,6 +125,10 @@ test("everything Theme Sync shows follows the family text standard", async () =>
       expect.stringContaining("Skipped project configuration at "),
       expect.stringContaining('User setting "syncEnabled"'),
       expect.stringContaining("Terminal color-scheme API is unavailable"),
+      expect.stringContaining("Theme Sync is deprecated because Pi now"),
+      expect.stringContaining(
+        "Theme Sync is deprecated and is not changing themes because",
+      ),
       expect.stringContaining("Config:"),
       expect.stringContaining(
         "Saved 1 changed setting to User. Press Ctrl+R to reload and apply.",

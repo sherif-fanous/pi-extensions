@@ -4,6 +4,7 @@ import {
   fakePollingDetector,
   fakeSubscriptionDetector,
 } from "./helpers/fake-detectors.js";
+import { DEFAULT_DEPRECATION_NOTICE } from "./helpers/notices.js";
 import { createDeferred } from "@sherif-fanous/pi-extensions-testing";
 import { expect, test, vi } from "vitest";
 
@@ -47,6 +48,7 @@ test("startup survives polling and subscription probe failures", async () => {
       currentAppearance: "dark",
       detectionStrategy: "OSC 11",
       warnings: [
+        DEFAULT_DEPRECATION_NOTICE,
         "Terminal Color Scheme query failed. Using the other available detectors.",
         "Terminal Color Scheme (subscription) query failed. Using the other available detectors.",
       ],
@@ -84,7 +86,10 @@ test("synchronous detector failure still permits the system fallback", async () 
     expect(runtime.getStatus(ctx)).toMatchObject({
       availableDetectors: ["System Appearance"],
       detectionStrategy: "System Appearance",
-      warnings: ["OSC 11 query failed. Using the other available detectors."],
+      warnings: [
+        DEFAULT_DEPRECATION_NOTICE,
+        "OSC 11 query failed. Using the other available detectors.",
+      ],
     });
   } finally {
     runtime.dispose();
@@ -118,6 +123,7 @@ test("a detector failing after discovery falls back and reports only one warning
     await vi.waitFor(() => expect(osc11.detect).toHaveBeenCalledTimes(3));
 
     expect(runtime.getStatus(ctx).warnings).toEqual([
+      DEFAULT_DEPRECATION_NOTICE,
       "Terminal Color Scheme query failed. Using the other available detectors.",
     ]);
   } finally {
@@ -146,7 +152,11 @@ test("setup notifies its warnings once and leaves later cycle warnings to status
     await runtime.startSession(ctx);
 
     expect(notify).toHaveBeenCalledExactlyOnceWith(
-      "Theme Sync: 1 warning\n- Terminal Color Scheme query failed. Using the other available detectors.",
+      [
+        "Theme Sync: 2 warnings",
+        `- ${DEFAULT_DEPRECATION_NOTICE}`,
+        "- Terminal Color Scheme query failed. Using the other available detectors.",
+      ].join("\n"),
       "warning",
     );
 
@@ -198,7 +208,9 @@ test.each(["reject", "unknown", "light"] as const)(
       expect(subscription.isSupported).not.toHaveBeenCalled();
       expect(schedule).not.toHaveBeenCalled();
       expect(ctx.appliedThemes).toEqual([]);
-      expect(runtime.getStatus(ctx).warnings).toEqual([]);
+      expect(runtime.getStatus(ctx).warnings).toEqual([
+        DEFAULT_DEPRECATION_NOTICE,
+      ]);
       expect(notify).not.toHaveBeenCalled();
     } finally {
       runtime.dispose();
@@ -230,6 +242,7 @@ test("all failed probes report no available detectors and start no recurring tim
       detectionStrategy: "No available detectors",
       lastEvent: "Appearance detection failed",
       warnings: [
+        DEFAULT_DEPRECATION_NOTICE,
         "Terminal Color Scheme query failed. Using the other available detectors.",
         "OSC 11 query failed. Using the other available detectors.",
         "System Appearance query failed. Using the other available detectors.",

@@ -33,6 +33,7 @@ export type FakeSubscriptionDetector = SubscriptionDetector & {
    * `unsubscribe`, so tests reach the runtime's own guards.
    */
   readonly report: (appearance: Appearance) => void;
+  readonly subscribe: Mock<SubscriptionDetector["subscribe"]>;
   readonly unsubscribe: Mock<() => void>;
 };
 
@@ -91,11 +92,13 @@ export function fakeSubscriptionDetector(
     report: (appearance) => listener?.(appearance),
     stoppedWarning:
       "Terminal color-scheme notifications stopped arriving. Switched to polling.",
-    subscribe: (_context, onAppearance) => {
-      listener = onAppearance;
+    subscribe: vi.fn<SubscriptionDetector["subscribe"]>(
+      (_context, onAppearance) => {
+        listener = onAppearance;
 
-      return unsubscribe;
-    },
+        return unsubscribe;
+      },
+    ),
     unsubscribe,
   };
 }

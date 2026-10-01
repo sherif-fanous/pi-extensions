@@ -28,6 +28,8 @@ export type ThemeSyncRuntimeOptions = {
   readonly detectors?: DetectorSet;
   /** How the recurring appearance cycle is timed. */
   readonly schedule?: ScheduleRecurringCycle;
+  /** Pi's effective `theme` setting, or `undefined` when it can't be read. */
+  readonly readThemeSetting?: () => string | undefined;
 };
 
 /**
@@ -53,6 +55,18 @@ type DetectionMode = "polling" | "subscription" | "grace" | "demoted";
 
 const RECURRING_CYCLE_FAILURE_WARNING =
   "A recurring appearance update failed. Retrying on the next cycle.";
+
+/** Whether Pi reads `value` as a light/dark pair: one `/`, both sides named. */
+function isThemePair(value: string | undefined): value is string {
+  const parts = value?.split("/");
+
+  return parts?.length === 2 && parts.every((part) => part.trim() !== "");
+}
+
+const deprecationNotice = (light: string, dark: string): string =>
+  `Theme Sync is deprecated because Pi now switches themes itself. Set "theme": "${light}/${dark}" in Pi's settings.json, then run pi remove npm:@sherif-fanous/pi-theme-sync.`;
+const deferralNotice = (themeSetting: string): string =>
+  `Theme Sync is deprecated and is not changing themes because Pi's theme setting "${themeSetting}" already follows the terminal. Run pi remove npm:@sherif-fanous/pi-theme-sync to uninstall it.`;
 const scheduleRecurringCycle: ScheduleRecurringCycle = (cycle, intervalMs) => {
   const timer = setInterval(cycle, intervalMs);
 
@@ -70,6 +84,7 @@ export type ThemeSyncRuntime = {
 export function createThemeSyncRuntime({
   detectors = THEME_SYNC_DETECTORS,
   schedule = scheduleRecurringCycle,
+  readThemeSetting = () => undefined,
 }: ThemeSyncRuntimeOptions = {}): ThemeSyncRuntime {
   let runtimeConfig: RuntimeConfig = structuredClone(DEFAULT_CONFIG);
 
@@ -89,6 +104,8 @@ export function createThemeSyncRuntime({
   let subscription: ActiveSubscription | undefined;
   let detectionMode: DetectionMode = "polling";
   let isShutDown = false;
+  // Set while Pi's own theme pair handles switching for this session.
+  let isDeferred = false;
   // Counts disposals, so a start can tell that a later dispose overtook it
   // even after a newer start cleared `isShutDown` again.
   let disposeCount = 0;
@@ -97,7 +114,7 @@ export function createThemeSyncRuntime({
     ctx: ExtensionContext,
     detectedAppearance: "light" | "dark",
   ) => {
-    if (!runtimeConfig.syncEnabled) {
+    if (isDeferred || !runtimeConfig.syncEnabled) {
       return;
     }
 
@@ -162,6 +179,25 @@ export function createThemeSyncRuntime({
     runtimeConfig = startup.runtimeConfig;
     configOutcome = startup.outcome;
     warnings = [];
+
+    const themeSetting = readThemeSetting();
+
+    isDeferred = isThemePair(themeSetting);
+
+    if (isDeferred) {
+      availableDetectors = [];
+      currentAppearance = "unknown";
+      detectionStrategy = "Inactive";
+
+      warnings.push(deferralNotice(themeSetting as string));
+      markEvent("Deferred to Pi's theme setting");
+
+      return;
+    }
+
+    warnings.push(
+      deprecationNotice(runtimeConfig.themes.light, runtimeConfig.themes.dark),
+    );
 
     const session = await probeDetectors(ctx, detectors, {
       isCancelled: () => isShutDown,
@@ -379,7 +415,7 @@ export function createThemeSyncRuntime({
 
       detectionStrategy,
       availableDetectors: [...availableDetectors],
-      syncEnabled: runtimeConfig.syncEnabled,
+      syncEnabled: isDeferred ? false : runtimeConfig.syncEnabled,
       pollIntervalMs: runtimeConfig.detection.pollIntervalMs,
 
       configStatusLines: configOutcome?.statusLines ?? [],
