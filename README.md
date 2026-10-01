@@ -8,14 +8,13 @@ coding agent, and the library they share, in one pnpm workspace.
 | Package                                                   | Description                                                                                | npm                                                                                                          |
 | :-------------------------------------------------------- | :----------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------- |
 | [pi-rtk](packages/pi-rtk)                                 | Routes shell commands through rtk to reduce LLM token usage                                | [@sherif-fanous/pi-rtk](https://www.npmjs.com/package/@sherif-fanous/pi-rtk)                                 |
-| [pi-theme-sync](packages/pi-theme-sync)                   | Switches Pi's theme to match your terminal or system appearance                            | [@sherif-fanous/pi-theme-sync](https://www.npmjs.com/package/@sherif-fanous/pi-theme-sync)                   |
 | [pi-presets-plus](packages/pi-presets-plus)               | Bundles a model, thinking level, tools, and system prompt into switchable presets          | [@sherif-fanous/pi-presets-plus](https://www.npmjs.com/package/@sherif-fanous/pi-presets-plus)               |
 | [pi-notification-center](packages/pi-notification-center) | Shows notifications as toasts and keeps a browsable session history                        | [@sherif-fanous/pi-notification-center](https://www.npmjs.com/package/@sherif-fanous/pi-notification-center) |
 | [pi-session-slice](packages/pi-session-slice)             | Starts a new session from a chosen range of the current one                                | [@sherif-fanous/pi-session-slice](https://www.npmjs.com/package/@sherif-fanous/pi-session-slice)             |
 | [pi-extensions-core](packages/pi-extensions-core)         | Shared helpers for errors, config files, reports, and TUI surfaces that the extensions use | [@sherif-fanous/pi-extensions-core](https://www.npmjs.com/package/@sherif-fanous/pi-extensions-core)         |
 
 Install an extension with `pi install npm:@sherif-fanous/<package>`, for example
-`pi install npm:@sherif-fanous/pi-theme-sync`. Each package's README has the
+`pi install npm:@sherif-fanous/pi-presets-plus`. Each package's README has the
 details.
 
 Two private packages support the others and are never published:

@@ -1,8 +1,8 @@
 # Agents
 
-A pnpm workspace of Pi extensions (RTK, Theme Sync, Presets Plus, Notification
-Center, Session Slice), a shared runtime library (`pi-extensions-core`), and
-private test and release tooling.
+A pnpm workspace of Pi extensions (RTK, Presets Plus, Notification Center,
+Session Slice), a shared runtime library (`pi-extensions-core`), and private
+test and release tooling.
 
 - Tasks run through mise, never `npm` or bare `pnpm run`. `mise run check` at
   the root checks everything; inside `packages/<p>` it checks one package

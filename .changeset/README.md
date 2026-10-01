@@ -18,10 +18,11 @@ something.
 
 ```markdown
 ---
-"@sherif-fanous/pi-theme-sync": minor
+"@sherif-fanous/pi-presets-plus": minor
 ---
 
-- Changed: **Breaking:** Rename `isSyncActive` to `syncEnabled`
+- Changed: **Breaking:** Read the Project configuration only when Pi trusts the
+  project
 - Fixed: Fall back to the User value when a Project value is invalid
 ```
 

@@ -4,9 +4,9 @@
 
 Define the shape every package in the pi-extensions workspace shares: the npm
 manifest, dependencies, published files, supported Pi version, README,
-changelog, license, and the tooling each package runs. The five extensions are
-`@sherif-fanous/pi-rtk`, `pi-theme-sync`, `pi-presets-plus`,
-`pi-notification-center`, and `pi-session-slice`; the published library is
+changelog, license, and the tooling each package runs. The four extensions are
+`@sherif-fanous/pi-rtk`, `pi-presets-plus`, `pi-notification-center`, and
+`pi-session-slice`; the published library is
 `@sherif-fanous/pi-extensions-core`. Each extension's own specs cover its
 behavior.
 

@@ -63,8 +63,8 @@ instead of drawing borders, hints, or list movement by hand.
   `cancel`), never from `Key.up`, `Key.escape`, and the like. A user's remap
   replaces the default keys; never also accept the default. Only
   extension-specific chords are matched with `matchesKey` (`Ctrl+S`, `Ctrl+T`,
-  `Ctrl+↑/↓`, `F1`). Every form (an overlay of editable fields: the Presets Plus
-  editor, the Theme Sync config form) has `F1 Help` for the focused field.
+  `Ctrl+↑/↓`, `F1`). Every form (an overlay of editable fields, such as the
+  Presets Plus editor) has `F1 Help` for the focused field.
 - Lists: one model, `moveListSelection`. `↑/↓` move one item and wrap around the
   ends; `PgUp/PgDn` move one page and stop at the first or last item. Every list
   that can scroll handles `PgUp/PgDn` and shows `PgUp/PgDn Page`. In a

@@ -13,7 +13,7 @@ Pending changes live in `.changeset/*.md` until a release, never in an
    tooling, refactors) need none. `mise run check` rejects a changeset that
    `mise run version` couldn't release. Agents pass everything as flags so
    nothing prompts, with `=` because the message starts with `-`:
-   `mise run changeset --patch=@sherif-fanous/pi-rtk --minor=@sherif-fanous/pi-theme-sync --message=$'- Fixed: …\n- Added: …'`.
+   `mise run changeset --patch=@sherif-fanous/pi-rtk --minor=@sherif-fanous/pi-presets-plus --message=$'- Fixed: …\n- Added: …'`.
 2. `mise run version` bumps the versions, releases every extension that depends
    on core when core changes, writes a `## [x.y.z] - YYYY-MM-DD` section and its
    tag link into each `CHANGELOG.md`, and deletes the changesets. Don't run

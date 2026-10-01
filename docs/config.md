@@ -52,7 +52,7 @@ resolves the location and project trust itself.
   its invalid values with `withValueWarnings`. At session start it calls
   `outcome.notify(ctx, extras)` once, when it chooses: one info message names
   everything the session start migrated
-  (`Theme Sync migrated its configuration to <path>.`), and one warning
+  (`Presets Plus migrated its configuration to <path>.`), and one warning
   notification lists migration warnings, then file warnings, then invalid
   values, then `extras` (its other startup warnings). A command that reads the
   files again does not repeat them, with two exceptions: an explicit reload
@@ -77,9 +77,9 @@ resolves the location and project trust itself.
   ```text
   Config:
     User:    loaded
-             /Users/me/.pi/agent/theme-sync/config.json
+             /Users/me/.pi/agent/presets-plus/config.json
     Project: skipped (untrusted)
-             /repo/.pi/theme-sync/config.json
+             /repo/.pi/presets-plus/config.json
   ```
 
 - Session entries: each custom entry type is a named constant, and its payload

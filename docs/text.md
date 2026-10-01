@@ -18,20 +18,21 @@ it can't check.
   the extension, so they leave out internal names, event names, and mechanism (a
   user can't act on `ctx.ui.notify`). `CONTRIBUTING.md` is for someone changing
   the code, so technical terms belong there.
-- Names: the display names are `RTK`, `Theme Sync`, `Presets Plus`,
-  `Notification Center`, and `Session Slice`. Each package exports one
-  `EXTENSION_NAME` constant from `src/extension-name.ts`, used by every
-  `guardCommand`, `onEvent`, `notifyWarnings`, `notifyUsageWarning`, and
-  `requireInteractiveTui` call, dialog title, and report heading. `Pi` is the
-  product and `pi` the binary; lowercase `rtk` means only the rtk executable.
-  Command names stay literal (`/presets clear`).
+- Names: the display names are `RTK`, `Presets Plus`, `Notification Center`, and
+  `Session Slice`. Each package exports one `EXTENSION_NAME` constant from
+  `src/extension-name.ts`, used by every `guardCommand`, `onEvent`,
+  `notifyWarnings`, `notifyUsageWarning`, and `requireInteractiveTui` call,
+  dialog title, and report heading. `Pi` is the product and `pi` the binary;
+  lowercase `rtk` means only the rtk executable. Command names stay literal
+  (`/presets clear`).
 - Labels and titles: dialog titles, report headings, and button and footer
   action labels are Title Case (`Move Preset?`, `Presets Plus Policy`, `Save`).
   Key/value labels are sentence case with a colon (`Applied theme:`); form rows
   use the same text without the colon.
 - Descriptions (commands, flags, completions): Pi's style, starting with a verb.
   Use the display name where the command name doesn't imply the product, and
-  never list subcommands (`Configure Theme Sync or show its status`).
+  never list subcommands
+  (`Turn RTK command rewriting on or off, or show its status`).
 - Usage mistakes: `notifyUsageWarning(ctx, EXTENSION_NAME, args, forms)`, with
   the bare command first in `forms`, then every subcommand. Subcommands match
   the whole trimmed argument, so `status foo` is a mistake. A command that takes

@@ -4,8 +4,8 @@ Reach for `@sherif-fanous/pi-extensions-core` before writing a helper; see its
 README for the full API.
 
 - Layout: `src/index.ts` holds the default export, named after the extension
-  (`rtk`, `themeSync`, `presetsPlus`, `notificationCenter`, `sessionSlice`) and
-  returning `void`, which registers everything. Each slash command lives in
+  (`rtk`, `presetsPlus`, `notificationCenter`, `sessionSlice`) and returning
+  `void`, which registers everything. Each slash command lives in
   `src/commands/<command>.ts`, or in `src/commands/<command>/` with its dispatch
   in `router.ts` when subcommands need modules of their own. Its entry point is
   `run<Command>Command(args, ctx, deps)`, where `deps` is one object holding
@@ -17,20 +17,20 @@ README for the full API.
   through `guardCommand("<Display Name>", handler)` and every event handler that
   can throw through `onEvent(pi, "<Display Name>", "<event>", handler)`, so
   failures read `<Display Name> command failed: …` or
-  `<Display Name> <event> failed: …`. Display names: `Theme Sync`,
-  `Presets Plus`, `Notification Center`, `Session Slice`, `RTK`. Don't notify
-  from `session_shutdown`: Pi provides no UI during shutdown, so the handler
-  swallows `dispose()` errors there instead.
+  `<Display Name> <event> failed: …`. Display names: `Presets Plus`,
+  `Notification Center`, `Session Slice`, `RTK`. Don't notify from
+  `session_shutdown`: Pi provides no UI during shutdown, so the handler swallows
+  `dispose()` errors there instead.
 - Session runtimes: Pi fires `session_start` again on reload and session
   switches, so dispose any previous runtime (timers, overlays, wrappers) before
   starting a new one, and dispose it on `session_shutdown`. A runtime's
   lifecycle methods are `startSession(ctx)` and `dispose()`; when each instance
   lasts one session, `startSession` is the static factory that creates it. If
   the start is async, `dispose()` must be able to abort it partway through (see
-  theme-sync's `runtime.ts`). The `session_shutdown` handler calls `dispose()`
-  inside `try { … } catch {}`, since it has no UI to report a failure to, then
-  drops its reference to a per-session runtime. There is no shared helper for
-  this, because the extensions' lifecycles differ.
+  Notification Center's `src/session.ts`). The `session_shutdown` handler calls
+  `dispose()` inside `try { … } catch {}`, since it has no UI to report a
+  failure to, then drops its reference to a per-session runtime. There is no
+  shared helper for this, because the extensions' lifecycles differ.
 - Config: describe `config.json` once with `defineConfigFile` and use only its
   handle (`load`, `read`, `update`, `write`, `migrateKeys`, `path`); see
   [config.md](config.md). An old layout a migration reads sits beside the
@@ -93,7 +93,5 @@ README for the full API.
 
 ## Rejected ideas
 
-- Theme Sync settings registry: revisit when a setting is added (4 stable
-  settings; ~12 edit sites today).
 - Name-bound extension helpers (`bindExtension(NAME)`): the repeated display
   name is harmless and grep-friendly.

@@ -6,9 +6,9 @@ holds the same rules.
 
 - Pi link: `[Pi](https://github.com/earendil-works/pi)`, never
   `badlogic/pi-mono` or `badlogic/pi`.
-- Naming: the README title is the package folder (`# pi-theme-sync`); prose
-  names the extension by its display name ("Theme Sync switches …"), never
-  `pi-<slug>`, "Pi Theme Sync", or "this extension". The package name appears
+- Naming: the README title is the package folder (`# pi-presets-plus`); prose
+  names the extension by its display name ("Presets Plus bundles …"), never
+  `pi-<slug>`, "Pi Presets Plus", or "this extension". The package name appears
   only in the title, install commands, and paths.
 - Description: the `package.json` `description` is one clause,
   `Pi extension that <verb>s …`, with no trailing full stop (core:
@@ -38,8 +38,7 @@ holds the same rules.
   8. `## Limitations` (optional): what the extension deliberately doesn't do or
      can't tell apart.
   9. `## Troubleshooting` (optional): the diagnostic command and what to look
-     for (`/rtk status`, `/theme-sync status`, `/presets status`,
-     `/notifications status`).
+     for (`/rtk status`, `/presets status`, `/notifications status`).
   10. `## License`: `[MIT](LICENSE)`.
 - Library READMEs (`pi-extensions-core`, `pi-extensions-testing`) keep the same
   order with a library's content: title and lead, `## Requirements`,
