@@ -2,6 +2,18 @@
 
 This changelog follows [Common Changelog](https://common-changelog.org/).
 
+## [0.7.0] - 2026-09-30
+
+### Changed
+
+- Theme Sync stops changing themes when Pi's `theme` setting already switches
+  between a light and a dark theme.
+
+### Added
+
+- Theme Sync shows a notice at startup that it is deprecated, with the Pi
+  `theme` setting that replaces your light and dark themes.
+
 ## [0.6.0] - 2026-09-29
 
 ### Changed
@@ -173,6 +185,8 @@ This changelog follows [Common Changelog](https://common-changelog.org/).
 
 _Initial release._
 
+[0.7.0]:
+  https://github.com/sherif-fanous/pi-extensions/releases/tag/%40sherif-fanous%2Fpi-theme-sync%400.7.0
 [0.6.0]:
   https://github.com/sherif-fanous/pi-extensions/releases/tag/%40sherif-fanous%2Fpi-theme-sync%400.6.0
 [0.5.0]: https://github.com/sherif-fanous/pi-theme-sync/releases/tag/v0.5.0
