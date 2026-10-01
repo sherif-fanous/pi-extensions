@@ -33,8 +33,10 @@ exec env "npm_config_//registry.npmjs.org/:_authToken=$NPM_ACCESS_TOKEN" changes
 # packages/pi-extensions-release.
 run = "node packages/pi-extensions-release/src/version.ts"
 
-# pnpm's npm package replaces its launcher in an install script. mise's default
-# npm installer skips install scripts, which leaves a pnpm that can't start.
+# pnpm's npm package replaces its launcher with its native binary in an install
+# script. mise skips npm install scripts unless `allow_builds` names the
+# package, and without that script pnpm's launcher fails with ENOEXEC when a
+# program on macOS spawns it, as `changeset publish` does.
 [settings]
 npm.package_manager = "npm"
 
@@ -42,4 +44,4 @@ npm.package_manager = "npm"
 # is a change to this file.
 [tools]
 node = "24"
-"npm:pnpm" = "12"
+"npm:pnpm" = { version = "12", allow_builds = ["pnpm"] }
