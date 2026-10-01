@@ -44,12 +44,7 @@ only.
 ```ts
 // src/types.ts (additions)
 export type ThinkingLevel =
-  | "off"
-  | "minimal"
-  | "low"
-  | "medium"
-  | "high"
-  | "xhigh";
+  "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 export interface Preset {
   name: string; // unique within file

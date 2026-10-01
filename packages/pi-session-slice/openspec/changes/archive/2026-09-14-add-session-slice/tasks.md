@@ -9,9 +9,9 @@
 - [x] 1.2 Create `src/index.ts` exporting a default extension function that
       registers `/slice` with a placeholder handler; verify `mise run check`
       passes with a first test file under `tests/`
-- [x] 1.3 Verify Pi loads the extension locally (`pi -e ./src/index.ts` or project
-      `.pi/extensions` link) and `/slice` appears in the command list with the
-      description "Start a new session from a range of this one"
+- [x] 1.3 Verify Pi loads the extension locally (`pi -e ./src/index.ts` or
+      project `.pi/extensions` link) and `/slice` appears in the command list
+      with the description "Start a new session from a range of this one"
 
 ## 2. Relative time helper (`src/time.ts`)
 
@@ -28,9 +28,9 @@
 - [x] 3.2 Implement `buildSlice(branch, startId, endId | null)` returning the
       raw `getBranch()` entries from `startId` up to (excluding) `endId`, with
       label, compaction, and session-info entries removed and `parentId`s
-      re-chained; verify a tool-loop test preserves ids, timestamps, and toolCallId, and a compaction
-      test starting at a retained pre-compaction message produces a chain with
-      the compaction removed
+      re-chained; verify a tool-loop test preserves ids, timestamps, and
+      toolCallId, and a compaction test starting at a retained pre-compaction
+      message produces a chain with the compaction removed
 - [x] 3.3 Implement carry-forward: find the latest `model_change` and
       `thinking_level_change` before `startId` on the branch and prepend
       synthetic entries (fresh ids, current timestamp) chained ahead of the
@@ -63,9 +63,9 @@
 ## 5. Command wiring (`src/index.ts`)
 
 - [x] 5.1 Register `/slice` and implement precondition checks per design D8 (no
-      session file path, not idle, zero candidates, header version ≠ 3) each calling
-      `ctx.ui.notify(..., "warning")` and returning; verify manually with
-      `pi --no-session` and with a brand-new session that the correct
+      session file path, not idle, zero candidates, header version ≠ 3) each
+      calling `ctx.ui.notify(..., "warning")` and returning; verify manually
+      with `pi --no-session` and with a brand-new session that the correct
       notification appears and no file is written
 - [x] 5.2 Wire start picker → end picker → `buildSlice` → `writeSliceFile` →
       `ctx.switchSession(path, { withSession })`; inside `withSession` call

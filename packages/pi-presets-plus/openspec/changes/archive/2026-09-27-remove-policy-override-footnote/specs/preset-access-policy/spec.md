@@ -88,8 +88,8 @@ immediately before it.
 - **WHEN** policy prohibits at least one usable preset
 - **THEN** the prohibited label SHALL be `Prohibited presets:` without an
   asterisk
-- **AND** the report SHALL end with its last row, with no blank line or
-  footnote after it
+- **AND** the report SHALL end with its last row, with no blank line or footnote
+  after it
 
 #### Scenario: Report with no prohibited presets
 

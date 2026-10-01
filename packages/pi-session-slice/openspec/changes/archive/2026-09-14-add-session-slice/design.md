@@ -85,8 +85,8 @@ unrepresentable.
 
 **Chosen.** List every user message from the compaction-aware context view in
 the order it returns them. This includes entries at and after the latest
-compaction's `firstKeptEntryId`, even though some precede the compaction entry in
-the raw branch. Entries summarized away by an earlier compaction are not
+compaction's `firstKeptEntryId`, even though some precede the compaction entry
+in the raw branch. Entries summarized away by an earlier compaction are not
 offered.
 
 **Rationale:** the picker should show what the model sees. The copied entries
@@ -155,12 +155,11 @@ dependency.
 Refuse with `ctx.ui.notify(..., "warning")` when: `getSessionFile()` is
 undefined (`--no-session`; slicing needs a file for `switchSession`, and
 extensions cannot replace the in-memory session the way `/fork` does);
-`!ctx.isIdle()`; zero user messages in
-context; source header version ≠ 3. Do not warn when the range equals the whole branch; the README explains the
-behavior. Do not check that the source file exists on disk: Pi assigns the
-path at creation and writes it on the first assistant reply, and neither
-`/fork` nor slicing reads the file; the path is only recorded as
-`parentSession`.
+`!ctx.isIdle()`; zero user messages in context; source header version ≠ 3. Do
+not warn when the range equals the whole branch; the README explains the
+behavior. Do not check that the source file exists on disk: Pi assigns the path
+at creation and writes it on the first assistant reply, and neither `/fork` nor
+slicing reads the file; the path is only recorded as `parentSession`.
 
 ### D9: Order of operations on success
 
@@ -169,11 +168,11 @@ path at creation and writes it on the first assistant reply, and neither
 3. `ctx.switchSession(path, { withSession })`.
 4. Inside `withSession`: if an end message was chosen,
    `ctx.ui.setEditorText(text)`.
-5. After `switchSession` returns without `cancelled`, notify
-   "Sliced N entries into a new session" through the ctx that `withSession`
-   received (captured in step 4). The original ctx is invalidated when the old
-   session is disposed, and Pi's own "Resumed session" status is printed after
-   `withSession` returns and replaces any status notified inside it.
+5. After `switchSession` returns without `cancelled`, notify "Sliced N entries
+   into a new session" through the ctx that `withSession` received (captured in
+   step 4). The original ctx is invalidated when the old session is disposed,
+   and Pi's own "Resumed session" status is printed after `withSession` returns
+   and replaces any status notified inside it.
 
 If step 2 throws, notify the error and return; nothing else has happened. If
 step 3 returns `cancelled` (an extension vetoed the switch), notify with the
@@ -183,12 +182,12 @@ path of the file that was written so it can be resumed manually.
 
 Tooling mirrors `pi-presets-plus`: pnpm, mise tasks, TypeScript 6, ESLint plus
 Biome, Vitest, Prettier; `mise run check` is the gate. `package.json` declares
-`"pi": { "extensions": ["./src/index.ts"] }`. Source under `src/`:
-`index.ts` (command registration, precondition checks, orchestration),
-`slice.ts` (candidate listing, slice builder, carry-forward, file writer),
-`picker.ts` (the ported selector), `time.ts` (relative time). Tests under
-`tests/*.test.ts` target the pure functions (slice builder, time formatter)
-with in-memory entry fixtures; the picker and switch are exercised manually.
+`"pi": { "extensions": ["./src/index.ts"] }`. Source under `src/`: `index.ts`
+(command registration, precondition checks, orchestration), `slice.ts`
+(candidate listing, slice builder, carry-forward, file writer), `picker.ts` (the
+ported selector), `time.ts` (relative time). Tests under `tests/*.test.ts`
+target the pure functions (slice builder, time formatter) with in-memory entry
+fixtures; the picker and switch are exercised manually.
 
 ## Risks / Trade-offs
 

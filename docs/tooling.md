@@ -11,9 +11,9 @@
   Pi packages as `peerDependencies` at `"*"`.
 - Formatting covers every file Prettier can format, Markdown wrapped at 80
   columns; `mise run format` applies it. It skips what `.gitignore` and
-  `.prettierignore` list: the lockfile and archived OpenSpec changes, which are
-  left as written. The root `format` also sorts every `package.json` with
-  `sort-package-json`, and the root check fails on an unsorted one.
+  `.prettierignore` list: the lockfile. Archived OpenSpec changes are formatted
+  like any other Markdown. The root `format` also sorts every `package.json`
+  with `sort-package-json`, and the root check fails on an unsorted one.
 - CI (`.github/workflows/check.yml`) runs `pnpm install --frozen-lockfile` and
   the root `mise run check` on every push to `main` and every pull request. The
   check's job summary has one table with every package's steps, and the log of
