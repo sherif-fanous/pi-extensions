@@ -77,11 +77,11 @@
 
 ## 5. After publishing (owner)
 
-- [ ] 5.1 After `mise run publish` releases the new version, run
+- [x] 5.1 After `mise run publish` releases the new version, run
       `npm deprecate @sherif-fanous/pi-theme-sync "Pi now switches themes itself. Set theme to <light>/<dark> in Pi's settings and remove this package."`,
       then verify that `npm view @sherif-fanous/pi-theme-sync deprecated` prints
       the message.
-- [ ] 5.2 Open the follow-up repo-wide change in the root `openspec/` that
+- [x] 5.2 Open the follow-up repo-wide change in the root `openspec/` that
       removes `packages/pi-theme-sync` from the workspace, the root
       `.pi/settings.json`, and the root README and AGENTS.md. That removal also
       ends the README's deliberate exception to the `docs/readme.md` and
