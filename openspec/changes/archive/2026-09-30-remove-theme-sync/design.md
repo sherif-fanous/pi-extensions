@@ -46,8 +46,9 @@ See proposal.md for why. Apart from the package itself, `theme-sync` and
 code that no longer exists, and Git history keeps them. Moving them into the
 root `openspec/` would leave specs with no implementation.
 
-- **Alternative rejected:** archiving them under the root `openspec/changes/archive`.
-  Archives hold changes, not capabilities, and nothing would read them.
+- **Alternative rejected:** archiving them under the root
+  `openspec/changes/archive`. Archives hold changes, not capabilities, and
+  nothing would read them.
 
 ### Swap examples instead of just deleting them
 

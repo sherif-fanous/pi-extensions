@@ -44,7 +44,7 @@ package, and a Purpose is edited in the main spec directly, so the change sets
 - Specs: the Purpose paragraph of `openspec/specs/extension-packaging/spec.md`.
 - Unchanged: test fixtures and examples in `pi-extensions-core`,
   `pi-extensions-testing`, and `pi-extensions-release` that use `theme-sync` or
-  `Theme Sync` as sample data, and the shown-text checker's product-name
-  lists. See design.md.
-- Users: none from this change. Installed copies keep working until users
-  remove them, as the 0.7.0 notice asks.
+  `Theme Sync` as sample data, and the shown-text checker's product-name lists.
+  See design.md.
+- Users: none from this change. Installed copies keep working until users remove
+  them, as the 0.7.0 notice asks.
