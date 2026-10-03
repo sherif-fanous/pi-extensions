@@ -89,9 +89,9 @@ type RecordingMember =
  * Build a fake `ExtensionAPI` that records registrations.
  *
  * Members it does not record behave like a session where nothing has
- * happened yet: no active tools, no flags passed, thinking `off`, and
- * `setModel` succeeding. `exec` rejects, since a test must script any
- * command it expects the extension to run.
+ * happened yet: no active tools, no flags passed, empty settings, thinking
+ * `off`, and `setModel` succeeding. `exec` rejects, since a test must script
+ * any command it expects the extension to run.
  */
 export function createFakePi(overrides: FakePiOverrides = {}): FakePi {
   const appendedEntries: FakeEntry[] = [];
@@ -114,7 +114,9 @@ export function createFakePi(overrides: FakePiOverrides = {}): FakePi {
     getAllTools: () => [],
     getCommands: () => [],
     getFlag: () => undefined,
+    getMcpServers: () => [],
     getSessionName: () => undefined,
+    getSettings: () => ({}),
     getThinkingLevel: () => "off",
     on(event: string, handler: (event: never, ctx: never) => unknown) {
       // Pi calls a handler only with the event it was registered for.
@@ -139,6 +141,7 @@ export function createFakePi(overrides: FakePiOverrides = {}): FakePi {
       flags.set(name, options);
     },
     registerMarkdownTransformer: () => undefined,
+    registerMcpServer: () => undefined,
     registerMessageRenderer: () => undefined,
     registerProvider: () => undefined,
     registerShortcut: (shortcut, options) => {
@@ -147,6 +150,7 @@ export function createFakePi(overrides: FakePiOverrides = {}): FakePi {
     registerTool: (tool) => {
       tools.set(tool.name, tool as FakeTool);
     },
+    registerVirtualModel: () => undefined,
     sendMessage: () => undefined,
     sendUserMessage: () => undefined,
     setActiveTools: () => undefined,
@@ -154,7 +158,9 @@ export function createFakePi(overrides: FakePiOverrides = {}): FakePi {
     setModel: () => Promise.resolve(true),
     setSessionName: () => undefined,
     setThinkingLevel: () => undefined,
+    unregisterMcpServer: () => undefined,
     unregisterProvider: () => undefined,
+    unregisterVirtualModel: () => undefined,
     ...replacements,
   };
   const command = (name: string): FakeCommand => {

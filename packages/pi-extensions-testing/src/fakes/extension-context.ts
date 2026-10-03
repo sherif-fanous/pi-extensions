@@ -7,6 +7,7 @@ import { createPlainTheme } from "./tui.js";
 import type {
   ExtensionCommandContext,
   ExtensionContext,
+  ExtensionToolContext,
   ExtensionUIContext,
   ModelRegistry,
 } from "@earendil-works/pi-coding-agent";
@@ -75,6 +76,24 @@ export function createFakeContext(
     ui: { ...createCancellingUi(), ...ui },
     waitForIdle: () => Promise.resolve(),
     ...members,
+  };
+}
+
+/**
+ * Build a fake tool context, the `ctx` Pi passes to a tool's `execute()`.
+ *
+ * It has the fake context's defaults, no callable tools, and an
+ * `executeTool` that rejects, since no extension under test calls tools from
+ * inside a tool yet.
+ */
+export function createFakeToolContext(
+  options: FakeContextOptions = {},
+): ExtensionToolContext {
+  return {
+    ...createFakeContext(options),
+    executeTool: (name) =>
+      Promise.reject(new Error(`ctx.executeTool("${name}") is not faked.`)),
+    tools: [],
   };
 }
 
