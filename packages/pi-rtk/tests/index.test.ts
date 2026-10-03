@@ -15,6 +15,7 @@ import type {
 import {
   createFakeContext,
   createFakePi,
+  createFakeToolContext,
   createMarkerTheme,
   createPlainTheme,
   createShownTextRecorder,
@@ -164,7 +165,7 @@ describe("! commands", () => {
 describe("bash tool", () => {
   it("runs rtk's rewrite of the agent's command", async () => {
     const { tools } = await loadRtk();
-    const ctx = createFakeContext({ cwd: process.cwd() });
+    const ctx = createFakeToolContext({ cwd: process.cwd() });
 
     mocks.spawnSync.mockReturnValue({
       error: undefined,

@@ -31,6 +31,7 @@ export {
 } from "./fakes/extension-api.js";
 export {
   createFakeContext,
+  createFakeToolContext,
   type FakeContextOptions,
   type FakeSessionManager,
 } from "./fakes/extension-context.js";
