@@ -21,7 +21,7 @@ catalog:
   "@stylistic/eslint-plugin": ^5.10.0
   eslint: ^10.10.0
   eslint-plugin-perfectionist: ^5.11.0
-  eslint-plugin-unicorn: ^76.0.0
+  eslint-plugin-unicorn: ^77.0.0
   prettier: ^3.9.6
   sort-package-json: ^4.0.0
   typescript: ^6.0.3
