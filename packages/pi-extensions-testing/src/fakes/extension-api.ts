@@ -150,6 +150,7 @@ export function createFakePi(overrides: FakePiOverrides = {}): FakePi {
     registerTool: (tool) => {
       tools.set(tool.name, tool as FakeTool);
     },
+    registerToolRenderer: () => undefined,
     registerVirtualModel: () => undefined,
     sendMessage: () => undefined,
     sendUserMessage: () => undefined,
