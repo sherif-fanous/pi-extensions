@@ -322,6 +322,7 @@ describe("session_start configuration", () => {
           appendSystemPrompt: "",
           contextFiles: [],
           cwd: ctx.cwd,
+          hiddenTools: [],
           promptGuidelines: [],
           sections: {},
           selectedTools: [],
