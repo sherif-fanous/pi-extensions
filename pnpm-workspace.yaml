@@ -12,9 +12,9 @@ catalog:
   "@changesets/config": ^4.0.1
   "@changesets/read": ^1.0.1
   "@changesets/types": ^7.0.0
-  "@earendil-works/pi-ai": 1.0.4
-  "@earendil-works/pi-coding-agent": 1.0.4
-  "@earendil-works/pi-tui": 1.0.4
+  "@earendil-works/pi-ai": 1.1.0
+  "@earendil-works/pi-coding-agent": 1.1.0
+  "@earendil-works/pi-tui": 1.1.0
   "@eslint/js": ^10.0.1
   "@ianvs/prettier-plugin-sort-imports": ^4.7.1
   "@manypkg/get-packages": ^3.1.0
