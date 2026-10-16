@@ -316,6 +316,7 @@ describe("session_start configuration", () => {
 
     const beforeTurn = await fake.emit(
       {
+        messageType: "user",
         prompt: "",
         systemPrompt: "Baseline prompt.",
         systemPromptOptions: {

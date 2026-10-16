@@ -9,6 +9,7 @@ import type { LoadedPreset, Preset } from "../../src/types.js";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
   Input,
+  renderFakeCursor,
   type Component,
   type OverlayHandle,
 } from "@earendil-works/pi-tui";
@@ -228,6 +229,11 @@ beforeEach(() => {
   updatePreset.mockResolvedValue({ ok: true });
 });
 
+// Pi's Input marks the cell under its cursor with zero-width markers the TUI
+// later turns into reverse video. Pi exports only the wrapper, so take the
+// opening marker from it.
+const FAKE_CURSOR_START = renderFakeCursor("|").split("|")[0] ?? "";
+
 describe("preset editor input UX", () => {
   it("renders unfocused Name and Hotkey as plain rows without Input cursor", async () => {
     const { editor } = await openHarness({ initial: preset() });
@@ -237,9 +243,9 @@ describe("preset editor input UX", () => {
     const nameLine = lineContaining(editor, "Name");
     const hotkeyLine = lineContaining(editor, "Hotkey");
 
-    expect(nameLine).not.toContain("\x1b[7m");
+    expect(nameLine).not.toContain(FAKE_CURSOR_START);
     expect(nameLine).not.toContain("> ");
-    expect(hotkeyLine).not.toContain("\x1b[7m");
+    expect(hotkeyLine).not.toContain(FAKE_CURSOR_START);
     expect(hotkeyLine).not.toContain("> ");
   });
 
@@ -260,7 +266,7 @@ describe("preset editor input UX", () => {
 
     expect(nameLine).toContain("plan");
     expect(nameLine).toContain("> ");
-    expect(nameLine).toContain("\x1b[7m");
+    expect(nameLine).toContain(FAKE_CURSOR_START);
   });
 
   it("renders the empty Name placeholder only while unfocused", async () => {
@@ -275,7 +281,7 @@ describe("preset editor input UX", () => {
     const nameLine = lineContaining(editor, "Name");
 
     expect(nameLine).toContain("> ");
-    expect(nameLine).toContain("\x1b[7m");
+    expect(nameLine).toContain(FAKE_CURSOR_START);
     expect(nameLine).not.toContain("(empty)");
   });
 
