@@ -43,5 +43,5 @@ npm.package_manager = "npm"
 # Major versions only: the newest release within each. Moving to a new major
 # is a change to this file.
 [tools]
-node = "24"
+node = "26"
 "npm:pnpm" = { version = "12", allow_builds = ["pnpm"] }
