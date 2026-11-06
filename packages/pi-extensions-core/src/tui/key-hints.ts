@@ -9,6 +9,7 @@
  */
 
 import {
+  isKeyRelease,
   Key,
   matchesKey,
   truncateToWidth,
@@ -131,8 +132,14 @@ const kittyF1Presses: ReadonlySet<string> = new Set([
 /**
  * Whether `data` is an F1 press, the key a form uses for `F1 Help`,
  * including the Kitty encodings `matchesKey(data, Key.f1)` misses.
+ *
+ * Since pi-tui 1.5.0, `matchesKey` also parses the Kitty SS3 form and
+ * ignores its event subfield, so it matches an F1 release too; releases
+ * are filtered out here.
  */
 export function matchesHelpKey(data: string): boolean {
+  if (isKeyRelease(data)) return false;
+
   return matchesKey(data, Key.f1) || kittyF1Presses.has(data);
 }
 
