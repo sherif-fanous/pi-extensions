@@ -61,7 +61,7 @@ describe("command reports", () => {
       {
         data: { body: "Presets Plus Status", severity: "info" },
       } as never,
-      { expanded: false },
+      { expanded: false, keyHint: () => "", keyText: () => "" },
       theme as never,
     );
 

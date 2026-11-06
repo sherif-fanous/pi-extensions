@@ -211,7 +211,11 @@ describe("createCommandReport", () => {
       type: "custom",
     };
     const rendered = reports
-      .render(entry, { expanded: false }, createMarkerTheme())
+      .render(
+        entry,
+        { expanded: false, keyHint: () => "", keyText: () => "" },
+        createMarkerTheme(),
+      )
       ?.render(200)
       .map((line) => line.trim());
 
