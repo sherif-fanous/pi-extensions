@@ -183,7 +183,7 @@ function config(overrides: ConfigOverrides): NotificationConfig {
   return { toast: { ...DEFAULT_CONFIG.toast, ...overrides.toast } };
 }
 
-function lines(fake: FakeTui): string[] {
+function lines(fake: FakeTui): readonly string[] {
   const overlay = fake.overlays[0];
 
   // A hidden overlay renders nothing, mirroring the TUI's own behavior.
